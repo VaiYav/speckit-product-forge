@@ -1,11 +1,12 @@
 # Product Forge — SpecKit Extension
 
-> **Full product lifecycle:** Research → Product Spec → Revalidation → SpecKit → Implement → Verify
+> **Full product lifecycle:** Research → Product Spec → Revalidation → SpecKit → Implement → Verify → **Test**
 
 Product Forge is a [SpecKit](https://github.com/github/spec-kit) extension that adds a
-complete **product discovery and specification phase** before any SpecKit implementation work begins.
-Instead of jumping straight to spec.md, you first research competitors, UX patterns, and your
-codebase — then craft an exhaustive, user-approved product spec — then let SpecKit turn it into code.
+complete **product discovery, specification, and testing pipeline** before and after any SpecKit
+implementation work. Instead of jumping straight to spec.md, you first research competitors, UX
+patterns, and your codebase — craft an approved product spec — let SpecKit implement it — then
+automatically generate and run Playwright tests with a bug-fix loop until the feature is ready to ship.
 
 ---
 
@@ -18,8 +19,9 @@ Standard SpecKit starts from a feature description. Product Forge starts from a 
 3. **Revalidates** everything with you through an approval loop until the spec is perfect
 4. **Bridges** the product spec into SpecKit's spec.md — enriched with all research context
 5. **Plans, implements, and verifies** using SpecKit with full traceability back to the original research
+6. **Auto-generates Playwright tests** from user stories, runs them, fixes P0/P1 bugs, and produces a test report
 
-The result: a **complete traceability chain** — research → product spec → spec.md → plan → tasks → code.
+The result: a **complete traceability chain** — research → product spec → spec.md → plan → tasks → code → tests.
 
 ---
 
@@ -27,13 +29,15 @@ The result: a **complete traceability chain** — research → product spec → 
 
 | Command | Phase | Description |
 |---------|-------|-------------|
-| `/product-forge.forge` | All (1–7) | **Main command.** Full lifecycle orchestrator with human gates |
-| `/product-forge.research` | 1 | Parallel multi-dimensional feature research |
+| `/product-forge.forge` | All (1–8B) | **Main command.** Full lifecycle orchestrator with human gates |
+| `/product-forge.research` | 1 | Parallel multi-dimensional feature research (adaptive depth) |
 | `/product-forge.product-spec` | 2 | Interactive product spec creation with configurable detail |
 | `/product-forge.revalidate` | 3 | Iterative review and correction loop until approval |
 | `/product-forge.bridge` | 4 | Convert product-spec to SpecKit spec.md, choose Classic or V-Model |
 | `/product-forge.implement` | 5–6 | Plan + tasks + implementation with product-spec cross-validation |
 | `/product-forge.verify-full` | 7 | Full traceability verification: code ↔ research |
+| `/product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
+| `/product-forge.test-run` | 8B | Execute tests, auto-fix bugs, loop until exit criteria met |
 | `/product-forge.status` | — | Show lifecycle status for any feature |
 
 ---
@@ -116,8 +120,33 @@ The result: a **complete traceability chain** — research → product spec → 
 │  Produces: verify-report.md with CRITICAL / WARNING / PASSED                │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
+   ▼ [Human gate: "Run test phases?" — optional but recommended]
+   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 8A: Test Plan  [OPTIONAL]                                             │
+│  /product-forge.test-plan                                                    │
+│                                                                              │
+│  Auto-detects framework, ports, env vars                                     │
+│  Generates: smoke / E2E / API / regression test cases                       │
+│  Writes Playwright .spec.ts files with US-NNN traceability                  │
+│  Creates: testing/test-plan.md · testing/test-cases.md · bugs/README.md     │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼ [Human gate: approve test plan]
+   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 8B: Test Execution  [OPTIONAL]                                        │
+│  /product-forge.test-run                                                     │
+│                                                                              │
+│  Smoke → E2E → API → Regression (ordered, smoke blocks on failure)          │
+│  Per bug: bugs/BUG-NNN.md with evidence + gap analysis                      │
+│  Auto-fix loop: P0/P1 bugs fixed → retested → smoke regression check        │
+│  Exit: ≥80% pass rate + zero P0/P1 open bugs                                │
+│  Produces: test-report.md with full traceability chain                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
    ▼
-  Done ✅
+  Done ✅  (Research → Spec → Approved → Code → Verified → Tested)
 ```
 
 ---
@@ -154,7 +183,23 @@ features/
     ├── plan.md                            ← SpecKit plan (Phase 5)
     ├── tasks.md                           ← SpecKit tasks (Phase 5)
     ├── review.md                          ← Revalidation log (Phase 3)
-    └── verify-report.md                   ← Verification report (Phase 7)
+    ├── verify-report.md                   ← Verification report (Phase 7)
+    │
+    ├── testing/                           ← Phase 8A outputs (optional)
+    │   ├── test-plan.md                   ← Master test plan + entry/exit criteria
+    │   ├── test-cases.md                  ← All test cases (TC-SMK/E2E/API/REG-NNN)
+    │   ├── env.md                         ← Credentials (gitignored)
+    │   └── playwright-tests/
+    │       ├── playwright.config.ts
+    │       ├── {slug}-smoke.spec.ts
+    │       ├── {slug}-e2e.spec.ts
+    │       └── {slug}-regression.spec.ts
+    │
+    ├── bugs/                              ← Phase 8B outputs (optional)
+    │   ├── README.md                      ← Bug dashboard (P0–P4 counts, status)
+    │   └── BUG-NNN.md × N               ← One file per bug with evidence + fix log
+    │
+    └── test-report.md                     ← Final test report (Phase 8B)
 ```
 
 ---
@@ -178,7 +223,7 @@ Edit `.product-forge/config.yml` with your project details.
 extensions:
   - id: product-forge
     source: https://github.com/VaiYav/speckit-product-forge
-    version: "1.0.0"
+    version: "1.1.0"
     enabled: true
 ```
 

@@ -2,8 +2,9 @@
 name: product-forge.forge
 description: >
   Full lifecycle orchestrator for Product Forge. Drives a feature from idea to
-  verified implementation through 7 phases with human-in-the-loop gates:
-  research → product-spec → revalidation → SpecKit bridge → implement → verify.
+  tested, shipped code through 9 phases with human-in-the-loop gates:
+  research → product-spec → revalidation → SpecKit bridge → implement → verify
+  → test-plan → test-run. Phases 8A/8B are optional but recommended.
   Use with: "forge feature", "run full cycle", "product-forge", "/product-forge.forge"
 ---
 
@@ -34,9 +35,11 @@ Parse the input:
 | 2. Product Spec | `product-forge.product-spec` | `product-spec/README.md` exists | User approves product spec |
 | 3. Revalidation | `product-forge.revalidate` | `review.md` with status `APPROVED` | User explicitly approves |
 | 4. Bridge → SpecKit | `product-forge.bridge` | `spec.md` exists in FEATURE_DIR | User approves spec.md |
-| 5. Plan + Tasks | SpecKit `plan` → `tasks` | `plan.md` + `tasks.md` exist | User approves both |
-| 6. Implement | SpecKit `implement` | All tasks `[x]` in tasks.md | Implementation complete |
+| 5. Plan + Tasks | `product-forge.implement` (plan hint) | `plan.md` + `tasks.md` exist | User approves both |
+| 6. Implement | `product-forge.implement` (implement hint) | All tasks `[x]` in tasks.md | Implementation complete |
 | 7. Verify Full | `product-forge.verify-full` | `verify-report.md` with no CRITICAL | User acknowledges report |
+| 8A. Test Plan *(optional)* | `product-forge.test-plan` | `testing/test-plan.md` + `testing/playwright-tests/` | User approves test plan |
+| 8B. Test Run *(optional)* | `product-forge.test-run` | `test-report.md` + `bugs/README.md` | Pass rate ≥80% + zero P0/P1 open |
 
 ---
 
@@ -49,11 +52,12 @@ Parse the input:
    - **Skip** → mark skipped and move on (user must confirm)
    - **Abort** → stop everything
    - **Rollback** → jump back to an earlier phase by name
-3. **Show progress.** Use the TodoWrite tool to show all 7 phases and mark current/completed.
+3. **Show progress.** Use the TodoWrite tool to show all 9 phases and mark current/completed.
 4. **Pass full context forward.** When delegating, always include: FEATURE_DESCRIPTION, FEATURE_DIR, project config, and prior phase outputs summary.
 5. **Suppress sub-agent handoffs.** When delegating, prepend: *"You are invoked by Product Forge Orchestrator. Do NOT follow handoffs or auto-forward. Return output to the orchestrator and stop."*
 6. **Context budget awareness.** If context feels heavy at phase boundaries, summarize prior phases and offer to continue in a new session with auto-resume via `.forge-status.yml`.
-7. **Git checkpoints.** After phases 5 and 7 complete, offer a WIP commit. Never auto-commit — always ask first.
+7. **Git checkpoints.** After phases 6, 7, and 8B complete, offer a WIP commit. Never auto-commit — always ask first.
+8. **Testing phases are optional.** After Phase 7 always ask: *"Run test planning and execution (Phases 8A–8B)? Recommended for Must Have features."* Respect the user's choice — skip cleanly if declined.
 
 ---
 
@@ -93,6 +97,8 @@ phases:
   plan_tasks: in_progress
   implement: pending
   verify: pending
+  test_plan: pending       # optional — skipped if user declines
+  test_run: pending        # optional — skipped if user declines
 last_updated: "2026-03-28T14:23:00"
 ```
 
@@ -106,7 +112,7 @@ If all phases are `pending`, start from Phase 1.
 Before starting:
 1. Check if FEATURE_DIR exists. If not, create it with initial `.forge-status.yml`.
 2. Summarize what's been done so far (if resuming).
-3. Show the full 7-phase checklist using TodoWrite.
+3. Show the full 9-phase checklist using TodoWrite (mark 8A/8B as "optional").
 4. Ask: *"Ready to start/resume from Phase N: [phase name]? Any changes to the feature description?"*
 
 ---
@@ -239,9 +245,67 @@ Update `.forge-status.yml`: `verify: completed`
 
 ---
 
+## Phase 8A: Test Plan *(Optional)*
+
+After Phase 7 completes, ask:
+
+```
+✅ Verification passed! The feature is fully verified.
+
+Would you like to proceed with automated test planning and execution?
+Phases 8A–8B generate Playwright test cases, run them, auto-fix bugs, and produce a test report.
+
+Options:
+  1. [YES] Proceed to Phase 8A: Test Planning
+  2. [SKIP] Skip testing phases — mark feature as complete
+```
+
+If user confirms → **Delegate to:** `product-forge.test-plan`
+
+Provide:
+- FEATURE_DIR (with spec.md, tasks.md, product-spec/)
+- codebase_path
+- project_tech_stack
+
+After completion:
+- Read `{FEATURE_DIR}/testing/test-plan.md` for summary
+- Show: test case counts per type (smoke / E2E / API / regression)
+- Show: FRONTEND_URL, entry criteria, exit criteria
+- Ask: *"Test plan created with [N] test cases across [N] test files. Approve and proceed to test execution?"*
+
+Update `.forge-status.yml`: `test_plan: completed`
+
+---
+
+## Phase 8B: Test Run *(Optional)*
+
+**Delegate to:** `product-forge.test-run`
+
+Provide:
+- FEATURE_DIR (with testing/)
+- codebase_path
+
+`product-forge.test-run` handles its own execution loop:
+- Pre-flight app reachability check
+- Smoke → E2E → API → Regression test execution
+- Bug creation and auto-fix loop for P0/P1 bugs
+- Full retest pass after all fixes
+- Exit criteria evaluation
+
+The skill returns only when exit criteria are met or user overrides.
+
+After completion:
+- Read `{FEATURE_DIR}/test-report.md`
+- Show: pass rate, bugs found, bugs fixed, bugs deferred
+- Offer git commit with all test artifacts
+
+Update `.forge-status.yml`: `test_run: completed` (or `completed_with_known_issues`)
+
+---
+
 ## Completion
 
-When all 7 phases are complete:
+When all active phases are complete (7 required + 8A/8B if not skipped):
 
 ```
 ✅ Product Forge Complete: [Feature Name]
@@ -253,11 +317,20 @@ When all 7 phases are complete:
   plan.md            — Technical plan
   tasks.md           — [N] tasks, all completed
   verify-report.md   — Verification passed
+  testing/           — Test plan + [N] Playwright spec files   (if 8A ran)
+  bugs/              — [N] bugs tracked, [N] fixed             (if 8B ran)
+  test-report.md     — [pass rate]% pass rate                  (if 8B ran)
 
-🎯 The feature is fully researched, specified, implemented and verified.
+🎯 The feature is fully researched, specified, implemented, verified and tested.
+```
+
+Traceability chain:
+```
+Research ✅ → Product Spec ✅ → Approved ✅ → spec.md ✅
+→ Plan ✅ → Tasks ✅ → Code ✅ → Verified ✅ → Tested ✅
 ```
 
 Offer:
 1. Create a git tag for the feature
-2. Generate a summary report
+2. Generate a summary report with `/product-forge.status`
 3. Start a new feature with `/product-forge.forge`

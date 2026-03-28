@@ -6,6 +6,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.0] — 2026-03-28
+
+### Added
+
+- **`product-forge.test-plan`** — Phase 8A: Auto-detects test framework, ports, and env vars; generates smoke/E2E/API/regression test cases with `TC-*-NNN` IDs; writes runnable Playwright `.spec.ts` files with story traceability comments; initializes `bugs/README.md` dashboard
+- **`product-forge.test-run`** — Phase 8B: Executes tests in priority order (smoke → E2E → API → regression); creates `bugs/BUG-NNN.md` per failed test with evidence, gap analysis, and fix log; auto-fix loop for P0/P1 bugs with single-test retest and smoke regression check; generates `test-report.md` with full coverage matrix and traceability chain
+- **Adaptive research depth** in `product-forge.research`: input richness scoring (0–8 across 4 dimensions) selects FULL_INTERVIEW / PARTIAL_INTERVIEW / CONFIRM mode; avoids redundant questions when context is already rich
+
+### Changed
+
+- `product-forge.forge` orchestrator updated to 9-phase pipeline (8A and 8B added as optional after Phase 7)
+- `forge.md` Phase Map table updated; Phase 8A/8B offer shown after every successful Phase 7 completion
+- `extension.yml` version bumped to `1.1.0`; tags updated to include `testing`
+- `docs/phases.md` updated with full Phase 8A and 8B documentation
+- `docs/file-structure.md` updated with `testing/`, `bugs/`, and `test-report.md` in directory layout; `.forge-status.yml` schema updated with `test_plan`, `test_run`, and `testing:` block; `BUG-NNN.md` and `test-report.md` schemas added; naming conventions updated with TC-* and BUG-NNN IDs
+- `README.md` updated with 9-phase lifecycle diagram, 10-command table, and expanded file structure
+
+### Bug Fixes
+
+- `forge.md` Phase 5 and 6 previously referenced SpecKit directly; corrected to delegate via `product-forge.implement` as intended
+
+---
+
 ## [1.0.0] — 2026-03-28
 
 ### Added
@@ -42,4 +65,5 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.1.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/VaiYav/speckit-product-forge/releases/tag/v1.0.0

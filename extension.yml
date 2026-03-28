@@ -3,8 +3,8 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.0.0"
-  description: "Full product lifecycle: research → product spec → SpecKit → implement → verify"
+  version: "1.1.0"
+  description: "Full product lifecycle: research → product spec → SpecKit → implement → verify → test"
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"
   license: "MIT"
@@ -43,6 +43,14 @@ provides:
       file: "commands/verify-full.md"
       description: "Phase 7: Full traceability verification: code ↔ tasks ↔ plan ↔ spec ↔ product-spec ↔ research"
 
+    - name: "product-forge.test-plan"
+      file: "commands/test-plan.md"
+      description: "Phase 8A: Auto-detect test setup, generate test cases and Playwright specs from user stories"
+
+    - name: "product-forge.test-run"
+      file: "commands/test-run.md"
+      description: "Phase 8B: Execute tests, track bugs in BUG-NNN.md, auto-fix P0/P1, loop until exit criteria met"
+
     - name: "product-forge.status"
       file: "commands/status.md"
       description: "Show current feature lifecycle status across all phases and recommend next action"
@@ -52,7 +60,7 @@ tags:
   - "research"
   - "product-spec"
   - "lifecycle"
-  - "orchestration"
+  - "testing"
 
 # Project configuration — copy to .product-forge/config.yml in your project root
 # See config-template.yml and docs/config.md for full documentation

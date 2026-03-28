@@ -51,7 +51,25 @@ features/
     ├── plan.md                              ← Phase 5: Technical plan (SpecKit)
     ├── tasks.md                             ← Phase 5: Task breakdown (SpecKit)
     ├── review.md                            ← Phase 3: Revalidation log
-    └── verify-report.md                     ← Phase 7: Verification report
+    ├── verify-report.md                     ← Phase 7: Verification report
+    │
+    ├── testing/                             ← Phase 8A artifacts [OPTIONAL]
+    │   ├── test-plan.md                     ← Master test plan (entry/exit criteria, run commands)
+    │   ├── test-cases.md                    ← All test cases (TC-SMK/E2E/API/REG-NNN)
+    │   ├── env.md                           ← Test credentials (added to .gitignore)
+    │   ├── playwright-results/              ← Screenshot + trace files (gitignored)
+    │   └── playwright-tests/
+    │       ├── playwright.config.ts
+    │       ├── {slug}-smoke.spec.ts         ← TC-SMK-NNN cases
+    │       ├── {slug}-e2e.spec.ts           ← TC-E2E-NNN cases
+    │       ├── {slug}-api.spec.ts           ← TC-API-NNN cases (if API tested)
+    │       └── {slug}-regression.spec.ts    ← TC-REG-NNN cases
+    │
+    ├── bugs/                                ← Phase 8B artifacts [OPTIONAL]
+    │   ├── README.md                        ← Bug dashboard (P0–P4 counts, open/fixed/deferred)
+    │   └── BUG-NNN.md × N                  ← One file per bug found during test run
+    │
+    └── test-report.md                       ← Phase 8B: Final test report
 ```
 
 ---
@@ -95,7 +113,15 @@ phases:
   plan_tasks: pending                 # covers both plan + tasks sub-phases
   implement: pending
   verify: pending
+  test_plan: pending                  # optional — "skipped" if user declines Phase 8A
+  test_run: pending                   # optional — "skipped" if user declines Phase 8B
 speckit_mode: ""                      # "classic" | "v-model" — set in Phase 4
+testing:                              # populated after Phase 8B
+  final_pass_rate: ""                 # e.g. "94%"
+  bugs_found: 0
+  bugs_fixed: 0
+  bugs_deferred: 0
+  test_runs_total: 0
 last_updated: "2026-03-28T10:00:00"   # ISO timestamp
 ```
 
@@ -156,6 +182,86 @@ last_updated: "2026-03-28T10:00:00"   # ISO timestamp
 
 ---
 
+## BUG-NNN.md Schema
+
+```markdown
+# BUG-{NNN}: {short title}
+
+> Severity: P{0-4} | Status: 🔴 Open | ✅ Verified | ⚠️ Deferred
+> Test Run: #{N} | Date: {date}
+> Test Case: {TC-ID}
+
+## Description
+{Clear one-sentence description of what's wrong}
+
+## Steps to Reproduce
+1. {step}
+2. {step}
+
+## Expected Behavior
+{What should happen per acceptance criteria}
+> AC Reference: {US-NNN} — {AC text from spec.md}
+
+## Actual Behavior
+{What actually happened}
+
+## Evidence
+- Screenshot: `testing/playwright-results/{name}.png`
+- Trace: `testing/playwright-results/{name}.zip`
+- Error: `{error message / stack trace excerpt}`
+
+## Gap Analysis
+- [ ] Implementation bug (code doesn't match spec — fix code)
+- [ ] Spec gap (spec is ambiguous — needs clarification)
+- [ ] Test issue (test is wrong — fix test)
+- [ ] Environment issue (test env problem — not a product bug)
+
+## Fix Applied
+{Filled after fix — what was changed, which files}
+
+## Retest Result
+{PASS / FAIL / BLOCKED}
+```
+
+---
+
+## test-report.md Schema
+
+```markdown
+# Test Report: {Feature Name}
+
+> Test Run: #{N} | Date: {date}
+> Result: ✅ PASS | ⚠️ PASS WITH KNOWN ISSUES | ❌ FAIL
+
+## Executive Summary
+{2-3 sentences: what was tested, overall outcome, key stats}
+
+## Results Summary
+| Type | Pass | Fail | Skip | Total | Pass Rate |
+|------|------|------|------|-------|-----------|
+| Smoke | {N} | {N} | {N} | {N} | {%%} |
+| E2E | {N} | {N} | {N} | {N} | {%%} |
+| API | {N} | {N} | {N} | {N} | {%%} |
+| Regression | {N} | {N} | {N} | {N} | {%%} |
+| **Total** | **{N}** | **{N}** | **{N}** | **{N}** | **{%%}** |
+
+## Story Coverage
+| Story | Priority | Test Cases | Result |
+|-------|----------|-----------|--------|
+
+## Bugs Summary
+| ID | Title | Severity | Status |
+|----|-------|----------|--------|
+
+## Spec Changes Applied During Testing
+## Known Issues / Deferred Bugs
+## Conclusion
+## Traceability
+Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → Bugs → Fixes → Verified
+```
+
+---
+
 ## Naming Conventions
 
 | What | Convention | Example |
@@ -167,3 +273,8 @@ last_updated: "2026-03-28T10:00:00"   # ISO timestamp
 | Feature slug in YAML | `kebab-case` | `push-notification-preferences` |
 | User story IDs | `US-NNN` (3 digits) | `US-001`, `US-012` |
 | Functional req IDs | `FR-NNN` | `FR-001`, `FR-012` |
+| Smoke test case IDs | `TC-SMK-NNN` | `TC-SMK-001` |
+| E2E test case IDs | `TC-E2E-NNN` | `TC-E2E-005` |
+| API test case IDs | `TC-API-NNN` | `TC-API-003` |
+| Regression test IDs | `TC-REG-NNN` | `TC-REG-002` |
+| Bug IDs | `BUG-NNN` (3 digits) | `BUG-001`, `BUG-012` |

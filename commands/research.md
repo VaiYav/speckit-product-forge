@@ -1,17 +1,18 @@
 ---
 name: product-forge.research
 description: >
-  Phase 1: Multi-dimensional parallel feature research. Mandatory dimensions: competitor
-  analysis, UX/UI patterns, codebase integration analysis. Optional: tech stack libraries,
-  metrics/ROI. Saves structured research artifacts to features/<name>/research/.
+  Phase 1: Adaptive multi-dimensional feature research. Assesses input richness and
+  auto-adjusts interview depth — minimal input triggers full 7-question interview,
+  rich input skips to confirmation. Mandatory: competitors, UX/UI, codebase.
+  Optional: tech stack, metrics/ROI. Saves to features/<name>/research/.
   Use with: "research feature", "/product-forge.research"
 ---
 
 # Product Forge — Phase 1: Research
 
 You are the **Research Orchestrator** for Product Forge Phase 1.
-Your goal: gather exhaustive, structured research across all relevant dimensions before any
-product spec is written. Research is the foundation — the deeper and more honest, the better.
+Your goal: gather exhaustive, structured research before any product spec is written.
+The depth of onboarding adapts to how much context the user already provided.
 
 ## User Input
 
@@ -21,138 +22,164 @@ $ARGUMENTS
 
 ---
 
-## Step 1: Gather Context
+## Step 1: Assess Input Richness
 
-If not provided via orchestrator, collect:
+Before asking any questions, score the provided input across 4 dimensions:
 
-**Feature description:**
-Ask: *"What feature are we researching? Describe it in 1-3 sentences — what it does, who it's for, what problem it solves."*
+| Dimension | Score 0 | Score 1 | Score 2 |
+|-----------|---------|---------|---------|
+| Feature description | Vague (1–5 words) | Clear (1–2 sentences) | Detailed (3+ sentences with use case) |
+| Competitor knowledge | None mentioned | "There are apps like X" | Named list of 3+ specific competitors |
+| Technical context | Not mentioned | Tech stack hinted | Explicit tech stack + constraints |
+| Domain context | Implicit only | Domain stated | Domain + target user + market stated |
 
-**Feature name (for file slug):**
-Derive a kebab-case slug from the feature description.
-Example: "Push notification preferences" → `push-notification-preferences`
+Sum the scores → **Input Richness Score (0–8)**:
+- **0–2** → `FULL_INTERVIEW` mode — ask all 7 questions
+- **3–5** → `PARTIAL_INTERVIEW` mode — ask only gaps (skip answered dimensions)
+- **6–8** → `CONFIRM` mode — brief 1-message confirmation, then proceed
+
+Load project config from `.product-forge/config.yml`:
+- `project_name`, `project_domain`, `project_tech_stack`, `codebase_path`, `features_dir`
+
 Set `FEATURE_DIR = {features_dir}/{feature-slug}/`
 Set `RESEARCH_DIR = {FEATURE_DIR}/research/`
 
-**Load project config** from `.product-forge/config.yml`:
-- `project_name` — used for codebase agent context
-- `project_domain` — used for competitor/UX context
-- `project_tech_stack` — used for tech stack agent
-- `codebase_path` — used for codebase analysis agent
-
 ---
 
-## Step 2: Configure Research Dimensions
+## Step 2: Adaptive Interview
 
-Ask the user the following questions (can be answered in one message):
+### FULL_INTERVIEW mode (score 0–2)
 
-### Mandatory dimensions (always run):
-- ✅ **Competitor analysis** — Who solves this already? How?
-- ✅ **UX/UI patterns** — Best interactions, flows, design patterns for this feature
-- ✅ **Codebase analysis** — Where does this fit in the existing code?
+Ask all questions in ONE message:
 
-### Optional dimensions (ask explicitly):
+```
+Before I start researching, I need to understand the feature better:
 
-**Question 1:** *"Should we research tech stack options (libraries, APIs, packages) for this feature? [yes/no]"*
+1. **Feature description** — What does this feature do? Who uses it and why?
+   (1–3 sentences covering: what it is, who benefits, what problem it solves)
 
-**Question 2:** *"Should we include a metrics/ROI analysis (business impact, KPIs, monetization potential)? [yes/no]"*
+2. **Competitors** — Are there specific apps or products I should analyze?
+   (Leave blank to auto-discover 6–8 competitors)
 
-**Question 3:** *"Do you have a list of specific competitors to analyze? If yes, list them. If no, I'll find them automatically."*
+3. **Tech stack** — What technology does your project use?
+   (e.g., "NestJS + Vue 3 + Quasar + Capacitor" — or say "use config")
 
-**Question 4:** *"Any additional context: existing designs, related tickets, prior art, or constraints I should know about?"*
+4. **Domain** — What industry/domain is this for?
+   (e.g., "astrology mobile app", "B2B SaaS fintech")
 
-Store: `RUN_TECH = yes|no`, `RUN_METRICS = yes|no`, `COMPETITOR_LIST`, `EXTRA_CONTEXT`.
+5. **Constraints** — Any hard constraints I should know?
+   (technical, budget, timeline, legal, platform)
+
+6. **Additional research?** — Should I also research:
+   - [ ] Tech stack libraries & packages (optional)
+   - [ ] Metrics/ROI & business impact (optional)
+
+7. **Existing materials** — Do you have any links, docs, designs, or prior art to include?
+   (Paste URLs or describe — I'll incorporate them into the research)
+```
+
+### PARTIAL_INTERVIEW mode (score 3–5)
+
+Ask ONLY the dimensions that scored 0. Format as:
+*"I have a good understanding of the feature. A few gaps before I start:"*
+Then ask only the missing questions from the list above.
+
+### CONFIRM mode (score 6–8)
+
+Show a brief confirmation:
+```
+✅ Rich context provided. Here's my research plan:
+
+Feature: {feature description}
+Competitors to research: {list or "auto-discover"}
+Domain: {domain}
+Tech stack: {stack}
+Dimensions: competitors ✅ · UX/UI ✅ · codebase ✅ {+ tech · metrics if opted-in}
+
+Starting research now. Any corrections before I launch?
+```
 
 ---
 
 ## Step 3: Launch Parallel Research Agents
 
-Launch ALL active research dimensions **in parallel** using the Agent tool.
-Each agent is independent — start them simultaneously for maximum speed.
+Launch ALL active dimensions **simultaneously** via Agent tool.
 
 ### Agent 1: Competitor Research (MANDATORY)
 
-**Task:** Analyze how competitors and existing products approach `{FEATURE_DESCRIPTION}`.
+**Goal:** Analyze how competitors approach `{FEATURE_DESCRIPTION}`.
 
-Provide context:
-- Feature: `{FEATURE_DESCRIPTION}`
+Context to provide:
+- Feature description
 - Project domain: `{project_domain}`
-- Competitor list (if provided): `{COMPETITOR_LIST}` — if empty, find 5-8 relevant competitors
-- Extra context: `{EXTRA_CONTEXT}`
+- Competitors (if user provided list; otherwise auto-find 5–8)
+- Extra context: any user-provided links/materials
 
-**Instructions for the agent:**
-1. Research each competitor: find screenshots, descriptions, user reviews
-2. For each competitor, document:
-   - Feature name and positioning
-   - Core interaction pattern
-   - Key differentiators
-   - Pricing/access model (free/paid/premium)
-   - User sentiment (App Store reviews, Reddit, Twitter)
-3. Identify the top 3 "best implementations" with rationale
-4. Find any open-source or publicly described implementations
-5. Identify gaps — what no one does well yet
+**Instructions:**
+1. For each competitor, document:
+   - Feature name, description, positioning
+   - Core interaction pattern (how user completes the task)
+   - Key differentiators + unique strengths
+   - Access model (free/freemium/premium/paid)
+   - User sentiment from App Store, Play Store, Reddit, Twitter/X
+2. Identify the **top 3 best implementations** with rationale
+3. Find any open-source or publicly described reference implementations
+4. Identify **gaps** — what no competitor does well (= our opportunity)
+5. Note pricing, growth signals, user base size if available
 
-**Output file:** `{RESEARCH_DIR}/competitors.md`
+**Output:** `{RESEARCH_DIR}/competitors.md`
 
-Format:
 ```markdown
 # Competitor Analysis: {Feature}
 
-> Generated: {date} | Feature: {feature-slug}
+> Generated: {date} | Dimensions: {N competitors analyzed}
 
 ## Executive Summary
-[2-3 paragraphs: key patterns, gaps, top recommendation]
+{2–3 paragraphs: dominant patterns, gaps, top recommendation}
 
 ## Competitors Analyzed
 
-### 1. {Competitor Name}
-- **Feature:** [how they implement it]
-- **Differentiator:** [what makes it unique]
-- **Access:** [free/premium/paid]
-- **User sentiment:** [positive/negative patterns from reviews]
-- **Screenshot/link:** [if available]
+### 1. {Name} — [{score}/5]
+- **Feature:** {how they implement it}
+- **Core UX pattern:** {how user interacts}
+- **Differentiator:** {unique strength}
+- **Access:** Free/Premium/Paid
+- **User sentiment:** {+positive / -negative patterns}
+- **Reference:** {link if available}
 
-[...repeat for each competitor]
+[repeat for each competitor]
 
-## Pattern Analysis
-[Common patterns across competitors — what works, what doesn't]
+## Common Patterns
+{What 80%+ of competitors do — table stakes}
 
-## Gaps & Opportunities
-[What no competitor does well — our opportunity]
+## Differentiation Opportunities
+{What no one does well — ranked by impact}
 
-## Top 3 Implementations to Study
-1. {Name} — {reason}
-2. {Name} — {reason}
-3. {Name} — {reason}
+## Top 3 Reference Implementations
+1. {Name} — {why it's best}
+2. {Name} — {why}
+3. {Name} — {why}
 ```
 
 ---
 
 ### Agent 2: UX/UI Patterns Research (MANDATORY)
 
-**Task:** Research the best UX/UI patterns, interactions, and design approaches for `{FEATURE_DESCRIPTION}`.
+**Goal:** Research best UX/UI patterns, interactions, and design for `{FEATURE_DESCRIPTION}`.
 
-Provide context:
-- Feature: `{FEATURE_DESCRIPTION}`
-- Domain: `{project_domain}`
-- Tech stack: `{project_tech_stack}` (for platform-specific patterns)
+Context: feature, domain, tech stack (mobile/web implications), any user-provided links.
 
-**Instructions for the agent:**
-1. Research UX best practices for this type of feature (Baymard, Nielsen Norman, UX Collective, etc.)
-2. Document:
-   - Primary user flows (happy paths)
-   - Edge cases and error states
-   - Empty states
-   - Loading/skeleton patterns
-   - Mobile-first considerations (if mobile product)
-   - Accessibility requirements (WCAG relevant to this feature)
-3. Find 3-5 UI pattern examples with visual descriptions
-4. Identify key micro-interactions and animations that elevate the experience
-5. List anti-patterns to avoid (common UX mistakes for this feature type)
+**Instructions:**
+1. Research UX best practices (Baymard, Nielsen Norman, UX Collective, Mobbin, Dribbble)
+2. Document: primary flows, edge cases, empty/loading/error states
+3. Find 3–5 concrete UI pattern examples with descriptions
+4. Identify key micro-interactions and animations
+5. List WCAG accessibility requirements specific to this feature type
+6. List anti-patterns to avoid (common mistakes for this type of feature)
+7. Mobile-specific considerations if applicable (touch targets, gestures, thumb zones)
 
-**Output file:** `{RESEARCH_DIR}/ux-patterns.md`
+**Output:** `{RESEARCH_DIR}/ux-patterns.md`
 
-Format:
 ```markdown
 # UX/UI Patterns: {Feature}
 
@@ -160,198 +187,265 @@ Format:
 
 ## Core User Flows
 
-### Happy Path
-[Step-by-step primary user journey]
+### Primary (Happy Path)
+{Step-by-step with expected user mental model at each step}
 
-### Edge Cases
-[List of edge cases with handling recommendations]
-
-## UI Pattern Library
-[Description of 3-5 proven UI patterns for this feature with sources]
+### Alternative Paths
+{List of key alternative scenarios}
 
 ## State Inventory
-- **Empty state:** [description + recommendation]
-- **Loading state:** [skeleton/spinner pattern]
-- **Error state:** [user-friendly error handling]
-- **Success state:** [confirmation pattern]
+| State | Trigger | Recommended Pattern |
+|-------|---------|---------------------|
+| Empty | No data yet | {recommendation} |
+| Loading | Data fetching | {skeleton/spinner} |
+| Error | Request failed | {user-friendly error} |
+| Success | Action complete | {confirmation} |
+| Partial | Some data missing | {graceful degradation} |
 
-## Mobile Considerations
-[Touch targets, gestures, thumb zones, etc.]
-
-## Accessibility Requirements
-[WCAG criteria relevant to this feature]
+## UI Pattern Library
+{3–5 proven patterns with sources and descriptions}
 
 ## Micro-interactions & Animations
-[Key moments that deserve animation/feedback]
+{Key moments worth animating — entry, transition, confirmation, error}
+
+## Accessibility Requirements (WCAG 2.1 AA)
+{Specific criteria relevant to this feature — not generic}
+
+## Platform Considerations
+{Mobile: touch targets ≥44px, gesture conflicts, safe areas}
+{Web: keyboard navigation, focus management}
 
 ## Anti-patterns to Avoid
-[Common mistakes for this feature type]
+{Common mistakes for this feature type — with explanations}
 
 ## Recommended Approach
-[2-3 paragraphs synthesizing the best approach for our context]
+{3–5 sentences synthesizing the best UX for our context}
 ```
 
 ---
 
 ### Agent 3: Codebase Integration Analysis (MANDATORY)
 
-**Task:** Analyze the existing codebase at `{codebase_path}` to find integration points for `{FEATURE_DESCRIPTION}`.
+**Goal:** Map `{FEATURE_DESCRIPTION}` to the existing codebase at `{codebase_path}`.
 
-Provide context:
-- Feature: `{FEATURE_DESCRIPTION}`
-- Codebase path: `{codebase_path}`
-- Tech stack: `{project_tech_stack}`
+Context: feature, codebase path, tech stack.
 
-**Instructions for the agent:**
-1. Explore the codebase structure (top-level dirs, src layout, key modules)
+**Instructions:**
+1. Explore project structure (top-level dirs, architecture, key modules)
 2. Find existing code relevant to this feature:
-   - Similar features already implemented
+   - Similar features already implemented (reference implementations)
    - Shared components/services that can be reused
-   - Data models that overlap
+   - Data models/schemas that overlap
    - API endpoints that can be extended
-3. Identify integration points:
-   - Where new code plugs in
-   - What needs to be modified
-   - What can be reused as-is
+3. Identify integration points (where new code plugs in)
 4. Assess technical complexity:
    - New module needed or extension of existing?
-   - Database schema changes required?
+   - Database/schema changes?
    - Breaking changes risk?
-5. List the current tech capabilities of the project relevant to this feature
+5. Document current tech capabilities relevant to this feature
 
-**Output file:** `{RESEARCH_DIR}/codebase-analysis.md`
+**Output:** `{RESEARCH_DIR}/codebase-analysis.md`
 
-Format:
 ```markdown
 # Codebase Analysis: {Feature}
 
 > Generated: {date} | Codebase: {codebase_path}
 
-## Project Structure Overview
-[Top-level architecture summary]
+## Architecture Overview
+{High-level: what layers exist, how they're organized}
 
-## Relevant Existing Code
-
-### Reusable Components / Services
+## Reusable Existing Code
 | Component/Service | Location | How to Reuse |
-|-------------------|----------|--------------|
+|------------------|----------|--------------|
 | {name} | {path} | {description} |
 
-### Related Features (reference implementations)
-| Feature | Location | Relevance |
-|---------|----------|-----------|
-| {name} | {path} | {description} |
+## Reference Implementations (Similar Features)
+| Feature | Location | Key Pattern |
+|---------|----------|-------------|
+| {name} | {path} | {what to learn from it} |
 
 ## Integration Points
-| Where | Type | Change Required |
-|-------|------|----------------|
-| {module} | New / Extend / Modify | {description} |
+| Layer | Location | Change Type | Description |
+|-------|----------|-------------|-------------|
+| API | {path} | New endpoint | {description} |
+| Service | {path} | Extend | {description} |
+| DB | {schema} | New collection | {description} |
+| UI | {path} | New component | {description} |
 
 ## Data Model Impact
-[Schema changes, new collections/tables, migrations needed]
+{New schemas, migrations, relationships}
 
-## Technical Complexity Assessment
-- **Complexity:** Low / Medium / High
-- **New modules needed:** [list]
-- **Breaking changes:** None / Possible / Likely
-- **Estimated touch points:** [N files/modules]
+## Technical Complexity
+- **Overall:** Low / Medium / High
+- **New modules:** {list or "none"}
+- **Breaking change risk:** None / Low / Medium / High
+- **Estimated touch points:** {N files/modules}
 
 ## Current Tech Capabilities
-[What the project already supports that this feature can leverage]
+{What the project already supports that this feature leverages}
 
-## Implementation Notes
-[Key technical decisions and constraints for Phase 4+ planning]
+## Implementation Guidance
+{2–3 key technical decisions or constraints for planning phase}
 ```
 
 ---
 
-### Agent 4: Tech Stack Research (OPTIONAL — only if `RUN_TECH = yes`)
+### Agent 4: Tech Stack Research (OPTIONAL — if user opted in)
 
-**Task:** Research and compare libraries, APIs, and packages for implementing `{FEATURE_DESCRIPTION}`.
+**Goal:** Compare libraries, APIs, packages for `{FEATURE_DESCRIPTION}`.
 
 **Instructions:**
-1. Identify the main technical sub-problems this feature needs to solve
-2. For each sub-problem, compare 2-3 solutions:
-   - npm/pip package stats (weekly downloads, last update, GitHub stars)
-   - API stability and breaking-change history
-   - Bundle size impact (for frontend)
+1. Identify the main technical sub-problems to solve
+2. For each, compare 2–3 solutions:
+   - npm/pip stats (weekly downloads, GitHub stars, last release)
+   - API stability, breaking-change history
+   - Bundle size (frontend) or memory footprint (backend)
    - License compatibility
-   - Community support
-3. Provide a recommendation matrix with rationale
+   - Community/ecosystem health
+3. Produce a decision matrix with recommendation
 
-**Output file:** `{RESEARCH_DIR}/tech-stack.md`
+**Output:** `{RESEARCH_DIR}/tech-stack.md`
+
+```markdown
+# Tech Stack Research: {Feature}
+
+> Generated: {date}
+
+## Sub-problems to Solve
+{List of technical challenges this feature needs to address}
+
+## Option Comparison
+
+### Sub-problem 1: {name}
+| Option | Stars | Downloads/wk | Bundle | License | Verdict |
+|--------|-------|--------------|--------|---------|---------|
+| {lib} | 12k | 800k | 45KB | MIT | ✅ Recommended |
+| {lib} | 5k | 200k | 120KB | Apache | ⚠️ Heavy |
+
+**Recommendation:** {option} — {rationale}
+
+[repeat per sub-problem]
+
+## Final Recommendation Stack
+{Summary table: what to use for each need}
+
+## Integration Notes
+{How recommended libs fit into the existing tech stack}
+```
 
 ---
 
-### Agent 5: Metrics & ROI Analysis (OPTIONAL — only if `RUN_METRICS = yes`)
+### Agent 5: Metrics & ROI Analysis (OPTIONAL — if user opted in)
 
-**Task:** Estimate the business impact and success metrics for `{FEATURE_DESCRIPTION}`.
+**Goal:** Estimate business impact of `{FEATURE_DESCRIPTION}`.
 
 **Instructions:**
-1. Industry benchmarks: what metrics does this type of feature typically impact?
-2. User impact: retention, engagement, satisfaction (NPS-relevant)
-3. Revenue impact: direct (monetization potential) or indirect (churn reduction, activation)
-4. Effort vs. impact assessment
+1. Industry benchmarks for this feature type
+2. User impact: retention, engagement, NPS-relevant metrics
+3. Revenue impact: direct or indirect
+4. Effort vs. impact signal
 5. Recommended KPIs and measurement approach
-6. Success/failure definition
 
-**Output file:** `{RESEARCH_DIR}/metrics-roi.md`
+**Output:** `{RESEARCH_DIR}/metrics-roi.md`
+
+```markdown
+# Metrics & ROI: {Feature}
+
+> Generated: {date}
+
+## Industry Benchmarks
+{What impact do similar features typically have? Sources cited.}
+
+## User Impact Signals
+| Metric | Expected Impact | Confidence | Source |
+|--------|----------------|------------|--------|
+| {metric} | +X% | High/Med/Low | {source} |
+
+## Revenue Impact
+{Direct/indirect revenue analysis}
+
+## Effort vs. Impact
+{Quick assessment: high/medium/low for both dimensions}
+
+## Recommended KPIs
+| KPI | Baseline | Target | Measurement |
+|-----|----------|--------|-------------|
+| {metric} | {current} | {goal} | {how} |
+
+## Measurement Plan
+- Day 1: {early signal}
+- Week 1: {leading indicator}
+- Month 1: {primary KPI review}
+```
 
 ---
 
-## Step 4: Wait for All Agents to Complete
+## Step 4: Wait for All Agents
 
-Wait for all launched agents to finish. Do not proceed until all active agents have returned results.
+Wait for all agents to complete. Do not generate the index until all are done.
 
 ---
 
 ## Step 5: Compile Research Index
 
-Create `{RESEARCH_DIR}/README.md` — the master index linking all research artifacts:
+Create `{RESEARCH_DIR}/README.md`:
 
 ```markdown
 # Research Index: {Feature Name}
 
 > Generated: {date} | Feature: {feature-slug}
-> Research dimensions: {list of completed dimensions}
+> Input richness: {score}/8 | Interview mode: {FULL/PARTIAL/CONFIRM}
+> Research dimensions: {list completed}
 
-## Quick Summary
+## Executive Summary
 
-{2-3 sentence executive summary synthesizing all research}
+{2–3 sentences synthesizing the most important findings across all dimensions}
 
 ## Key Findings
 
-- **Competitors:** {top finding in 1 sentence}
-- **UX/UI:** {top finding in 1 sentence}
-- **Codebase:** {top finding in 1 sentence}
-- **Tech Stack:** {top finding in 1 sentence — if applicable}
-- **Metrics/ROI:** {top finding in 1 sentence — if applicable}
+| Dimension | Top Insight |
+|-----------|-------------|
+| 🏆 Competitors | {1-sentence finding} |
+| 🎨 UX/UI | {1-sentence finding} |
+| 🔧 Codebase | {1-sentence finding} |
+| 📦 Tech Stack | {1-sentence finding — if researched} |
+| 📊 Metrics | {1-sentence finding — if researched} |
 
 ## Research Documents
 
-| Document | Dimensions | Key Insight |
-|----------|-----------|-------------|
-| [competitors.md](./competitors.md) | Competitor analysis | {1-line insight} |
-| [ux-patterns.md](./ux-patterns.md) | UX/UI patterns | {1-line insight} |
-| [codebase-analysis.md](./codebase-analysis.md) | Integration points | {1-line insight} |
-| [tech-stack.md](./tech-stack.md) | Libraries & APIs | {1-line insight} |
-| [metrics-roi.md](./metrics-roi.md) | Business impact | {1-line insight} |
+| Document | Status | Key Insight |
+|----------|--------|-------------|
+| [competitors.md](./competitors.md) | ✅ | {insight} |
+| [ux-patterns.md](./ux-patterns.md) | ✅ | {insight} |
+| [codebase-analysis.md](./codebase-analysis.md) | ✅ | {insight} |
+| [tech-stack.md](./tech-stack.md) | ✅ Optional | {insight} |
+| [metrics-roi.md](./metrics-roi.md) | ✅ Optional | {insight} |
 
-## Recommended Approach
-{3-5 sentences: synthesized recommendation for product spec phase}
+## Synthesis: Recommended Approach
+{4–6 sentences: what to build, how to build it, what to prioritize}
 
 ## Open Questions for Product Spec
-{Bullet list of questions that research raised but couldn't answer — to be resolved in Phase 2}
+{Questions research raised but couldn't answer — to resolve in Phase 2}
+
+## Red Flags / Risks Identified
+{Any significant risks discovered during research}
 ```
 
 ---
 
 ## Step 6: Update Status
 
-Update `{FEATURE_DIR}/.forge-status.yml`:
 ```yaml
+# {FEATURE_DIR}/.forge-status.yml
 phases:
   research: completed
+research_dimensions:
+  competitors: completed
+  ux_patterns: completed
+  codebase: completed
+  tech_stack: completed   # or: skipped
+  metrics_roi: skipped    # or: completed
+input_richness_score: {0-8}
 last_updated: "{ISO timestamp}"
 ```
 
@@ -359,12 +453,12 @@ last_updated: "{ISO timestamp}"
 
 ## Step 7: Present Results
 
-Show the user:
-1. Summary table of completed research dimensions
-2. Key findings from `{RESEARCH_DIR}/README.md`
-3. Any questions raised by research that need user input in Phase 2
+Show:
+1. Summary table of completed dimensions
+2. Top 3 most important findings
+3. Open questions that need answers in Phase 2
+4. Any red flags or risks
 
-Ask: *"Research phase complete. All documents saved to `{RESEARCH_DIR}/`. Ready to proceed to Phase 2: Product Spec creation?"*
+Ask: *"Research complete — {N} dimensions analyzed, saved to `{RESEARCH_DIR}/`. Ready to proceed to Phase 2: Product Spec creation?"*
 
-If running standalone (not via forge orchestrator), also ask:
-*"To continue the full lifecycle, run `/product-forge.product-spec` next."*
+If standalone: *"Next: `/product-forge.product-spec`"*

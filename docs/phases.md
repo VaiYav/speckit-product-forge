@@ -1,6 +1,6 @@
 # Product Forge — Phase Reference
 
-Full documentation for each of the 7 Product Forge lifecycle phases.
+Full documentation for each of the 9 Product Forge lifecycle phases (7 required + 2 optional testing phases).
 
 ---
 
@@ -219,3 +219,121 @@ Delegates to SpecKit `implement`. Product Forge adds:
 | ⚠️ WARNING | Deviation that may be intentional | No |
 | ✅ PASSED | Check verified successfully | — |
 | ⏭️ SKIPPED | Cannot verify (missing context) | No |
+
+---
+
+## Phase 8A: Test Plan *(Optional)*
+
+**Command:** `/product-forge.test-plan`
+**Output:** `features/{slug}/testing/`
+**Gate:** User approves test plan before execution
+
+### What happens
+
+The agent automatically detects your test setup, then generates test cases for every user story
+and creates runnable Playwright `.spec.ts` files. No manual test writing required.
+
+### Auto-detection
+
+| What | How |
+|------|-----|
+| Test framework | Detect Jest / Vitest in package.json |
+| E2E framework | Detect Playwright / Cypress in devDependencies |
+| Frontend port | Scan `package.json` scripts for `--port`, `vite.config.*`, `.env` |
+| API base URL | Detect `VITE_API_URL`, `API_URL`, NestJS config files |
+| Existing tests | Count files in `src/**/*.spec.*`, `test/`, `e2e/` |
+| Auth flow | Detect login page pattern from frontend routes |
+
+### Test types generated
+
+| Type | ID Format | Source | Description |
+|------|-----------|--------|-------------|
+| Smoke | `TC-SMK-NNN` | Key Must Have stories | App loads, auth works, primary action reachable |
+| E2E | `TC-E2E-NNN` | All user stories | Full happy path + key error paths |
+| API | `TC-API-NNN` | Functional requirements | Request/response contract validation |
+| Regression | `TC-REG-NNN` | Adjacent existing features | Existing functionality not broken |
+
+### Generated files
+
+| File | Description |
+|------|-------------|
+| `testing/test-plan.md` | Master plan: types, FRONTEND_URL, entry/exit criteria, run commands |
+| `testing/test-cases.md` | All test cases searchable by ID and story |
+| `testing/env.md` | Credentials (added to `.gitignore`) |
+| `testing/playwright-tests/playwright.config.ts` | Playwright configuration |
+| `testing/playwright-tests/{slug}-smoke.spec.ts` | Smoke test file |
+| `testing/playwright-tests/{slug}-e2e.spec.ts` | E2E test file |
+| `testing/playwright-tests/{slug}-api.spec.ts` | API test file (if applicable) |
+| `testing/playwright-tests/{slug}-regression.spec.ts` | Regression test file |
+| `bugs/README.md` | Initialized empty bug dashboard |
+
+### Test file conventions
+
+- All test IDs in comments: `// TC-E2E-001 | US-003 — User registers successfully`
+- Credentials via `process.env`: `process.env.TEST_EMAIL`, `process.env.TEST_PASSWORD`
+- Selectors prefer `data-testid`: `page.getByTestId('submit-button')`
+- Story mapping comments included for traceability
+
+---
+
+## Phase 8B: Test Run *(Optional)*
+
+**Command:** `/product-forge.test-run`
+**Output:** `features/{slug}/bugs/`, `features/{slug}/test-report.md`
+**Gate:** ≥80% pass rate AND zero P0/P1 open bugs
+
+### What happens
+
+Tests are executed in priority order, bugs are created and auto-fixed, then a full retest pass
+runs, and finally a test report is generated with full traceability.
+
+### Execution order
+
+```
+1. Smoke Tests     → block all further testing if any P0 test fails
+2. E2E Tests       → full user story coverage
+3. API Tests       → contract validation
+4. Regression      → ensure existing features still work
+```
+
+### Bug severity levels
+
+| Severity | What triggers it | Action |
+|----------|-----------------|--------|
+| P0 Blocker | Smoke test failure or auth broken | Auto-fix or ask user to abort |
+| P1 Critical | Must Have story E2E failure | Auto-fix required |
+| P2 High | Should Have story or error state failure | Auto-fix attempted |
+| P3 Medium | Edge case or cosmetic failure | Document, optional fix |
+| P4 Low | Regression test on low-risk path | Document only |
+
+### Auto-fix loop (P0/P1)
+
+For each P0 or P1 bug:
+1. Fix Agent analyzes the bug and applies minimal fix
+2. Single test retest: `npx playwright test --grep "TC-{ID}"`
+3. Smoke regression check after every P0/P1 fix
+4. If still failing after fix → escalate to user with options
+
+### Gap analysis per bug
+
+Every bug file includes a gap analysis checkbox:
+- `[ ] Implementation bug` → fix code
+- `[ ] Spec gap` → update `spec.md` (lightweight — no full Phase 3 rerun)
+- `[ ] Test issue` → fix the test
+- `[ ] Environment issue` → not a product bug
+
+### Exit criteria (configurable in test-plan.md)
+
+- All P0 smoke tests PASS
+- All E2E happy paths PASS
+- ≥80% of all tests PASS
+- Zero P0/P1 open bugs
+- All P2+ bugs documented with workarounds
+
+### Output
+
+| File | Description |
+|------|-------------|
+| `bugs/README.md` | Live dashboard: P0–P4 counts, open/fixed/deferred |
+| `bugs/BUG-NNN.md` × N | One per bug: steps, evidence, gap analysis, fix, retest |
+| `test-report.md` | Final report: pass rate, story coverage, traceability chain |
