@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.3] — 2026-03-28
+
+### Changed
+
+- `README.md` Installation section rewritten with proper `specify extension add/update` commands:
+  - Install latest: `specify extension add product-forge --from .../archive/refs/heads/main.zip`
+  - Install pinned version: `specify extension add product-forge --from .../archive/refs/tags/v1.1.3.zip`
+  - Update: `specify extension update product-forge --from ...`
+  - Added post-install config setup instructions with `specify extension path product-forge`
+
+---
+
 ## [1.1.2] — 2026-03-28
 
 ### Added
@@ -87,6 +99,7 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.1.3]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.0.0...v1.1.0

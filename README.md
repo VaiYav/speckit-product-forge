@@ -206,28 +206,60 @@ features/
 
 ## Installation
 
-### 1. Configure your project
+### Install (latest version)
+
+```bash
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/heads/main.zip
+```
+
+### Install (specific version)
+
+```bash
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.1.3.zip
+```
+
+### Update to latest
+
+```bash
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/heads/main.zip
+```
+
+### Update to specific version
+
+```bash
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.1.3.zip
+```
+
+### Verify installation
+
+```bash
+specify extension list
+# Should show: product-forge  v1.1.2  enabled
+```
+
+---
+
+### After installing: configure your project
 
 Copy the config template to your project root:
 
 ```bash
 mkdir -p .product-forge
-cp path/to/speckit-product-forge/config-template.yml .product-forge/config.yml
+cp $(specify extension path product-forge)/config-template.yml .product-forge/config.yml
 ```
 
-Edit `.product-forge/config.yml` with your project details.
-
-### 2. Add to `.specify/extensions.yml`
+Edit `.product-forge/config.yml`:
 
 ```yaml
-extensions:
-  - id: product-forge
-    source: https://github.com/VaiYav/speckit-product-forge
-    version: "1.1.2"
-    enabled: true
+project_name: "My App"
+project_tech_stack: "NestJS + Vue 3 + Quasar"
+project_domain: "mobile fitness app"
+codebase_path: "./src"
+features_dir: "features"
+default_speckit_mode: "ask"   # classic | v-model | ask
 ```
 
-### 3. Run
+### Run
 
 ```
 /speckit.product-forge.forge Build a push notification preferences screen
