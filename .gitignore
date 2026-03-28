@@ -1,0 +1,21 @@
+# Product Forge — .gitignore
+
+# macOS
+.DS_Store
+._*
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node (if any tooling is added)
+node_modules/
+
+# Generated feature artifacts (optional — you may want to commit these)
+# Uncomment to exclude generated features from version control:
+# features/
+
+# Local config overrides
+.product-forge/config.local.yml

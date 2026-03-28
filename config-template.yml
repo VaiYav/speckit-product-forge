@@ -1,0 +1,72 @@
+# Product Forge Configuration
+# Copy this file to .product-forge/config.yml in your project root
+#
+# All settings are optional — Product Forge will ask for missing values at runtime.
+# See docs/config.md for full documentation.
+
+# ─── Project Identity ──────────────────────────────────────────────────────────
+
+# Human-readable project name (used in research prompts and report headers)
+project_name: "My Project"
+
+# Brief tech stack description (helps research agents find relevant libraries)
+# Examples: "NestJS + Vue 3 + Quasar", "Next.js + Supabase", "Django + React"
+project_tech_stack: ""
+
+# Domain/industry (helps competitor and UX research focus)
+# Examples: "astrology mobile app", "B2B SaaS fintech", "e-commerce marketplace"
+project_domain: ""
+
+# ─── Paths ─────────────────────────────────────────────────────────────────────
+
+# Path to the project codebase relative to this config file
+# Used by codebase analysis agent and project-styled mockup generation
+codebase_path: "."
+
+# Directory where Product Forge feature artifacts are stored
+# Avoid changing this after features have been created
+features_dir: "features"
+
+# ─── SpecKit Integration ───────────────────────────────────────────────────────
+
+# Default SpecKit mode for Phase 4 bridge
+# Options:
+#   "ask"      — always ask the user (default, recommended)
+#   "classic"  — always use plan → tasks → implement
+#   "v-model"  — always use full V-Model traceability
+default_speckit_mode: "ask"
+
+# ─── Research Defaults ─────────────────────────────────────────────────────────
+
+# Default competitors to always include in competitor analysis
+# Leave empty to let the agent find them automatically
+default_competitors: []
+  # - "Competitor One"
+  # - "Competitor Two"
+
+# Whether to run tech stack research by default (can always be overridden per feature)
+default_tech_research: false
+
+# Whether to run metrics/ROI analysis by default
+default_metrics_research: false
+
+# ─── Product Spec Defaults ─────────────────────────────────────────────────────
+
+# Default wireframe detail level
+# Options: "text" | "basic-html" | "detailed-html"
+default_wireframe_detail: "basic-html"
+
+# Default mockup style when creating mockups
+# Options: "none" | "generic" | "project-styled"
+default_mockup_style: "project-styled"
+
+# ─── Advanced ──────────────────────────────────────────────────────────────────
+
+# Maximum token budget target per generated document (approximate)
+# Larger features will auto-decompose into multiple files
+# Recommended: 3000-5000 tokens per file
+max_tokens_per_doc: 4000
+
+# Language for all generated documents
+# Examples: "en", "ru", "de"
+output_language: "en"

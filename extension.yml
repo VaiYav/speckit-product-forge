@@ -1,0 +1,89 @@
+schema_version: "1.0"
+
+extension:
+  id: "product-forge"
+  name: "Product Forge"
+  version: "1.0.0"
+  description: "Full product lifecycle: research → product spec → SpecKit → implement → verify"
+  author: "Valentin Yakovlev"
+  repository: "https://github.com/VaiYav/speckit-product-forge"
+  license: "MIT"
+  homepage: "https://github.com/VaiYav/speckit-product-forge"
+
+requires:
+  speckit_version: ">=0.1.0"
+
+provides:
+  commands:
+    - name: "product-forge.forge"
+      file: "commands/forge.md"
+      description: "Full lifecycle orchestrator: research → product-spec → revalidation → SpecKit → implement → verify"
+
+    - name: "product-forge.research"
+      file: "commands/research.md"
+      description: "Phase 1: Parallel multi-dimensional feature research (competitors, UX, codebase, tech, metrics)"
+
+    - name: "product-forge.product-spec"
+      file: "commands/product-spec.md"
+      description: "Phase 2: Interactive product specification with configurable detail levels and auto-decomposition"
+
+    - name: "product-forge.revalidate"
+      file: "commands/revalidate.md"
+      description: "Phase 3: Iterative revalidation and correction cycle until user approval"
+
+    - name: "product-forge.bridge"
+      file: "commands/bridge.md"
+      description: "Phase 4: Convert product-spec artifacts to SpecKit spec.md and launch planning"
+
+    - name: "product-forge.implement"
+      file: "commands/implement.md"
+      description: "Phase 5-6: Plan, task breakdown and implementation with product-spec cross-validation"
+
+    - name: "product-forge.verify-full"
+      file: "commands/verify-full.md"
+      description: "Phase 7: Full traceability verification: code ↔ tasks ↔ plan ↔ spec ↔ product-spec ↔ research"
+
+    - name: "product-forge.status"
+      file: "commands/status.md"
+      description: "Show current feature lifecycle status across all phases and recommend next action"
+
+tags:
+  - "process"
+  - "research"
+  - "product-spec"
+  - "lifecycle"
+  - "orchestration"
+
+# Project configuration — copy to .product-forge/config.yml in your project root
+# See config-template.yml and docs/config.md for full documentation
+config:
+  codebase_path:
+    description: "Relative path to the project codebase for static analysis"
+    required: false
+    default: "."
+    example: "./src"
+
+  project_name:
+    description: "Project name used as context in all research agents"
+    required: false
+    example: "My Zodiac AI"
+
+  project_tech_stack:
+    description: "Brief tech stack description passed to research agents"
+    required: false
+    example: "NestJS + Vue 3 + Quasar + Capacitor"
+
+  project_domain:
+    description: "Domain/industry for competitor and UX research context"
+    required: false
+    example: "astrology mobile app"
+
+  features_dir:
+    description: "Directory where feature artifacts are stored"
+    required: false
+    default: "features"
+
+  default_speckit_mode:
+    description: "Default SpecKit transition mode: 'classic' or 'v-model' or 'ask'"
+    required: false
+    default: "ask"
