@@ -1,21 +1,19 @@
-# Product Forge — .gitignore
+# Test environment credentials (never commit)
+features/**/testing/env.md
+features/**/testing/playwright-results/
 
-# macOS
+# Playwright output
+test-results/
+playwright-report/
+
+# Node
+node_modules/
+
+# OS
 .DS_Store
-._*
+Thumbs.db
 
 # Editor
 .idea/
 .vscode/
 *.swp
-*.swo
-
-# Node (if any tooling is added)
-node_modules/
-
-# Generated feature artifacts (optional — you may want to commit these)
-# Uncomment to exclude generated features from version control:
-# features/
-
-# Local config overrides
-.product-forge/config.local.yml
