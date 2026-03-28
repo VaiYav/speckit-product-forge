@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.1.1"
+  version: "1.1.2"
   description: "Full product lifecycle: research → product spec → SpecKit → implement → verify → test"
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"

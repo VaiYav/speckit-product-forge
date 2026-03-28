@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.2] — 2026-03-28
+
+### Added
+
+- **`playwright-cli` as execution engine for Phase 8B** (`speckit.product-forge.test-run`): agent now drives the browser interactively using `playwright-cli open`, `playwright-cli click/fill/snapshot/screenshot`, `playwright-cli tracing-start/stop`, and `playwright-cli -s=pf-auth state-save/load` for auth session reuse
+- **Dual execution model** documented in `commands/test-plan.md`: `test-cases.md` (primary, agent-driven via `playwright-cli`) vs `.spec.ts` files (CI/CD companion, run with `npx playwright test`)
+- **`test-cases.md` format specification**: each test case now uses a playwright-cli action table (`# | Action | playwright-cli equivalent`) so Phase 8B can translate steps mechanically without ambiguity
+- **`playwright-cli` dependency section** in `README.md` Requirements with install instructions and link to [github.com/microsoft/playwright-cli](https://github.com/microsoft/playwright-cli)
+- **"How to Run Tests"** section in generated `test-plan.md` now documents both execution paths: agent-driven (`/speckit.product-forge.test-run`) and CI/CD (`npx playwright test`)
+
+---
+
 ## [1.1.1] — 2026-03-28
 
 ### Fixed
@@ -75,6 +87,7 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.1.2]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/VaiYav/speckit-product-forge/releases/tag/v1.0.0

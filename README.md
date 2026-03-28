@@ -223,7 +223,7 @@ Edit `.product-forge/config.yml` with your project details.
 extensions:
   - id: product-forge
     source: https://github.com/VaiYav/speckit-product-forge
-    version: "1.1.0"
+    version: "1.1.2"
     enabled: true
 ```
 
@@ -250,9 +250,25 @@ Key settings:
 
 ## Requirements
 
-- SpecKit >= 0.1.0
-- Agent with web search capabilities (for research phase)
-- Agent with file system access (for codebase analysis)
+- **SpecKit** >= 0.1.0
+- **Agent with web search capabilities** — for research phase (Phases 1)
+- **Agent with file system access** — for codebase analysis and artifact creation
+
+### Phases 8A–8B: Testing
+
+- **[`playwright-cli`](https://github.com/microsoft/playwright-cli)** — interactive browser agent used by Phase 8B (`test-run`) to execute test cases step-by-step, capture screenshots, record traces, and manage auth sessions.
+
+  Install:
+  ```bash
+  npm install -g playwright-cli
+  ```
+
+- **Playwright browsers** — required for both `playwright-cli` (agent-driven) and `.spec.ts` CI/CD runs:
+  ```bash
+  npx playwright install
+  ```
+
+> **Note:** Phases 8A and 8B are optional. If you skip testing phases, `playwright-cli` is not needed.
 
 ---
 

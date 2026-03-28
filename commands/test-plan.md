@@ -21,6 +21,25 @@ $ARGUMENTS
 
 ---
 
+## Execution Models
+
+Product Forge supports **two complementary test execution models**. This phase generates artifacts for both:
+
+| Model | Artifacts | When to use |
+|-------|-----------|------------|
+| **Agent-driven** (Phase 8B) | `testing/test-cases.md` — step-by-step cases translated to `playwright-cli` commands by the AI agent | Interactive execution, visual verification, evidence capture |
+| **CI/CD pipeline** | `testing/playwright-tests/*.spec.ts` — runnable Playwright spec files | Automated test runs, pull request checks, scheduled regression |
+
+> **Primary execution in Phase 8B uses [`playwright-cli`](https://github.com/microsoft/playwright-cli)** — an interactive browser agent tool.
+> The AI agent reads each test case from `test-cases.md` and drives the browser step-by-step using
+> `playwright-cli open`, `playwright-cli click`, `playwright-cli fill`, `playwright-cli snapshot`,
+> `playwright-cli screenshot`, and `playwright-cli tracing-start/stop`.
+>
+> `.spec.ts` files serve as a **CI/CD companion** — run them with `npx playwright test` in your pipeline.
+> Both artifacts are generated together in Phase 8A and complement each other.
+
+---
+
 ## Step 1: Validate Prerequisites
 
 1. Read `.forge-status.yml` — `verify` must be `completed` (Phase 7 done)
@@ -408,6 +427,15 @@ Create `{TESTING_DIR}/test-plan.md`:
 | P4 Low | Cosmetic | Typo, pixel misalignment |
 
 ## How to Run Tests
+
+### Agent-driven execution (Phase 8B — recommended)
+Run `/speckit.product-forge.test-run` — the AI agent reads `test-cases.md` and executes
+each step interactively using `playwright-cli`.
+
+> Requires: [`playwright-cli`](https://github.com/microsoft/playwright-cli) installed globally.
+> See project README → Requirements.
+
+### CI/CD pipeline execution
 \`\`\`bash
 # Smoke tests (run first)
 npx playwright test --grep @smoke
@@ -431,13 +459,36 @@ npx playwright test --ui
 ## Step 8: Create Test Cases Document
 
 Create `{TESTING_DIR}/test-cases.md` — all test cases in one searchable document.
+**This is the primary input for Phase 8B `playwright-cli` execution.**
 
 Include all TC-SMK, TC-E2E, TC-API, TC-REG cases in full detail with:
 - Preconditions
-- Step-by-step instructions
-- Expected result
+- Step-by-step instructions **written as discrete UI actions** (navigate, click, fill, wait, assert) so Phase 8B can translate each step directly to a `playwright-cli` command
+- Expected result (what to verify via snapshot / screenshot / DOM assertion)
 - Linked story (US-NNN)
 - Linked AC
+
+Write each test case step at the **`playwright-cli` action granularity**:
+
+```markdown
+## TC-E2E-001: Happy path — {title}
+
+**Preconditions:** User is logged in. No data exists for {feature}.
+**Story:** US-001 | **AC:** 1.1, 1.2
+
+| # | Action | playwright-cli equivalent |
+|---|--------|--------------------------|
+| 1 | Navigate to {url} | `playwright-cli goto {url}` |
+| 2 | Click "{button label}" | `playwright-cli click "text={button label}"` |
+| 3 | Fill "{field label}" with "{value}" | `playwright-cli fill "[name={field}]" "{value}"` |
+| 4 | Click "Submit" | `playwright-cli click "[data-testid=submit]"` |
+| 5 | Assert: success toast appears | `playwright-cli snapshot` → verify "Success" visible |
+
+**Expected result:** {outcome}
+**Screenshot point:** After step 4
+```
+
+This format lets Phase 8B translate steps mechanically — no ambiguity, no interpretation needed.
 
 ---
 
@@ -508,11 +559,15 @@ Files created:
   testing/env.md          ← ⚠️ Add to .gitignore
   testing/playwright-tests/{slug}-*.spec.ts
 
-Before running tests:
-  1. Install Playwright: npx playwright install
-  2. Set credentials in testing/env.md
-  3. Ensure app is running at {FRONTEND_URL}
-  4. Run: /speckit.product-forge.test-run
+Execution options:
+  Agent-driven  → /speckit.product-forge.test-run  (uses playwright-cli, recommended)
+  CI/CD pipeline → npx playwright test testing/playwright-tests/{slug}-*.spec.ts
+
+Before running (either mode):
+  1. Ensure playwright-cli is installed (see README → Requirements)
+  2. Install Playwright browsers: npx playwright install
+  3. Set credentials in testing/env.md
+  4. Ensure app is running at {FRONTEND_URL}
 ```
 
 Ask: *"Test plan ready. Proceed to Phase 8B: Test Execution?"*
