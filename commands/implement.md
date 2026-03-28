@@ -1,10 +1,10 @@
 ---
-name: product-forge.implement
+name: speckit.product-forge.implement
 description: >
   Phase 5-6: Plan and task breakdown with product-spec cross-validation, followed by
   implementation. Ensures plan and tasks align with product-spec goals before executing.
   Wraps SpecKit plan + tasks + implement with Product Forge traceability checks.
-  Use with: "implement feature", "start implementation", "/product-forge.implement"
+  Use with: "implement feature", "start implementation", "/speckit.product-forge.implement"
 ---
 
 # Product Forge — Phase 5-6: Plan, Tasks & Implementation
@@ -141,7 +141,7 @@ Update `.forge-status.yml`: `plan_tasks: completed`
 **Delegate to SpecKit `implement`**.
 
 Provide context:
-> *"Product Forge implementation: After completion, run `/product-forge.verify-full` to perform a full traceability check from code back to the original product spec and research artifacts."*
+> *"Product Forge implementation: After completion, run `/speckit.product-forge.verify-full` to perform a full traceability check from code back to the original product spec and research artifacts."*
 
 ### During Implementation
 
@@ -173,7 +173,7 @@ Product Forge traceability chain:
   CODE          ✅ (just implemented)
 
 Ready for Phase 7: Full Verification
-Run: /product-forge.verify-full
+Run: /speckit.product-forge.verify-full
 ```
 
 Update `.forge-status.yml`: `implement: completed`

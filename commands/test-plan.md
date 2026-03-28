@@ -1,10 +1,10 @@
 ---
-name: product-forge.test-plan
+name: speckit.product-forge.test-plan
 description: >
   Phase 8A: Creates a comprehensive test plan from feature artifacts. Asks about test
   types (smoke, E2E Playwright, API/integration, regression), environment setup, credentials,
   auto-detects project test framework, and generates test cases mapped to user stories.
-  Saves to features/<name>/testing/. Use with: "create test plan", "/product-forge.test-plan"
+  Saves to features/<name>/testing/. Use with: "create test plan", "/speckit.product-forge.test-plan"
 ---
 
 # Product Forge — Phase 8A: Test Planning
@@ -29,7 +29,7 @@ $ARGUMENTS
 
 If not ready:
 > ⚠️ Phase 7 (verify-full) must be completed before test planning.
-> Run: `/product-forge.verify-full`
+> Run: `/speckit.product-forge.verify-full`
 
 Set `TESTING_DIR = {FEATURE_DIR}/testing/`
 Set `BUGS_DIR = {FEATURE_DIR}/bugs/`
@@ -512,7 +512,7 @@ Before running tests:
   1. Install Playwright: npx playwright install
   2. Set credentials in testing/env.md
   3. Ensure app is running at {FRONTEND_URL}
-  4. Run: /product-forge.test-run
+  4. Run: /speckit.product-forge.test-run
 ```
 
 Ask: *"Test plan ready. Proceed to Phase 8B: Test Execution?"*

@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.1.0"
+  version: "1.1.1"
   description: "Full product lifecycle: research → product spec → SpecKit → implement → verify → test"
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"
@@ -15,43 +15,43 @@ requires:
 
 provides:
   commands:
-    - name: "product-forge.forge"
+    - name: "speckit.product-forge.forge"
       file: "commands/forge.md"
       description: "Full lifecycle orchestrator: research → product-spec → revalidation → SpecKit → implement → verify"
 
-    - name: "product-forge.research"
+    - name: "speckit.product-forge.research"
       file: "commands/research.md"
       description: "Phase 1: Parallel multi-dimensional feature research (competitors, UX, codebase, tech, metrics)"
 
-    - name: "product-forge.product-spec"
+    - name: "speckit.product-forge.product-spec"
       file: "commands/product-spec.md"
       description: "Phase 2: Interactive product specification with configurable detail levels and auto-decomposition"
 
-    - name: "product-forge.revalidate"
+    - name: "speckit.product-forge.revalidate"
       file: "commands/revalidate.md"
       description: "Phase 3: Iterative revalidation and correction cycle until user approval"
 
-    - name: "product-forge.bridge"
+    - name: "speckit.product-forge.bridge"
       file: "commands/bridge.md"
       description: "Phase 4: Convert product-spec artifacts to SpecKit spec.md and launch planning"
 
-    - name: "product-forge.implement"
+    - name: "speckit.product-forge.implement"
       file: "commands/implement.md"
       description: "Phase 5-6: Plan, task breakdown and implementation with product-spec cross-validation"
 
-    - name: "product-forge.verify-full"
+    - name: "speckit.product-forge.verify-full"
       file: "commands/verify-full.md"
       description: "Phase 7: Full traceability verification: code ↔ tasks ↔ plan ↔ spec ↔ product-spec ↔ research"
 
-    - name: "product-forge.test-plan"
+    - name: "speckit.product-forge.test-plan"
       file: "commands/test-plan.md"
       description: "Phase 8A: Auto-detect test setup, generate test cases and Playwright specs from user stories"
 
-    - name: "product-forge.test-run"
+    - name: "speckit.product-forge.test-run"
       file: "commands/test-run.md"
       description: "Phase 8B: Execute tests, track bugs in BUG-NNN.md, auto-fix P0/P1, loop until exit criteria met"
 
-    - name: "product-forge.status"
+    - name: "speckit.product-forge.status"
       file: "commands/status.md"
       description: "Show current feature lifecycle status across all phases and recommend next action"
 

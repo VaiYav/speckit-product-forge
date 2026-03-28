@@ -1,10 +1,10 @@
 ---
-name: product-forge.verify-full
+name: speckit.product-forge.verify-full
 description: >
   Phase 7: Full traceability verification across the entire Product Forge chain.
   Checks: code ↔ tasks ↔ plan ↔ spec.md ↔ product-spec ↔ research.
   Produces a structured verify-report.md with CRITICAL/WARNING/PASSED findings.
-  Use with: "verify full", "check traceability", "/product-forge.verify-full"
+  Use with: "verify full", "check traceability", "/speckit.product-forge.verify-full"
 ---
 
 # Product Forge — Phase 7: Full Verification
@@ -284,7 +284,7 @@ Write `{FEATURE_DIR}/verify-report.md`:
 {OR}
 {PASS WITH WARNINGS}: {N} warnings found. Review recommended but no blockers.
 {OR}
-{FAIL}: {N} critical issues must be resolved. Run `/product-forge.verify-full` again after fixes.
+{FAIL}: {N} critical issues must be resolved. Run `/speckit.product-forge.verify-full` again after fixes.
 
 ```
 
@@ -308,7 +308,7 @@ Full report: {FEATURE_DIR}/verify-report.md
 ```
 
 ### If CRITICAL issues exist:
-Ask: *"There are {N} critical issues that need to be resolved. I recommend fixing them and re-running `/product-forge.verify-full`. Would you like me to help fix them, or do you want to address them manually?"*
+Ask: *"There are {N} critical issues that need to be resolved. I recommend fixing them and re-running `/speckit.product-forge.verify-full`. Would you like me to help fix them, or do you want to address them manually?"*
 
 ### If only WARNINGS:
 Ask: *"Verification passed with {N} warnings. These are advisory — you can review and address them or acknowledge and close. Ready to mark this feature as complete?"*

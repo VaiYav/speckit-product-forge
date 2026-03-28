@@ -1,10 +1,10 @@
 ---
-name: product-forge.revalidate
+name: speckit.product-forge.revalidate
 description: >
   Phase 3: Iterative revalidation and correction cycle. Shows product spec summary,
   collects user feedback in chat, applies corrections via a dedicated agent, and loops
   until explicit user approval. All revision history recorded in review.md.
-  Use with: "revalidate spec", "review product spec", "/product-forge.revalidate"
+  Use with: "revalidate spec", "review product spec", "/speckit.product-forge.revalidate"
 ---
 
 # Product Forge — Phase 3: Revalidation
@@ -260,7 +260,7 @@ Update `{FEATURE_DIR}/README.md` phase status table:
 Revision history: {N} rounds of revisions captured in review.md
 
 Ready for Phase 4: SpecKit Bridge
-Run: /product-forge.bridge
+Run: /speckit.product-forge.bridge
 ```
 
 ---

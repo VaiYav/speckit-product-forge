@@ -1,10 +1,10 @@
 ---
-name: product-forge.bridge
+name: speckit.product-forge.bridge
 description: >
   Phase 4: Converts approved product-spec artifacts into a SpecKit-compatible spec.md,
   enriched with full research and product context. Then launches SpecKit in classic
   (plan → tasks → implement) or V-Model mode based on user choice.
-  Use with: "bridge to speckit", "create spec", "/product-forge.bridge"
+  Use with: "bridge to speckit", "create spec", "/speckit.product-forge.bridge"
 ---
 
 # Product Forge — Phase 4: SpecKit Bridge
@@ -30,7 +30,7 @@ Check that Phase 3 was approved:
 3. Verify `{FEATURE_DIR}/review.md` contains "APPROVED"
 
 If not approved:
-> ⚠️ Product spec has not been approved yet. Please complete Phase 3 first: `/product-forge.revalidate`
+> ⚠️ Product spec has not been approved yet. Please complete Phase 3 first: `/speckit.product-forge.revalidate`
 
 ---
 
@@ -285,7 +285,7 @@ Next commands (run in sequence):
 1. /speckit.plan    — Technical architecture plan
 2. /speckit.tasks   — Actionable task breakdown
 3. /speckit.implement — Execution
-4. /product-forge.verify-full — Full traceability verification
+4. /speckit.product-forge.verify-full — Full traceability verification
 ```
 
 Delegate to SpecKit `plan` with context:
@@ -305,7 +305,7 @@ Phases:
 5. /speckit.tasks                   — Implementation tasks
 6. /speckit.implement               — Execution
 7. /speckit.v-model-unit-test + integration/system/acceptance — Test specs
-8. /product-forge.verify-full       — Full traceability check
+8. /speckit.product-forge.verify-full       — Full traceability check
 ```
 
 Delegate to SpecKit `v-model-requirements` with the same context note above.

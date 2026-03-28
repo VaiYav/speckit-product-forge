@@ -1,10 +1,10 @@
 ---
-name: product-forge.status
+name: speckit.product-forge.status
 description: >
   Show the current Product Forge lifecycle status for a feature. Reads .forge-status.yml,
   displays all phases with completion state, lists available artifacts, and recommends
   the next action. Works for any feature in the features/ directory.
-  Use with: "forge status", "show status", "/product-forge.status"
+  Use with: "forge status", "show status", "/speckit.product-forge.status"
 ---
 
 # Product Forge — Status Command
@@ -115,9 +115,9 @@ For each phase, check whether the expected artifacts exist:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Quick Actions:
-  • Continue full cycle:  /product-forge.forge
-  • Jump to current phase: /product-forge.implement
-  • Revalidate spec:       /product-forge.revalidate
+  • Continue full cycle:  /speckit.product-forge.forge
+  • Jump to current phase: /speckit.product-forge.implement
+  • Revalidate spec:       /speckit.product-forge.revalidate
   • View research:         cat {FEATURE_DIR}/research/README.md
 ```
 
@@ -143,14 +143,14 @@ If artifact file exists but status says pending → flag inconsistency:
 ⚠️  Status mismatch detected:
     .forge-status.yml says "Phase 2: pending"
     but product-spec/README.md exists.
-    Run /product-forge.status --repair to sync status file.
+    Run /speckit.product-forge.status --repair to sync status file.
 ```
 
 If `verify-report.md` exists with CRITICAL findings:
 ```
 ❌ ATTENTION: verify-report.md contains {N} CRITICAL findings.
    The feature cannot be considered done until these are resolved.
-   Run: /product-forge.verify-full
+   Run: /speckit.product-forge.verify-full
 ```
 
 ---

@@ -1,11 +1,11 @@
 ---
-name: product-forge.research
+name: speckit.product-forge.research
 description: >
   Phase 1: Adaptive multi-dimensional feature research. Assesses input richness and
   auto-adjusts interview depth — minimal input triggers full 7-question interview,
   rich input skips to confirmation. Mandatory: competitors, UX/UI, codebase.
   Optional: tech stack, metrics/ROI. Saves to features/<name>/research/.
-  Use with: "research feature", "/product-forge.research"
+  Use with: "research feature", "/speckit.product-forge.research"
 ---
 
 # Product Forge — Phase 1: Research
@@ -461,4 +461,4 @@ Show:
 
 Ask: *"Research complete — {N} dimensions analyzed, saved to `{RESEARCH_DIR}/`. Ready to proceed to Phase 2: Product Spec creation?"*
 
-If standalone: *"Next: `/product-forge.product-spec`"*
+If standalone: *"Next: `/speckit.product-forge.product-spec`"*

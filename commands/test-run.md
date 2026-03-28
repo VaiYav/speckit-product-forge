@@ -1,10 +1,10 @@
 ---
-name: product-forge.test-run
+name: speckit.product-forge.test-run
 description: >
   Phase 8B: Executes test plan via playwright-cli, tracks bugs in bugs/<BUG-NNN>.md,
   agent auto-fixes bugs and retests, performs gap analysis when bugs require spec changes.
   Loop continues until all P0/P1 bugs closed and exit criteria met.
-  Use with: "run tests", "execute tests", "/product-forge.test-run"
+  Use with: "run tests", "execute tests", "/speckit.product-forge.test-run"
 ---
 
 # Product Forge — Phase 8B: Test Execution & Bug Fix Loop
@@ -30,7 +30,7 @@ $ARGUMENTS
 5. `testing/env.md` exists with FRONTEND_URL configured
 
 If not ready:
-> ⚠️ Test plan not found. Run `/product-forge.test-plan` first.
+> ⚠️ Test plan not found. Run `/speckit.product-forge.test-plan` first.
 
 Load from `testing/test-plan.md`:
 - `FRONTEND_URL`, `API_URL`, `TEST_TYPES`, `BROWSERS`
@@ -417,7 +417,7 @@ Read exit criteria from `testing/test-plan.md`:
   {list what's missing}
 
 Options:
-  A. Continue fixing P0/P1 bugs — [/product-forge.test-run resume]
+  A. Continue fixing P0/P1 bugs — [/speckit.product-forge.test-run resume]
   B. Override exit criteria — accept current state with documented risks
   C. Defer bugs to next sprint — create bug tracker issues, mark feature as conditional-done
 ```

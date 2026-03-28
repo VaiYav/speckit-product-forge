@@ -1,11 +1,11 @@
 ---
-name: product-forge.forge
+name: speckit.product-forge.forge
 description: >
   Full lifecycle orchestrator for Product Forge. Drives a feature from idea to
   tested, shipped code through 9 phases with human-in-the-loop gates:
   research → product-spec → revalidation → SpecKit bridge → implement → verify
   → test-plan → test-run. Phases 8A/8B are optional but recommended.
-  Use with: "forge feature", "run full cycle", "product-forge", "/product-forge.forge"
+  Use with: "forge feature", "run full cycle", "product-forge", "/speckit.product-forge.forge"
 ---
 
 # Product Forge — Full Lifecycle Orchestrator
@@ -31,15 +31,15 @@ Parse the input:
 
 | Phase | Command | Artifact Signal | Gate |
 |-------|---------|-----------------|------|
-| 1. Research | `product-forge.research` | `research/` folder with ≥2 files | User approves research |
-| 2. Product Spec | `product-forge.product-spec` | `product-spec/README.md` exists | User approves product spec |
-| 3. Revalidation | `product-forge.revalidate` | `review.md` with status `APPROVED` | User explicitly approves |
-| 4. Bridge → SpecKit | `product-forge.bridge` | `spec.md` exists in FEATURE_DIR | User approves spec.md |
-| 5. Plan + Tasks | `product-forge.implement` (plan hint) | `plan.md` + `tasks.md` exist | User approves both |
-| 6. Implement | `product-forge.implement` (implement hint) | All tasks `[x]` in tasks.md | Implementation complete |
-| 7. Verify Full | `product-forge.verify-full` | `verify-report.md` with no CRITICAL | User acknowledges report |
-| 8A. Test Plan *(optional)* | `product-forge.test-plan` | `testing/test-plan.md` + `testing/playwright-tests/` | User approves test plan |
-| 8B. Test Run *(optional)* | `product-forge.test-run` | `test-report.md` + `bugs/README.md` | Pass rate ≥80% + zero P0/P1 open |
+| 1. Research | `speckit.product-forge.research` | `research/` folder with ≥2 files | User approves research |
+| 2. Product Spec | `speckit.product-forge.product-spec` | `product-spec/README.md` exists | User approves product spec |
+| 3. Revalidation | `speckit.product-forge.revalidate` | `review.md` with status `APPROVED` | User explicitly approves |
+| 4. Bridge → SpecKit | `speckit.product-forge.bridge` | `spec.md` exists in FEATURE_DIR | User approves spec.md |
+| 5. Plan + Tasks | `speckit.product-forge.implement` (plan hint) | `plan.md` + `tasks.md` exist | User approves both |
+| 6. Implement | `speckit.product-forge.implement` (implement hint) | All tasks `[x]` in tasks.md | Implementation complete |
+| 7. Verify Full | `speckit.product-forge.verify-full` | `verify-report.md` with no CRITICAL | User acknowledges report |
+| 8A. Test Plan *(optional)* | `speckit.product-forge.test-plan` | `testing/test-plan.md` + `testing/playwright-tests/` | User approves test plan |
+| 8B. Test Run *(optional)* | `speckit.product-forge.test-run` | `test-report.md` + `bugs/README.md` | Pass rate ≥80% + zero P0/P1 open |
 
 ---
 
@@ -119,7 +119,7 @@ Before starting:
 
 ## Phase 1: Research
 
-**Delegate to:** `product-forge.research`
+**Delegate to:** `speckit.product-forge.research`
 
 Provide:
 - FEATURE_DESCRIPTION
@@ -137,7 +137,7 @@ Update `.forge-status.yml`: `research: completed`
 
 ## Phase 2: Product Spec
 
-**Delegate to:** `product-forge.product-spec`
+**Delegate to:** `speckit.product-forge.product-spec`
 
 Provide:
 - FEATURE_DESCRIPTION
@@ -156,7 +156,7 @@ Update `.forge-status.yml`: `product_spec: completed`
 
 ## Phase 3: Revalidation
 
-**Delegate to:** `product-forge.revalidate`
+**Delegate to:** `speckit.product-forge.revalidate`
 
 Provide:
 - FEATURE_DIR
@@ -175,7 +175,7 @@ Update `.forge-status.yml`: `revalidation: approved`
 
 ## Phase 4: Bridge → SpecKit
 
-**Delegate to:** `product-forge.bridge`
+**Delegate to:** `speckit.product-forge.bridge`
 
 Provide:
 - FEATURE_DIR
@@ -193,13 +193,13 @@ Update `.forge-status.yml`: `bridge: completed`
 
 ## Phase 5: Plan + Tasks
 
-**Delegate to:** `product-forge.implement` (handles plan + tasks sub-phases with cross-validation)
+**Delegate to:** `speckit.product-forge.implement` (handles plan + tasks sub-phases with cross-validation)
 
 Provide:
 - FEATURE_DIR with spec.md
 - Resume hint: `phase=plan` to start from plan sub-phase
 
-`product-forge.implement` will:
+`speckit.product-forge.implement` will:
 1. Delegate to SpecKit `plan` with product-spec context
 2. Cross-validate plan vs product-spec
 3. Gate: user approves plan
@@ -217,7 +217,7 @@ Update `.forge-status.yml`: `plan_tasks: completed`
 
 ## Phase 6: Implement
 
-**Delegate to:** `product-forge.implement` (continues after tasks approval, resume hint: `phase=implement`)
+**Delegate to:** `speckit.product-forge.implement` (continues after tasks approval, resume hint: `phase=implement`)
 
 Monitor task completion. After all tasks `[x]`:
 - Summarize what was implemented
@@ -229,7 +229,7 @@ Update `.forge-status.yml`: `implement: completed`
 
 ## Phase 7: Verify Full
 
-**Delegate to:** `product-forge.verify-full`
+**Delegate to:** `speckit.product-forge.verify-full`
 
 Provide:
 - FEATURE_DIR (with all artifacts: research/, product-spec/, spec.md, plan.md, tasks.md)
@@ -260,7 +260,7 @@ Options:
   2. [SKIP] Skip testing phases — mark feature as complete
 ```
 
-If user confirms → **Delegate to:** `product-forge.test-plan`
+If user confirms → **Delegate to:** `speckit.product-forge.test-plan`
 
 Provide:
 - FEATURE_DIR (with spec.md, tasks.md, product-spec/)
@@ -279,13 +279,13 @@ Update `.forge-status.yml`: `test_plan: completed`
 
 ## Phase 8B: Test Run *(Optional)*
 
-**Delegate to:** `product-forge.test-run`
+**Delegate to:** `speckit.product-forge.test-run`
 
 Provide:
 - FEATURE_DIR (with testing/)
 - codebase_path
 
-`product-forge.test-run` handles its own execution loop:
+`speckit.product-forge.test-run` handles its own execution loop:
 - Pre-flight app reachability check
 - Smoke → E2E → API → Regression test execution
 - Bug creation and auto-fix loop for P0/P1 bugs
@@ -332,5 +332,5 @@ Research ✅ → Product Spec ✅ → Approved ✅ → spec.md ✅
 
 Offer:
 1. Create a git tag for the feature
-2. Generate a summary report with `/product-forge.status`
-3. Start a new feature with `/product-forge.forge`
+2. Generate a summary report with `/speckit.product-forge.status`
+3. Start a new feature with `/speckit.product-forge.forge`

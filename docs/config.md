@@ -207,5 +207,5 @@ Any config value can be overridden via environment variable using the prefix `PR
 ```bash
 PRODUCT_FORGE_PROJECT_NAME="My App" \
 PRODUCT_FORGE_CODEBASE_PATH="./src" \
-/product-forge.forge
+/speckit.product-forge.forge
 ```

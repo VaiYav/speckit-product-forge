@@ -6,7 +6,7 @@ Full documentation for each of the 9 Product Forge lifecycle phases (7 required 
 
 ## Phase 1: Research
 
-**Command:** `/product-forge.research`
+**Command:** `/speckit.product-forge.research`
 **Output:** `features/{slug}/research/`
 **Gate:** User approves research before Phase 2
 
@@ -46,7 +46,7 @@ Two additional agents run **if opted-in**:
 
 ## Phase 2: Product Spec
 
-**Command:** `/product-forge.product-spec`
+**Command:** `/speckit.product-forge.product-spec`
 **Output:** `features/{slug}/product-spec/`
 **Gate:** User approves document plan before writing, then approves output
 
@@ -93,7 +93,7 @@ then conducts a brief interview, then generates all documents.
 
 ## Phase 3: Revalidation
 
-**Command:** `/product-forge.revalidate`
+**Command:** `/speckit.product-forge.revalidate`
 **Output:** `features/{slug}/review.md`
 **Gate:** Explicit "APPROVED" / "LGTM" from user
 
@@ -125,7 +125,7 @@ Before locking, the agent automatically verifies:
 
 ## Phase 4: Bridge → SpecKit
 
-**Command:** `/product-forge.bridge`
+**Command:** `/speckit.product-forge.bridge`
 **Output:** `features/{slug}/spec.md`
 **Gate:** User approves spec.md; then SpecKit mode is selected
 
@@ -158,7 +158,7 @@ competitive intelligence, UX recommendations, and technical integration notes.
 
 ## Phase 5: Plan + Tasks
 
-**Command:** `/product-forge.implement` (handles both plan and tasks sub-phases)
+**Command:** `/speckit.product-forge.implement` (handles both plan and tasks sub-phases)
 **Output:** `features/{slug}/plan.md` + `features/{slug}/tasks.md`
 **Gates:** Two separate human gates — one after plan, one after tasks
 
@@ -183,7 +183,7 @@ competitive intelligence, UX recommendations, and technical integration notes.
 
 ## Phase 6: Implementation
 
-**Command:** `/product-forge.implement` (continues after tasks approval)
+**Command:** `/speckit.product-forge.implement` (continues after tasks approval)
 **Output:** Code files (per tasks.md)
 **Gate:** All tasks `[x]`
 
@@ -196,7 +196,7 @@ Delegates to SpecKit `implement`. Product Forge adds:
 
 ## Phase 7: Full Verification
 
-**Command:** `/product-forge.verify-full`
+**Command:** `/speckit.product-forge.verify-full`
 **Output:** `features/{slug}/verify-report.md`
 **Gate:** No CRITICAL findings (or user acknowledges)
 
@@ -224,7 +224,7 @@ Delegates to SpecKit `implement`. Product Forge adds:
 
 ## Phase 8A: Test Plan *(Optional)*
 
-**Command:** `/product-forge.test-plan`
+**Command:** `/speckit.product-forge.test-plan`
 **Output:** `features/{slug}/testing/`
 **Gate:** User approves test plan before execution
 
@@ -278,7 +278,7 @@ and creates runnable Playwright `.spec.ts` files. No manual test writing require
 
 ## Phase 8B: Test Run *(Optional)*
 
-**Command:** `/product-forge.test-run`
+**Command:** `/speckit.product-forge.test-run`
 **Output:** `features/{slug}/bugs/`, `features/{slug}/test-report.md`
 **Gate:** ≥80% pass rate AND zero P0/P1 open bugs
 

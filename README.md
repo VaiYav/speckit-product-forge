@@ -29,16 +29,16 @@ The result: a **complete traceability chain** — research → product spec → 
 
 | Command | Phase | Description |
 |---------|-------|-------------|
-| `/product-forge.forge` | All (1–8B) | **Main command.** Full lifecycle orchestrator with human gates |
-| `/product-forge.research` | 1 | Parallel multi-dimensional feature research (adaptive depth) |
-| `/product-forge.product-spec` | 2 | Interactive product spec creation with configurable detail |
-| `/product-forge.revalidate` | 3 | Iterative review and correction loop until approval |
-| `/product-forge.bridge` | 4 | Convert product-spec to SpecKit spec.md, choose Classic or V-Model |
-| `/product-forge.implement` | 5–6 | Plan + tasks + implementation with product-spec cross-validation |
-| `/product-forge.verify-full` | 7 | Full traceability verification: code ↔ research |
-| `/product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
-| `/product-forge.test-run` | 8B | Execute tests, auto-fix bugs, loop until exit criteria met |
-| `/product-forge.status` | — | Show lifecycle status for any feature |
+| `/speckit.product-forge.forge` | All (1–8B) | **Main command.** Full lifecycle orchestrator with human gates |
+| `/speckit.product-forge.research` | 1 | Parallel multi-dimensional feature research (adaptive depth) |
+| `/speckit.product-forge.product-spec` | 2 | Interactive product spec creation with configurable detail |
+| `/speckit.product-forge.revalidate` | 3 | Iterative review and correction loop until approval |
+| `/speckit.product-forge.bridge` | 4 | Convert product-spec to SpecKit spec.md, choose Classic or V-Model |
+| `/speckit.product-forge.implement` | 5–6 | Plan + tasks + implementation with product-spec cross-validation |
+| `/speckit.product-forge.verify-full` | 7 | Full traceability verification: code ↔ research |
+| `/speckit.product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
+| `/speckit.product-forge.test-run` | 8B | Execute tests, auto-fix bugs, loop until exit criteria met |
+| `/speckit.product-forge.status` | — | Show lifecycle status for any feature |
 
 ---
 
@@ -50,7 +50,7 @@ The result: a **complete traceability chain** — research → product spec → 
    ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 1: Research                                                           │
-│  /product-forge.research                                                     │
+│  /speckit.product-forge.research                                                     │
 │                                                                              │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────────┐        │
 │  │ Competitor       │  │ UX/UI Patterns  │  │ Codebase Analysis    │        │
@@ -69,7 +69,7 @@ The result: a **complete traceability chain** — research → product spec → 
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 2: Product Spec                                                       │
-│  /product-forge.product-spec                                                 │
+│  /speckit.product-forge.product-spec                                                 │
 │                                                                              │
 │  Asks: detail level · decomposition · mockup style                          │
 │                                                                              │
@@ -82,7 +82,7 @@ The result: a **complete traceability chain** — research → product spec → 
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 3: Revalidation                                                       │
-│  /product-forge.revalidate                                                   │
+│  /speckit.product-forge.revalidate                                                   │
 │                                                                              │
 │  Loop: show summary → collect feedback → apply changes → confirm            │
 │  Exits only on explicit user approval                                        │
@@ -93,7 +93,7 @@ The result: a **complete traceability chain** — research → product spec → 
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 4: SpecKit Bridge                                                     │
-│  /product-forge.bridge                                                       │
+│  /speckit.product-forge.bridge                                                       │
 │                                                                              │
 │  Synthesizes all artifacts → spec.md (enriched)                             │
 │  User chooses: Classic (plan → tasks → impl) or V-Model (full traceability) │
@@ -103,7 +103,7 @@ The result: a **complete traceability chain** — research → product spec → 
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 5: Plan + Tasks          PHASE 6: Implementation                     │
-│  /product-forge.implement                                                    │
+│  /speckit.product-forge.implement                                                    │
 │                                                                              │
 │  SpecKit plan → cross-validate vs product-spec                              │
 │  SpecKit tasks → cross-validate vs product-spec                             │
@@ -114,7 +114,7 @@ The result: a **complete traceability chain** — research → product spec → 
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 7: Full Verification                                                  │
-│  /product-forge.verify-full                                                  │
+│  /speckit.product-forge.verify-full                                                  │
 │                                                                              │
 │  Code ↔ Tasks ↔ Plan ↔ spec.md ↔ product-spec ↔ research                  │
 │  Produces: verify-report.md with CRITICAL / WARNING / PASSED                │
@@ -124,7 +124,7 @@ The result: a **complete traceability chain** — research → product spec → 
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 8A: Test Plan  [OPTIONAL]                                             │
-│  /product-forge.test-plan                                                    │
+│  /speckit.product-forge.test-plan                                                    │
 │                                                                              │
 │  Auto-detects framework, ports, env vars                                     │
 │  Generates: smoke / E2E / API / regression test cases                       │
@@ -136,7 +136,7 @@ The result: a **complete traceability chain** — research → product spec → 
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 8B: Test Execution  [OPTIONAL]                                        │
-│  /product-forge.test-run                                                     │
+│  /speckit.product-forge.test-run                                                     │
 │                                                                              │
 │  Smoke → E2E → API → Regression (ordered, smoke blocks on failure)          │
 │  Per bug: bugs/BUG-NNN.md with evidence + gap analysis                      │
@@ -230,7 +230,7 @@ extensions:
 ### 3. Run
 
 ```
-/product-forge.forge Build a push notification preferences screen
+/speckit.product-forge.forge Build a push notification preferences screen
 ```
 
 ---

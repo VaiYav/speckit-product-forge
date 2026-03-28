@@ -1,11 +1,11 @@
 ---
-name: product-forge.product-spec
+name: speckit.product-forge.product-spec
 description: >
   Phase 2: Interactive product specification creation. Asks detailed questions about
   desired level of detail and document decomposition. Creates product-spec.md,
   user-journey.md, wireframes, metrics.md, and optional mockups.html.
   All documents are cross-linked via product-spec/README.md index.
-  Use with: "create product spec", "/product-forge.product-spec"
+  Use with: "create product spec", "/speckit.product-forge.product-spec"
 ---
 
 # Product Forge — Phase 2: Product Spec Creation
