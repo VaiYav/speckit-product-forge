@@ -1,17 +1,20 @@
 ---
 name: speckit.product-forge.implement
 description: >
-  Phase 5-6: Plan and task breakdown with product-spec cross-validation, followed by
-  implementation. Ensures plan and tasks align with product-spec goals before executing.
-  Wraps SpecKit plan + tasks + implement with Product Forge traceability checks.
-  Use with: "implement feature", "start implementation", "/speckit.product-forge.implement"
+  Phase 6: Execute implementation from tasks.md. Delegates to SpecKit implement,
+  monitors task completion, surfaces product-spec context to implementation agents.
+  Standalone — run after tasks (or after any custom step inserted before implementation).
+  Use: "implement", "start coding", "/speckit.product-forge.implement"
 ---
 
-# Product Forge — Phase 5-6: Plan, Tasks & Implementation
+# Product Forge — Phase 6: Implementation
 
-You are the **Implementation Coordinator** for Product Forge Phase 5-6.
-Your job: ensure the technical plan and task breakdown faithfully represent what was
-agreed in the product spec, then drive implementation to completion.
+You are the **Implementation Coordinator** for Product Forge Phase 6.
+Your job: drive implementation to completion from `tasks.md`, keep implementation agents
+anchored to the product spec, and report when all tasks are done.
+
+This is a **standalone command** — it does one thing and exits.
+The next step is `/speckit.product-forge.verify-full`.
 
 ## User Input
 
@@ -23,166 +26,119 @@ $ARGUMENTS
 
 ## Step 1: Validate Prerequisites
 
-1. Read `{FEATURE_DIR}/.forge-status.yml` — `bridge` must be `completed`
-2. Verify `{FEATURE_DIR}/spec.md` exists
-3. Determine current sub-phase from status:
-   - No `plan.md` → start from Phase 5A (Plan)
-   - `plan.md` exists, no `tasks.md` → start from Phase 5B (Tasks)
-   - `tasks.md` exists, has unchecked tasks → resume Phase 6 (Implement)
-   - All tasks `[x]` → skip to completion summary
+1. Read `.forge-status.yml` — `tasks` must be `completed`
+2. Verify `tasks.md` exists with at least one unchecked task `[ ]`
+3. Verify `plan.md` and `spec.md` exist
+
+If all tasks are already `[x]`:
+> ✅ All tasks in `tasks.md` are already completed.
+> Run `/speckit.product-forge.verify-full` for full traceability verification.
 
 ---
 
-## Step 2: Pre-Implementation Brief
+## Step 2: Implementation Brief
 
-Show the user a summary to re-anchor on what we're building:
+Show the user a summary before starting:
 
 ```
-🎯 Implementation Brief: {Feature Name}
+🔨 Implementation Brief: {Feature Name}
 
-Product spec: {FEATURE_DIR}/product-spec/
-SpecKit spec: {FEATURE_DIR}/spec.md
-Mode: {SPECKIT_MODE from .forge-status.yml}
+tasks.md:         {FEATURE_DIR}/tasks.md
+plan.md:          {FEATURE_DIR}/plan.md
+spec.md:          {FEATURE_DIR}/spec.md
+Product spec:     {FEATURE_DIR}/product-spec/
 
-Must Have stories to implement: {N}
-Functional requirements: {N}
-Integration points identified: {N}
-
-Key technical constraints (from codebase analysis):
-{top 3 bullet points from research/codebase-analysis.md}
-```
-
----
-
-## Phase 5A: Technical Plan
-
-**Delegate to SpecKit `plan`** with enriched context:
-
-Provide to the plan agent:
-- FEATURE_DIR with spec.md
-- This context note:
-  > *"Product Forge context: This spec is backed by exhaustive research. Key integration points are documented in `research/codebase-analysis.md`. User journeys and wireframes are in `product-spec/`. The plan should align with the product-spec feature breakdown and cover all Must Have user stories."*
-
-After plan agent returns:
-
-### 5A-1: Cross-validate Plan vs Product Spec
-
-Read `plan.md` and cross-check against `product-spec/product-spec.md`:
-
-| Check | Status | Notes |
-|-------|--------|-------|
-| All Must Have user stories addressed? | ✅/⚠️/❌ | |
-| Technical integration matches codebase-analysis? | ✅/⚠️/❌ | |
-| No unresolved open questions from product-spec? | ✅/⚠️/❌ | |
-| Data model plan aligns with product-spec data requirements? | ✅/⚠️/❌ | |
-| Performance/NFR approach defined? | ✅/⚠️/❌ | |
-
-If ❌ issues found: summarize for user, ask how to resolve.
-If all ✅ or ⚠️ (warnings only): proceed to approval.
-
-### 5A-2: Plan Approval Gate
-
-Show plan summary + cross-validation result.
-Ask: *"Technical plan created. Cross-validation: {N} checks passed, {N} warnings, {N} issues. Approve plan and move to Task breakdown?"*
-
-Update `.forge-status.yml`: `plan_tasks: plan_complete`
-
----
-
-## Phase 5B: Task Breakdown
-
-**Delegate to SpecKit `tasks`** with context:
-
-Provide:
-- FEATURE_DIR
-- Note: *"Ensure tasks are decomposed enough to stay within safe implementation size. Reference product-spec/product-spec.md for acceptance criteria that each task group must satisfy. Tasks should be grouped by the feature breakdown sections in product-spec.md."*
-
-After tasks agent returns:
-
-### 5B-1: Cross-validate Tasks vs Product Spec
-
-Read `tasks.md` and check:
-
-| Check | Status |
-|-------|--------|
-| Every Must Have US-NNN has at least 1 implementation task? | ✅/⚠️/❌ |
-| Every FR-NNN has at least 1 corresponding task? | ✅/⚠️/❌ |
-| Test tasks included for each implementation group? | ✅/⚠️/❌ |
-| No orphan tasks (tasks without traceable requirement)? | ✅/⚠️/❌ |
-
-If issues: surface to user with specific mismatches.
-
-### 5B-2: Tasks Approval Gate
-
-Show tasks summary:
-```
-📋 Task Breakdown Created
-
-{N} task groups:
-  • Phase 1: {name} — {N} tasks
-  • Phase 2: {name} — {N} tasks
+Tasks to complete: {N} remaining / {N} total
+Task groups: {N}
+  • {group 1}: {N} tasks
+  • {group 2}: {N} tasks
   ...
 
-Coverage check:
-  ✅ {N}/{N} Must Have stories covered
-  ⚠️ {N} warnings: {list}
-
-Estimated implementation surface: {N} files to create/modify
+Key context for implementation agents:
+  • Wireframes/mockups: {FEATURE_DIR}/product-spec/mockups/
+  • User journeys:      {FEATURE_DIR}/product-spec/user-journey*.md
+  • Acceptance criteria in spec.md — reference these for each task group
 ```
-
-Ask: *"Task breakdown approved? Begin implementation?"*
-
-Update `.forge-status.yml`: `plan_tasks: completed`
 
 ---
 
-## Phase 6: Implementation
+## Step 3: Delegate to SpecKit Implement
 
-**Delegate to SpecKit `implement`**.
+**Delegate to SpecKit `implement`** with the enriched context note:
 
-Provide context:
-> *"Product Forge implementation: After completion, run `/speckit.product-forge.verify-full` to perform a full traceability check from code back to the original product spec and research artifacts."*
+> *"Product Forge context:
+> — Wireframes and mockups are in `product-spec/mockups/` — use them for UI implementation.
+> — User journeys are in `product-spec/user-journey*.md` — match UX flows exactly.
+> — Acceptance criteria are in `spec.md` — each task must satisfy its linked AC.
+> — If you need to clarify a product decision, check `product-spec/product-spec.md` first
+>   before asking the user.
+> After all tasks are completed, do NOT run verification — stop and return control
+> to the Product Forge orchestrator."*
 
-### During Implementation
+---
 
-If running via forge orchestrator, monitor for:
-- Task completion updates
-- Blocker situations
-- Requests for product-spec clarification (agent may need to read wireframes/user-journeys)
+## Step 4: Monitor & Support
 
-If the implementation agent asks a product question that's answered in the product spec, point them there:
-> *"Check `{FEATURE_DIR}/product-spec/product-spec.md § {section}` — this was defined in the product spec."*
+During implementation, if the agent asks a product question that is answered
+in the product spec, redirect:
 
-### After Implementation Complete
+> *"Check `{FEATURE_DIR}/product-spec/product-spec.md § {section}` —
+> this decision was made in the product spec."*
 
-Verify all tasks in `tasks.md` are `[x]`.
+If a blocker arises that requires changing the plan or tasks, surface it to the user
+before proceeding. Do not silently deviate from `tasks.md`.
 
-Show:
+---
+
+## Step 5: Completion Check
+
+After SpecKit implement returns, verify all tasks in `tasks.md` are `[x]`.
+
+If incomplete tasks remain:
+> ⚠️ {N} tasks still pending. Resume implementation? Or mark as skipped with a reason?
+
+If all `[x]`:
+
 ```
 ✅ Implementation Complete: {Feature Name}
 
-Tasks completed: {N}/{N}
-Files created/modified: (read from implementation output)
+Tasks completed: {N}/{N} ✅
+Implementation surface:
+  Files created:  {N}
+  Files modified: {N}
 
 Product Forge traceability chain:
-  research/     ✅ (completed in Phase 1)
-  product-spec/ ✅ (approved in Phase 3)
-  spec.md       ✅ (created in Phase 4)
-  plan.md       ✅ (approved in Phase 5A)
-  tasks.md      ✅ (all {N} tasks complete)
-  CODE          ✅ (just implemented)
-
-Ready for Phase 7: Full Verification
-Run: /speckit.product-forge.verify-full
+  problem-discovery/ ✅ (Phase 0 — if ran)
+  research/          ✅ (Phase 1)
+  product-spec/      ✅ (Phase 2–3)
+  spec.md            ✅ (Phase 4)
+  plan.md            ✅ (Phase 5)
+  tasks.md           ✅ (Phase 5B — {N} tasks complete)
+  CODE               ✅ (Phase 6 — just implemented)
 ```
 
-Update `.forge-status.yml`: `implement: completed`
+Update `.forge-status.yml`:
+
+```yaml
+phases:
+  implement: completed
+implement:
+  tasks_completed: {N}
+  tasks_total: {N}
+last_updated: "{ISO timestamp}"
+```
 
 ---
 
-## Operating Notes
+## Step 6: Handoff
 
-1. **Never skip cross-validation.** The value of Product Forge is traceability — always check plan and tasks against product-spec before proceeding.
-2. **Delegate fully.** Do not re-implement SpecKit logic — delegate to SpecKit agents. Add context, validate, and gate.
-3. **Surface product-spec to implementation agents.** Make sure implementation agents know where to find wireframes, user journeys, and acceptance criteria.
-4. **One approval per sub-phase.** Plan approval and Tasks approval are separate gates.
+```
+✅ Implementation done.
+
+Next step: /speckit.product-forge.verify-full
+  (or insert any custom step before verification)
+```
+
+> **Extension point:** Between implementation and verification, community commands
+> can be inserted — for example: a manual QA checkpoint, a code review request,
+> a PR creation step, or any team-specific process.

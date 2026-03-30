@@ -38,7 +38,9 @@ The result: a **complete traceability chain** — problem → research → produ
 | `/speckit.product-forge.product-spec` | 2 | Interactive product spec creation with configurable detail |
 | `/speckit.product-forge.revalidate` | 3 | Iterative review and correction loop until approval |
 | `/speckit.product-forge.bridge` | 4 | Convert product-spec to SpecKit spec.md, choose Classic or V-Model |
-| `/speckit.product-forge.implement` | 5–6 | Plan + tasks + implementation with product-spec cross-validation |
+| `/speckit.product-forge.plan` | 5 | Generate technical plan from spec.md — standalone, exits after approval |
+| `/speckit.product-forge.tasks` | 5B | Generate task breakdown from plan.md — standalone, exits after approval |
+| `/speckit.product-forge.implement` | 6 | Execute implementation from tasks.md — standalone, exits when all tasks done |
 | `/speckit.product-forge.verify-full` | 7 | Full traceability verification: code ↔ research |
 | `/speckit.product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
 | `/speckit.product-forge.test-run` | 8B | Execute tests with playwright-cli, auto-fix bugs, loop until done |
@@ -121,15 +123,31 @@ The result: a **complete traceability chain** — problem → research → produ
    ▼ [Human gate: approve spec.md]
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 5: Plan + Tasks          PHASE 6: Implementation                     │
-│  /speckit.product-forge.implement                                                    │
+│  PHASE 5: Plan                                                               │
+│  /speckit.product-forge.plan                                                 │
 │                                                                              │
-│  SpecKit plan → cross-validate vs product-spec                              │
-│  SpecKit tasks → cross-validate vs product-spec                             │
-│  SpecKit implement                                                           │
+│  SpecKit plan → cross-validate vs product-spec → approve                   │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
-   ▼ [Human gate: approve plan, tasks, implementation]
+   ▼ [Human gate: approve plan]  ← extension point: insert custom step here
+   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 5B: Tasks                                                             │
+│  /speckit.product-forge.tasks                                                │
+│                                                                              │
+│  SpecKit tasks → cross-validate vs product-spec → approve                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼ [Human gate: approve tasks]  ← extension point: insert custom step here
+   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 6: Implementation                                                     │
+│  /speckit.product-forge.implement                                            │
+│                                                                              │
+│  SpecKit implement — anchored to product-spec wireframes + user journeys    │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼ [Human gate: implementation complete]  ← extension point: insert custom step here
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 7: Full Verification                                                  │
@@ -278,7 +296,7 @@ specify extension add product-forge --from https://github.com/VaiYav/speckit-pro
 ### Install (specific version)
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.2.0.zip
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.2.1.zip
 ```
 
 ### Update to latest
@@ -290,7 +308,7 @@ specify extension update product-forge --from https://github.com/VaiYav/speckit-
 ### Update to specific version
 
 ```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.2.0.zip
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.2.1.zip
 ```
 
 ### Verify installation

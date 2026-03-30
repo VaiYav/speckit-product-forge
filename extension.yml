@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.2.0"
+  version: "1.2.1"
   description: "Full product lifecycle: problem discovery → research → product spec → SpecKit → implement → verify → test → analytics → security → retrospective"
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"
@@ -35,9 +35,17 @@ provides:
       file: "commands/bridge.md"
       description: "Phase 4: Convert product-spec artifacts to SpecKit spec.md and launch planning"
 
+    - name: "speckit.product-forge.plan"
+      file: "commands/plan.md"
+      description: "Phase 5: Generate technical plan from spec.md with cross-validation against product-spec. Standalone command — exits after plan approval"
+
+    - name: "speckit.product-forge.tasks"
+      file: "commands/tasks.md"
+      description: "Phase 5B: Generate task breakdown from plan.md with cross-validation against product-spec. Standalone command — exits after tasks approval"
+
     - name: "speckit.product-forge.implement"
       file: "commands/implement.md"
-      description: "Phase 5-6: Plan, task breakdown and implementation with product-spec cross-validation"
+      description: "Phase 6: Execute implementation from tasks.md. Standalone — run after tasks or after any custom step inserted before coding"
 
     - name: "speckit.product-forge.verify-full"
       file: "commands/verify-full.md"

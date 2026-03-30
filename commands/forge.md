@@ -35,11 +35,16 @@ Parse the input:
 | 2. Product Spec | `speckit.product-forge.product-spec` | `product-spec/README.md` exists | User approves product spec |
 | 3. Revalidation | `speckit.product-forge.revalidate` | `review.md` with status `APPROVED` | User explicitly approves |
 | 4. Bridge → SpecKit | `speckit.product-forge.bridge` | `spec.md` exists in FEATURE_DIR | User approves spec.md |
-| 5. Plan + Tasks | `speckit.product-forge.implement` (plan hint) | `plan.md` + `tasks.md` exist | User approves both |
-| 6. Implement | `speckit.product-forge.implement` (implement hint) | All tasks `[x]` in tasks.md | Implementation complete |
+| 5. Plan | `speckit.product-forge.plan` | `plan.md` exists | User approves plan |
+| 5B. Tasks | `speckit.product-forge.tasks` | `tasks.md` exists | User approves tasks |
+| 6. Implement | `speckit.product-forge.implement` | All tasks `[x]` in tasks.md | Implementation complete |
 | 7. Verify Full | `speckit.product-forge.verify-full` | `verify-report.md` with no CRITICAL | User acknowledges report |
 | 8A. Test Plan *(optional)* | `speckit.product-forge.test-plan` | `testing/test-plan.md` + `testing/playwright-tests/` | User approves test plan |
 | 8B. Test Run *(optional)* | `speckit.product-forge.test-run` | `test-report.md` + `bugs/README.md` | Pass rate ≥80% + zero P0/P1 open |
+
+> **Extension points:** Community commands can be inserted between any two phases.
+> The forge orchestrator respects `.forge-status.yml` — it will pick up from the last
+> completed phase, so custom steps just need to write their status before handing back.
 
 ---
 
@@ -94,8 +99,9 @@ phases:
   product_spec: completed
   revalidation: approved
   bridge: completed
-  plan_tasks: in_progress
-  implement: pending
+  plan: completed          # Phase 5 — technical plan
+  tasks: in_progress       # Phase 5B — task breakdown
+  implement: pending       # Phase 6 — implementation
   verify: pending
   test_plan: pending       # optional — skipped if user declines
   test_run: pending        # optional — skipped if user declines
@@ -191,39 +197,77 @@ Update `.forge-status.yml`: `bridge: completed`
 
 ---
 
-## Phase 5: Plan + Tasks
+## Phase 5: Plan
 
-**Delegate to:** `speckit.product-forge.implement` (handles plan + tasks sub-phases with cross-validation)
+**Delegate to:** `speckit.product-forge.plan`
 
 Provide:
 - FEATURE_DIR with spec.md
-- Resume hint: `phase=plan` to start from plan sub-phase
+- product-spec artifacts summary
+- codebase_path
 
-`speckit.product-forge.implement` will:
+`speckit.product-forge.plan` will:
 1. Delegate to SpecKit `plan` with product-spec context
 2. Cross-validate plan vs product-spec
 3. Gate: user approves plan
-4. Delegate to SpecKit `tasks`
-5. Cross-validate tasks vs product-spec
-6. Gate: user approves tasks
 
-After both sub-phases approved:
-- Show plan.md + tasks.md summary
-- Ask: *"Plan and tasks approved. Begin implementation?"*
+After plan approved:
+- Confirm `plan.md` exists
+- Ask: *"Plan approved. Proceed to Task Breakdown?"*
 
-Update `.forge-status.yml`: `plan_tasks: completed`
+Update `.forge-status.yml`: `plan: completed`
+
+> **Extension point:** Before moving to Phase 5B, offer:
+> *"Want to insert a custom step here (e.g., architecture review, cost estimation)?
+> Just run your command and come back — the forge will resume from Phase 5B."*
+
+---
+
+## Phase 5B: Tasks
+
+**Delegate to:** `speckit.product-forge.tasks`
+
+Provide:
+- FEATURE_DIR with plan.md
+
+`speckit.product-forge.tasks` will:
+1. Delegate to SpecKit `tasks` with product-spec context
+2. Cross-validate tasks vs product-spec (all US-NNN and FR-NNN covered)
+3. Gate: user approves tasks
+
+After tasks approved:
+- Show task count, group summary, story coverage
+- Ask: *"Tasks approved. Begin implementation?"*
+
+Update `.forge-status.yml`: `tasks: completed`
+
+> **Extension point:** Before moving to Phase 6, offer:
+> *"Want to insert a custom step here (e.g., sprint estimation, PR review gate, approval workflow)?
+> Just run your command and come back — the forge will resume from Phase 6."*
 
 ---
 
 ## Phase 6: Implement
 
-**Delegate to:** `speckit.product-forge.implement` (continues after tasks approval, resume hint: `phase=implement`)
+**Delegate to:** `speckit.product-forge.implement`
 
-Monitor task completion. After all tasks `[x]`:
-- Summarize what was implemented
+Provide:
+- FEATURE_DIR with tasks.md, plan.md, spec.md, product-spec/
+
+`speckit.product-forge.implement` will:
+1. Delegate to SpecKit `implement` with product-spec context
+2. Monitor task completion
+3. Surface product-spec artifacts to implementation agents as needed
+
+After all tasks `[x]`:
+- Summarize implemented files
 - Ask: *"Implementation complete. Run full verification?"*
 
 Update `.forge-status.yml`: `implement: completed`
+
+> **Extension point:** Before moving to Phase 7, offer:
+> *"Want to insert a custom step here (e.g., manual QA, code review, PR creation)?
+> Just run your command and come back — the forge will resume from Phase 7."*
 
 ---
 

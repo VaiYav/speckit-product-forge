@@ -6,6 +6,26 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.1] — 2026-03-30
+
+### Changed — Breaking: `implement` split into 3 independent commands
+
+`speckit.product-forge.implement` previously covered Phase 5 (plan), Phase 5B (tasks), and Phase 6 (implementation) as a single monolithic command. It is now split into three **standalone, independently runnable commands**:
+
+- **`speckit.product-forge.plan`** (new, Phase 5) — generates `plan.md` from `spec.md`, cross-validates against product-spec, exits after approval. Extension point before tasks.
+- **`speckit.product-forge.tasks`** (new, Phase 5B) — generates `tasks.md` from `plan.md`, cross-validates all US-NNN and FR-NNN coverage, exits after approval. Extension point before implementation.
+- **`speckit.product-forge.implement`** (narrowed, Phase 6) — executes implementation from `tasks.md` only, exits when all tasks are `[x]`. Extension point before verification.
+
+**Why:** Community members can now insert custom steps between any of the three phases — architecture review, cost estimation, sprint planning, PR approval gates, external review workflows — without forking or patching the core commands.
+
+**Forge orchestrator updated:** `forge.md` now delegates to `plan` → `tasks` → `implement` as three separate calls, with explicit extension point prompts between each.
+
+**`.forge-status.yml` schema updated:** `plan_tasks` field replaced by separate `plan` and `tasks` fields.
+
+**Migration:** If you call `speckit.product-forge.implement` directly and expect it to also run plan/tasks — update your workflow to call `plan` → `tasks` → `implement` in sequence.
+
+---
+
 ## [1.2.0] — 2026-03-30
 
 ### Added
@@ -152,6 +172,7 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.2.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.1...v1.1.2
