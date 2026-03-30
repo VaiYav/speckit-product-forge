@@ -1,6 +1,6 @@
 # Product Forge — SpecKit Extension
 
-> **Full product lifecycle:** Research → Product Spec → Revalidation → SpecKit → Implement → Verify → **Test**
+> **Full product lifecycle:** Problem Discovery → Research → Product Spec → Revalidation → SpecKit → Implement → Verify → Test → **API Docs · Security · Analytics · Retrospective**
 
 Product Forge is a [SpecKit](https://github.com/github/spec-kit) extension that adds a
 complete **product discovery, specification, and testing pipeline** before and after any SpecKit
@@ -14,14 +14,17 @@ automatically generate and run Playwright tests with a bug-fix loop until the fe
 
 Standard SpecKit starts from a feature description. Product Forge starts from a feature idea and:
 
-1. **Researches** competitors, UX best practices, and your codebase in parallel
-2. **Creates** structured product documents: user journeys, wireframes, mockups, metrics
-3. **Revalidates** everything with you through an approval loop until the spec is perfect
-4. **Bridges** the product spec into SpecKit's spec.md — enriched with all research context
-5. **Plans, implements, and verifies** using SpecKit with full traceability back to the original research
-6. **Auto-generates Playwright tests** from user stories, runs them, fixes P0/P1 bugs, and produces a test report
+1. **Discovers** whether the problem is real: JTBD analysis, interview script, Go/No-go before any research begins
+2. **Researches** competitors, UX best practices, and your codebase in parallel — guided by validated hypotheses
+3. **Creates** structured product documents: user journeys, wireframes, mockups, metrics
+4. **Revalidates** everything with you through an approval loop until the spec is perfect
+5. **Bridges** the product spec into SpecKit's spec.md — enriched with all research context
+6. **Plans, implements, and verifies** using SpecKit with full traceability back to the original research
+7. **Auto-generates Playwright tests** from user stories, runs them via `playwright-cli`, fixes P0/P1 bugs, and produces a test report
+8. **Generates API docs** (OpenAPI 3.1 + Postman), runs an **OWASP security audit**, and creates an **analytics tracking plan** with SDK snippets
+9. **Runs a post-launch retrospective** comparing predicted KPIs against real data from NewRelic/Analytics
 
-The result: a **complete traceability chain** — research → product spec → spec.md → plan → tasks → code → tests.
+The result: a **complete traceability chain** — problem → research → product spec → spec.md → plan → tasks → code → tests → metrics.
 
 ---
 
@@ -29,7 +32,8 @@ The result: a **complete traceability chain** — research → product spec → 
 
 | Command | Phase | Description |
 |---------|-------|-------------|
-| `/speckit.product-forge.forge` | All (1–8B) | **Main command.** Full lifecycle orchestrator with human gates |
+| `/speckit.product-forge.forge` | All | **Main command.** Full lifecycle orchestrator with human gates |
+| `/speckit.product-forge.problem-discovery` | 0 | Validate the problem: JTBD analysis, interview script, Go/No-go |
 | `/speckit.product-forge.research` | 1 | Parallel multi-dimensional feature research (adaptive depth) |
 | `/speckit.product-forge.product-spec` | 2 | Interactive product spec creation with configurable detail |
 | `/speckit.product-forge.revalidate` | 3 | Iterative review and correction loop until approval |
@@ -37,7 +41,11 @@ The result: a **complete traceability chain** — research → product spec → 
 | `/speckit.product-forge.implement` | 5–6 | Plan + tasks + implementation with product-spec cross-validation |
 | `/speckit.product-forge.verify-full` | 7 | Full traceability verification: code ↔ research |
 | `/speckit.product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
-| `/speckit.product-forge.test-run` | 8B | Execute tests, auto-fix bugs, loop until exit criteria met |
+| `/speckit.product-forge.test-run` | 8B | Execute tests with playwright-cli, auto-fix bugs, loop until done |
+| `/speckit.product-forge.api-docs` | post-impl | Generate OpenAPI 3.1 spec + Postman collection from plan.md |
+| `/speckit.product-forge.security-check` | post-impl | OWASP audit scoped to detected surfaces (auth, input, payments) |
+| `/speckit.product-forge.tracking-plan` | post-spec | Analytics events, funnels, property schemas + SDK code snippets |
+| `/speckit.product-forge.retrospective` | post-launch | Predicted vs actual metrics, research accuracy, lessons learned |
 | `/speckit.product-forge.status` | — | Show lifecycle status for any feature |
 
 ---
@@ -48,6 +56,17 @@ The result: a **complete traceability chain** — research → product spec → 
   Idea
    │
    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 0: Problem Discovery  [OPTIONAL but recommended]                      │
+│  /speckit.product-forge.problem-discovery                                    │
+│                                                                              │
+│  JTBD Analysis · Problem Statement Canvas · Interview Script                │
+│  Competing Forces · Go / Investigate further / No-go decision               │
+│  Outputs hypotheses H1–HN that guide Phase 1 research agents                │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼ [Human gate: Go decision]
+   │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 1: Research                                                           │
 │  /speckit.product-forge.research                                                     │
@@ -146,7 +165,35 @@ The result: a **complete traceability chain** — research → product spec → 
 └─────────────────────────────────────────────────────────────────────────────┘
    │
    ▼
-  Done ✅  (Research → Spec → Approved → Code → Verified → Tested)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  POST-IMPLEMENTATION COMMANDS  [Run in any order after Phase 6]              │
+│                                                                              │
+│  /speckit.product-forge.api-docs                                             │
+│  OpenAPI 3.1 spec + Postman collection from plan.md contracts               │
+│  Consistency check: plan vs implementation drift                             │
+│                                                                              │
+│  /speckit.product-forge.security-check                                       │
+│  OWASP audit scoped to detected surfaces from plan.md                       │
+│  Checks only: auth / input / payments / files / webhooks (as applicable)    │
+│                                                                              │
+│  /speckit.product-forge.tracking-plan                                        │
+│  Analytics events from user journeys · Funnel definitions                   │
+│  SDK code snippets (Mixpanel / Amplitude / PostHog / Firebase)              │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼ Ship ✅
+   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  POST-LAUNCH  [Run ≥14 days after shipping]                                  │
+│  /speckit.product-forge.retrospective                                        │
+│                                                                              │
+│  Predicted vs actual metrics (from research/metrics-roi.md)                 │
+│  NewRelic + Analytics MCP query · Research accuracy audit                   │
+│  Lessons learned · Closes the full lifecycle loop                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+  Done ✅  (Problem → Research → Spec → Code → Verified → Tested → Measured)
 ```
 
 ---
@@ -160,6 +207,10 @@ features/
 └── my-feature-name/
     ├── README.md                          ← Feature index (all links)
     ├── .forge-status.yml                  ← Phase tracker
+    │
+    ├── problem-discovery/                 ← Phase 0 outputs (optional)
+    │   ├── problem-statement.md           ← JTBD + Problem Canvas + Go/No-go
+    │   └── interview-script.md            ← User interview guide
     │
     ├── research/
     │   ├── README.md                      ← Research index + executive summary
@@ -199,7 +250,19 @@ features/
     │   ├── README.md                      ← Bug dashboard (P0–P4 counts, status)
     │   └── BUG-NNN.md × N               ← One file per bug with evidence + fix log
     │
-    └── test-report.md                     ← Final test report (Phase 8B)
+    ├── test-report.md                     ← Final test report (Phase 8B)
+    │
+    ├── api-docs/                          ← api-docs command outputs (optional)
+    │   ├── openapi.yml                    ← OpenAPI 3.1 spec
+    │   ├── postman-collection.json        ← Postman collection
+    │   └── consistency-report.md         ← Plan vs implementation drift
+    │
+    ├── tracking/                          ← tracking-plan command outputs (optional)
+    │   ├── tracking-plan.md              ← Event taxonomy + property schemas + funnels
+    │   └── snippets.md                   ← Ready-to-paste SDK code snippets
+    │
+    ├── security-check.md                  ← OWASP audit report (optional)
+    └── retrospective.md                   ← Post-launch retrospective (optional)
 ```
 
 ---
@@ -215,7 +278,7 @@ specify extension add product-forge --from https://github.com/VaiYav/speckit-pro
 ### Install (specific version)
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.1.3.zip
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.2.0.zip
 ```
 
 ### Update to latest
@@ -227,7 +290,7 @@ specify extension update product-forge --from https://github.com/VaiYav/speckit-
 ### Update to specific version
 
 ```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.1.3.zip
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.2.0.zip
 ```
 
 ### Verify installation

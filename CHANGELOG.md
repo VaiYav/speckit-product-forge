@@ -6,6 +6,59 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.0] — 2026-03-30
+
+### Added
+
+- **`speckit.product-forge.problem-discovery`** (Phase 0) — validate the problem before any research begins:
+  - JTBD analysis (functional / emotional / social job layers)
+  - Competing Forces model (Push + Pull vs Inertia + Anxiety)
+  - Problem Statement Canvas saved to `problem-discovery/problem-statement.md`
+  - User interview script with scoring rubric saved to `problem-discovery/interview-script.md`
+  - Go / Investigate further / No-go decision with confidence score
+  - Hypotheses H1–HN passed forward to Phase 1 research agents
+
+- **`speckit.product-forge.api-docs`** — generate production-ready API documentation from `plan.md` contracts:
+  - Auto-detects API framework (NestJS, Express, FastAPI, etc.) and existing OpenAPI setup
+  - Generates OpenAPI 3.1 `openapi.yml` with full request/response schemas and examples
+  - Generates `postman-collection.json` with auto-token-save login request
+  - Consistency check: plan.md contracts vs actual implementation (reports drift)
+  - Outputs: `api-docs/openapi.yml`, `api-docs/postman-collection.json`, `api-docs/consistency-report.md`
+
+- **`speckit.product-forge.security-check`** — feature-scoped OWASP security audit:
+  - Builds a threat model from `plan.md` — only checks surfaces present in this feature
+  - Covers: A01 Broken Access Control, A02 Crypto Failures, A03 Injection, A04 Insecure Design, A05 Misconfiguration, A07 Auth Failures, A08 Integrity Failures
+  - Scans for hardcoded secrets, missing ownership checks, mass assignment, missing rate limiting
+  - Outputs prioritized findings (Critical / High / Medium / Low) with code evidence and fix patterns
+  - Ship-readiness decision: ✅ Ready / ⚠️ Fix critical first / 🔴 Not ready
+
+- **`speckit.product-forge.tracking-plan`** — analytics tracking plan from user journeys:
+  - Auto-detects analytics SDK (Mixpanel, Amplitude, PostHog, Firebase, Segment)
+  - Generates event taxonomy with property schemas, required/optional flags, and examples
+  - Defines conversion funnels and abandonment funnels mapped to product-spec success metrics
+  - Coverage matrix: each user story → key event → success metric
+  - Generates ready-to-paste typed SDK snippets for the detected framework
+  - Outputs: `tracking/tracking-plan.md`, `tracking/snippets.md`
+
+- **`speckit.product-forge.retrospective`** — post-launch retrospective (run ≥14 days after ship):
+  - Loads predicted KPIs from `research/metrics-roi.md` as the baseline
+  - Queries NewRelic (via MCP) for real performance data since launch date
+  - Compares predicted vs actual: adoption, completion rate, latency, error rate, business metrics
+  - Research accuracy audit: were Phase 1 predictions correct?
+  - Lessons learned, open issues table, and next-step recommendations
+  - Closes the full lifecycle loop: Idea → Ship → Measure → Learn
+
+### Changed
+
+- `extension.yml`: description updated to reflect full 15-command lifecycle
+- `extension.yml`: added tags `analytics`, `security`, `api-docs`, `jtbd`
+- `README.md`: commands table expanded to 15 commands
+- `README.md`: lifecycle diagram now includes Phase 0 (Problem Discovery) and post-implementation block (api-docs, security-check, tracking-plan, retrospective)
+- `README.md`: file structure updated with `problem-discovery/`, `api-docs/`, `tracking/`, `security-check.md`, `retrospective.md`
+- `README.md`: Why section updated to reflect the full 9-step value proposition
+
+---
+
 ## [1.1.3] — 2026-03-28
 
 ### Changed
@@ -99,6 +152,7 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.2.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.0...v1.1.1
