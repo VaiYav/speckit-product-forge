@@ -297,20 +297,43 @@ Initialize the feature directory if it doesn't exist:
 └── .forge-status.yml
 ```
 
-Update `.forge-status.yml`:
+Update `.forge-status.yml` (schema v2):
 
 ```yaml
+schema_version: 2
 feature: "{feature-slug}"
+created_at: "{ISO date}"
 phases:
   problem_discovery: completed
   research: pending
   product_spec: pending
   revalidation: pending
   bridge: pending
+  plan: pending
+  tasks: pending
+  pre_impl_review: pending
   implement: pending
+  code_review: pending
   verify: pending
   test_plan: pending
   test_run: pending
+  release_readiness: pending
+  retrospective: pending
+speckit_mode: ""
+testing:
+  final_pass_rate: ""
+  bugs_found: 0
+  bugs_fixed: 0
+  bugs_deferred: 0
+  test_runs_total: 0
+gates: []
+sync_runs:
+  last_run: ""
+  total_runs: 0
+  last_drift_count: 0
+  last_critical_count: 0
+  last_verdict: ""
+change_requests: []
 problem:
   statement: "{1-sentence statement}"
   severity: "{score}/10"

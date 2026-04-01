@@ -59,9 +59,15 @@ For each phase, check whether the expected artifacts exist:
 | 2. Product Spec | `product-spec/README.md` | ✅/❌ |
 | 3. Revalidation | `review.md` with "APPROVED" | ✅/❌ |
 | 4. Bridge | `spec.md` | ✅/❌ |
-| 5. Plan + Tasks | `plan.md` + `tasks.md` | ✅/❌ |
+| 5. Plan | `plan.md` | ✅/❌ |
+| 5B. Tasks | `tasks.md` | ✅/❌ |
+| 5C. Pre-Impl Review | `pre-impl-review.md` | ✅/❌/⏭️ |
 | 6. Implementation | All tasks `[x]` in tasks.md | ✅/❌ |
+| 6B. Code Review | `code-review.md` | ✅/❌/⏭️ |
 | 7. Verification | `verify-report.md` | ✅/❌ |
+| 8A. Test Plan | `testing/test-plan.md` | ✅/❌/⏭️ |
+| 8B. Test Run | `test-report.md` | ✅/❌/⏭️ |
+| 9. Release Readiness | `release-readiness.md` | ✅/❌/⏭️ |
 
 ---
 
@@ -97,16 +103,34 @@ For each phase, check whether the expected artifacts exist:
   ✅ Phase 4 · SpecKit Bridge    [COMPLETE]
      └── spec.md — {N} user stories, {N} requirements
 
-  🔄 Phase 5 · Plan + Tasks      [IN PROGRESS]
-     └── plan.md ✅ · tasks.md ✅
-         Progress: {N}/{N} tasks complete [{%%}]
-         Remaining: {list of unchecked tasks, up to 5}
+  🔄 Phase 5 · Plan              [IN PROGRESS]
+     └── plan.md {✅/⏳}
+
+  ⏳ Phase 5B · Tasks             [PENDING]
+     └── tasks.md {✅/⏳}
+         {If exists: Progress: {N}/{N} tasks complete [{%%}]}
+
+  ⏳ Phase 5C · Pre-Impl Review   [PENDING / SKIPPED]
+     └── pre-impl-review.md — design + architecture + risk
 
   ⏳ Phase 6 · Implementation    [PENDING]
-     └── Waiting for Phase 5 task approval
+     └── Waiting for tasks approval
+         {If in progress: implementation-log.md — {N} checkpoints}
+
+  ⏳ Phase 6B · Code Review       [PENDING / SKIPPED]
+     └── code-review.md — quality + security + patterns + tests
 
   ⏳ Phase 7 · Verification      [PENDING]
-     └── Will run after Phase 6
+     └── Will run after Phase 6/6B
+
+  ⏳ Phase 8A · Test Plan         [PENDING / SKIPPED]
+     └── testing/ — {N} test cases across {N} test types
+
+  ⏳ Phase 8B · Test Run          [PENDING / SKIPPED]
+     └── test-report.md — {pass rate}% pass rate, {N} bugs
+
+  ⏳ Phase 9 · Release Readiness  [PENDING / SKIPPED]
+     └── release-readiness.md — ship checklist
 
   ─────────────────────────────────────────
   📍 Current Phase: 5 · Plan + Tasks
@@ -114,11 +138,27 @@ For each phase, check whether the expected artifacts exist:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  Sync History:
+  ─────────────────────────────────────────
+  Last sync-verify: {date or "never"}
+  Runs total: {N} | Last verdict: {verdict}
+  Drift items: {N} (last run)
+
+  Gate Audit Trail:
+  ─────────────────────────────────────────
+  {N} gate decisions recorded
+  Last gate: Phase {N} — {decision} on {date}
+
+  Change Requests:
+  ─────────────────────────────────────────
+  {N} change requests ({N} accepted, {N} deferred, {N} rejected)
+
   Quick Actions:
-  • Continue full cycle:  /speckit.product-forge.forge
-  • Jump to current phase: /speckit.product-forge.implement
-  • Revalidate spec:       /speckit.product-forge.revalidate
-  • View research:         cat {FEATURE_DIR}/research/README.md
+  • Continue full cycle:    /speckit.product-forge.forge
+  • Jump to current phase:  /speckit.product-forge.{current_phase}
+  • Run sync-verify:        /speckit.product-forge.sync-verify
+  • Submit change request:  /speckit.product-forge.change-request
+  • View research:          cat {FEATURE_DIR}/research/README.md
 ```
 
 ---

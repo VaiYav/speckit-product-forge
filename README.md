@@ -1,12 +1,16 @@
 # Product Forge — SpecKit Extension
 
-> **Full product lifecycle:** Problem Discovery → Research → Product Spec → Revalidation → SpecKit → Implement → Verify → Test → **API Docs · Security · Analytics · Retrospective**
+> **Full product lifecycle:** Problem Discovery → Research → Product Spec → Revalidation → SpecKit → Pre-Impl Review → Implement → Code Review → Verify → Test → Release Readiness → **API Docs · Security · Analytics · Retrospective**
 
 Product Forge is a [SpecKit](https://github.com/github/spec-kit) extension that adds a
-complete **product discovery, specification, and testing pipeline** before and after any SpecKit
+complete **product discovery, specification, and quality pipeline** before and after any SpecKit
 implementation work. Instead of jumping straight to spec.md, you first research competitors, UX
-patterns, and your codebase — craft an approved product spec — let SpecKit implement it — then
+patterns, and your codebase — craft an approved product spec — review design/architecture/risks —
+let SpecKit implement it with progressive verification — run multi-agent code review — then
 automatically generate and run Playwright tests with a bug-fix loop until the feature is ready to ship.
+
+**New in v1.3.0:** Cross-artifact sync-verify, pre-implementation review gate, code review phase,
+release readiness checklist, change request management, gate audit trail, and progressive verification.
 
 ---
 
@@ -40,15 +44,20 @@ The result: a **complete traceability chain** — problem → research → produ
 | `/speckit.product-forge.bridge` | 4 | Convert product-spec to SpecKit spec.md, choose Classic or V-Model |
 | `/speckit.product-forge.plan` | 5 | Generate technical plan from spec.md — standalone, exits after approval |
 | `/speckit.product-forge.tasks` | 5B | Generate task breakdown from plan.md — standalone, exits after approval |
-| `/speckit.product-forge.implement` | 6 | Execute implementation from tasks.md — standalone, exits when all tasks done |
+| `/speckit.product-forge.pre-impl-review` | 5C | **[NEW]** Design review + architecture review + risk assessment before coding |
+| `/speckit.product-forge.implement` | 6 | Execute implementation with progressive verification checkpoints |
+| `/speckit.product-forge.code-review` | 6B | **[NEW]** Multi-agent code review: quality, security, patterns, test coverage |
 | `/speckit.product-forge.verify-full` | 7 | Full traceability verification: code ↔ research |
 | `/speckit.product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
 | `/speckit.product-forge.test-run` | 8B | Execute tests with playwright-cli, auto-fix bugs, loop until done |
+| `/speckit.product-forge.release-readiness` | 9 | **[NEW]** Pre-ship checklist: feature flags, rollout, docs, monitoring |
+| `/speckit.product-forge.sync-verify` | cross-cutting | **[NEW]** 7-layer artifact consistency check, runnable between any phases |
+| `/speckit.product-forge.change-request` | cross-cutting | **[NEW]** Formal scope change with impact analysis and artifact propagation |
 | `/speckit.product-forge.api-docs` | post-impl | Generate OpenAPI 3.1 spec + Postman collection from plan.md |
 | `/speckit.product-forge.security-check` | post-impl | OWASP audit scoped to detected surfaces (auth, input, payments) |
 | `/speckit.product-forge.tracking-plan` | post-spec | Analytics events, funnels, property schemas + SDK code snippets |
 | `/speckit.product-forge.retrospective` | post-launch | Predicted vs actual metrics, research accuracy, lessons learned |
-| `/speckit.product-forge.status` | — | Show lifecycle status for any feature |
+| `/speckit.product-forge.status` | — | Show lifecycle status, gate audit trail, sync history |
 
 ---
 
@@ -141,17 +150,42 @@ The result: a **complete traceability chain** — problem → research → produ
    ▼ [Human gate: approve tasks]  ← extension point: insert custom step here
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 6: Implementation                                                     │
+│  PHASE 5C: Pre-Implementation Review  [OPTIONAL but recommended]  [NEW v1.3] │
+│  /speckit.product-forge.pre-impl-review                                      │
+│                                                                              │
+│  Design Review · Architecture Review · Risk Assessment                       │
+│  State completeness · UX compliance · NFR coverage · Risk register          │
+│  Rollout strategy recommendation                                            │
+│  Outputs: pre-impl-review.md                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼ [Human gate: approve review]  ← extension point: insert custom step here
+   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 6: Implementation (with Progressive Verification)         [UPD v1.3]  │
 │  /speckit.product-forge.implement                                            │
 │                                                                              │
 │  SpecKit implement — anchored to product-spec wireframes + user journeys    │
+│  Mini-verify every N tasks: task-code, spec drift, unplanned changes        │
+│  Outputs: implementation-log.md with checkpoint results                     │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
-   ▼ [Human gate: implementation complete]  ← extension point: insert custom step here
+   ▼ [Human gate: implementation complete]
+   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 6B: Code Review  [OPTIONAL but recommended]               [NEW v1.3]  │
+│  /speckit.product-forge.code-review                                          │
+│                                                                              │
+│  Parallel agents: Quality · Security · Patterns · Tests                     │
+│  Enriched with Product Forge context (ux-patterns, codebase-analysis)       │
+│  Outputs: code-review.md with findings by severity                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼ [Human gate: approve code review]  ← extension point: insert custom step here
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 7: Full Verification                                                  │
-│  /speckit.product-forge.verify-full                                                  │
+│  /speckit.product-forge.verify-full                                          │
 │                                                                              │
 │  Code ↔ Tasks ↔ Plan ↔ spec.md ↔ product-spec ↔ research                  │
 │  Produces: verify-report.md with CRITICAL / WARNING / PASSED                │
@@ -180,6 +214,32 @@ The result: a **complete traceability chain** — problem → research → produ
 │  Auto-fix loop: P0/P1 bugs fixed → retested → smoke regression check        │
 │  Exit: ≥80% pass rate + zero P0/P1 open bugs                                │
 │  Produces: test-report.md with full traceability chain                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼ [Human gate: "Run release readiness?" — optional but recommended]
+   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 9: Release Readiness  [OPTIONAL]                          [NEW v1.3]  │
+│  /speckit.product-forge.release-readiness                                    │
+│                                                                              │
+│  Feature flags · Rollout strategy · Rollback plan                           │
+│  Documentation · Monitoring · Analytics · Dependencies                       │
+│  Consolidates api-docs + security-check + tracking-plan status              │
+│  Outputs: release-readiness.md with READY / CONDITIONAL / NOT READY         │
+└─────────────────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  CROSS-CUTTING COMMANDS  [Runnable at any time]                  [NEW v1.3]  │
+│                                                                              │
+│  /speckit.product-forge.sync-verify                                          │
+│  7-layer consistency check across all artifacts (forward + backward drift)   │
+│  Auto-runs in quick mode between every phase transition                      │
+│  Full run on demand or before Phase 7                                        │
+│                                                                              │
+│  /speckit.product-forge.change-request                                       │
+│  Formal scope change: capture → impact analysis → effort delta → propagate  │
+│  Traces changes with CR-NNN markers across all affected artifacts           │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
    ▼
@@ -211,7 +271,7 @@ The result: a **complete traceability chain** — problem → research → produ
 └─────────────────────────────────────────────────────────────────────────────┘
    │
    ▼
-  Done ✅  (Problem → Research → Spec → Code → Verified → Tested → Measured)
+  Done ✅  (Problem → Research → Spec → Reviewed → Code → Code Review → Verified → Tested → Ship Ready → Measured)
 ```
 
 ---
@@ -250,8 +310,11 @@ features/
     │
     ├── spec.md                            ← SpecKit spec (generated in Phase 4)
     ├── plan.md                            ← SpecKit plan (Phase 5)
-    ├── tasks.md                           ← SpecKit tasks (Phase 5)
+    ├── tasks.md                           ← SpecKit tasks (Phase 5B)
     ├── review.md                          ← Revalidation log (Phase 3)
+    ├── pre-impl-review.md                 ← Design + arch + risk review (Phase 5C) [NEW v1.3]
+    ├── implementation-log.md              ← Progressive verify log (Phase 6) [NEW v1.3]
+    ├── code-review.md                     ← Multi-agent code review (Phase 6B) [NEW v1.3]
     ├── verify-report.md                   ← Verification report (Phase 7)
     │
     ├── testing/                           ← Phase 8A outputs (optional)
@@ -280,7 +343,13 @@ features/
     │   └── snippets.md                   ← Ready-to-paste SDK code snippets
     │
     ├── security-check.md                  ← OWASP audit report (optional)
-    └── retrospective.md                   ← Post-launch retrospective (optional)
+    ├── release-readiness.md               ← Pre-ship checklist (Phase 9) [NEW v1.3]
+    ├── retrospective.md                   ← Post-launch retrospective (optional)
+    │
+    ├── sync-report.md                     ← Latest sync-verify report [NEW v1.3]
+    ├── sync-report.json                   ← Machine-readable sync data [NEW v1.3]
+    ├── change-log.md                      ← Change request history [NEW v1.3]
+    └── backlog.md                         ← Deferred changes (if any) [NEW v1.3]
 ```
 
 ---
@@ -296,7 +365,7 @@ specify extension add product-forge --from https://github.com/VaiYav/speckit-pro
 ### Install (specific version)
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.2.1.zip
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.3.0.zip
 ```
 
 ### Update to latest
@@ -308,14 +377,14 @@ specify extension update product-forge --from https://github.com/VaiYav/speckit-
 ### Update to specific version
 
 ```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.2.1.zip
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.3.0.zip
 ```
 
 ### Verify installation
 
 ```bash
 specify extension list
-# Should show: product-forge  v1.1.2  enabled
+# Should show: product-forge  v1.3.0  enabled
 ```
 
 ---

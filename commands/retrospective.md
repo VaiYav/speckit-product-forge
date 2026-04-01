@@ -24,7 +24,8 @@ $ARGUMENTS
 ## Step 1: Validate Prerequisites
 
 1. Read `.forge-status.yml` — find the feature slug and launch date
-2. Check `phases.test_run` is `completed` (feature was shipped)
+2. Check that the feature was shipped: `phases.verify` is `completed` (minimum requirement).
+   Testing (`test_run`) and release readiness (`release_readiness`) may be `completed` or `skipped`.
 3. Read `research/metrics-roi.md` — predicted KPIs (the baseline for comparison)
 4. Read `product-spec/product-spec.md` — success metrics definition
 5. Check `tracking/tracking-plan.md` (if exists) — know which events to query

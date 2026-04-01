@@ -3,8 +3,8 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.2.1"
-  description: "Full product lifecycle: problem discovery → research → product spec → SpecKit → implement → verify → test → analytics → security → retrospective"
+  version: "1.3.0"
+  description: "Full product lifecycle: problem discovery → research → product spec → SpecKit → pre-impl review → implement → code review → verify → test → release readiness → retrospective. With cross-artifact sync-verify and change request management."
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"
   license: "MIT"
@@ -17,7 +17,7 @@ provides:
   commands:
     - name: "speckit.product-forge.forge"
       file: "commands/forge.md"
-      description: "Full lifecycle orchestrator: research → product-spec → revalidation → SpecKit → implement → verify"
+      description: "Full lifecycle orchestrator: research → product-spec → revalidation → SpecKit → pre-impl-review → implement → code-review → verify → test → release-readiness"
 
     - name: "speckit.product-forge.research"
       file: "commands/research.md"
@@ -79,6 +79,26 @@ provides:
       file: "commands/tracking-plan.md"
       description: "Generate analytics tracking plan from user journeys: event taxonomy, property schemas, funnel definitions, SDK code snippets"
 
+    - name: "speckit.product-forge.pre-impl-review"
+      file: "commands/pre-impl-review.md"
+      description: "Phase 5C: Combined design review, architecture review, and risk assessment before implementation"
+
+    - name: "speckit.product-forge.code-review"
+      file: "commands/code-review.md"
+      description: "Phase 6B: Multi-agent code review — quality, security, patterns, test coverage — enriched with Product Forge context"
+
+    - name: "speckit.product-forge.release-readiness"
+      file: "commands/release-readiness.md"
+      description: "Phase 9: Pre-ship readiness checklist — feature flags, rollout, documentation, monitoring, analytics, dependencies"
+
+    - name: "speckit.product-forge.sync-verify"
+      file: "commands/sync-verify.md"
+      description: "Cross-cutting: 7-layer artifact consistency checker. Detects forward and backward drift across all lifecycle artifacts"
+
+    - name: "speckit.product-forge.change-request"
+      file: "commands/change-request.md"
+      description: "Cross-cutting: Formal scope change management with impact analysis, effort delta, and artifact propagation"
+
     - name: "speckit.product-forge.retrospective"
       file: "commands/retrospective.md"
       description: "Post-launch retrospective: predicted vs actual metrics, NewRelic/analytics data, research accuracy audit, lessons learned"
@@ -93,6 +113,10 @@ tags:
   - "security"
   - "api-docs"
   - "jtbd"
+  - "sync-verify"
+  - "code-review"
+  - "release-readiness"
+  - "change-management"
 
 # Project configuration — copy to .product-forge/config.yml in your project root
 # See config-template.yml and docs/config.md for full documentation

@@ -437,8 +437,39 @@ Create `{RESEARCH_DIR}/README.md`:
 
 ```yaml
 # {FEATURE_DIR}/.forge-status.yml
+schema_version: 2
+feature: "{feature-slug}"
+created_at: "{ISO date}"
 phases:
   research: completed
+  product_spec: pending
+  revalidation: pending
+  bridge: pending
+  plan: pending
+  tasks: pending
+  pre_impl_review: pending
+  implement: pending
+  code_review: pending
+  verify: pending
+  test_plan: pending
+  test_run: pending
+  release_readiness: pending
+  retrospective: pending
+speckit_mode: ""
+testing:
+  final_pass_rate: ""
+  bugs_found: 0
+  bugs_fixed: 0
+  bugs_deferred: 0
+  test_runs_total: 0
+gates: []
+sync_runs:
+  last_run: ""
+  total_runs: 0
+  last_drift_count: 0
+  last_critical_count: 0
+  last_verdict: ""
+change_requests: []
 research_dimensions:
   competitors: completed
   ux_patterns: completed
@@ -448,6 +479,10 @@ research_dimensions:
 input_richness_score: {0-8}
 last_updated: "{ISO timestamp}"
 ```
+
+> **Note:** If `.forge-status.yml` already exists (e.g., from Phase 0 Problem Discovery),
+> only update `phases.research: completed` and append the `research_dimensions:` block.
+> Do not overwrite existing phase states or gates.
 
 ---
 

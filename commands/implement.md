@@ -1,20 +1,23 @@
 ---
 name: speckit.product-forge.implement
 description: >
-  Phase 6: Execute implementation from tasks.md. Delegates to SpecKit implement,
-  monitors task completion, surfaces product-spec context to implementation agents.
-  Standalone — run after tasks (or after any custom step inserted before implementation).
+  Phase 6: Execute implementation from tasks.md with progressive verification.
+  Delegates to SpecKit implement, monitors task completion, runs mini-verify every N tasks,
+  surfaces product-spec context to implementation agents.
+  Standalone — run after pre-impl-review (or after any custom step inserted before coding).
   Use: "implement", "start coding", "/speckit.product-forge.implement"
 ---
 
-# Product Forge — Phase 6: Implementation
+# Product Forge — Phase 6: Implementation (with Progressive Verification)
 
 You are the **Implementation Coordinator** for Product Forge Phase 6.
 Your job: drive implementation to completion from `tasks.md`, keep implementation agents
-anchored to the product spec, and report when all tasks are done.
+anchored to the product spec, run progressive verification checkpoints, and report when
+all tasks are done.
 
 This is a **standalone command** — it does one thing and exits.
-The next step is `/speckit.product-forge.verify-full`.
+The next step is `/speckit.product-forge.code-review` (Phase 6B) or
+`/speckit.product-forge.verify-full` (Phase 7).
 
 ## User Input
 
@@ -77,7 +80,7 @@ Key context for implementation agents:
 
 ---
 
-## Step 4: Monitor & Support
+## Step 4: Monitor & Support with Progressive Verification
 
 During implementation, if the agent asks a product question that is answered
 in the product spec, redirect:
@@ -87,6 +90,50 @@ in the product spec, redirect:
 
 If a blocker arises that requires changing the plan or tasks, surface it to the user
 before proceeding. Do not silently deviate from `tasks.md`.
+
+### Progressive Verification Checkpoints
+
+After every **N completed tasks** (N = `progressive_verify_interval` from config, default: 3),
+pause implementation and run a mini-verify checkpoint:
+
+**Mini-verify checks:**
+
+1. **Task-Code correspondence:** For each just-completed task, verify the target files exist and contain relevant changes
+2. **Spec drift check:** Compare completed work against `spec.md` acceptance criteria — are AC being met?
+3. **Unplanned changes check:** Identify files modified that are NOT referenced by any task in `tasks.md`
+4. **Plan alignment check:** Verify implementation approach matches `plan.md` architecture (e.g., correct layers, correct data model)
+
+**Checkpoint output** — append to `{FEATURE_DIR}/implementation-log.md`:
+
+```markdown
+## Checkpoint #{N} — After task {task-range}
+
+| Check | Status | Notes |
+|-------|:------:|-------|
+| Task-Code correspondence | {✅/⚠️/❌} | {details} |
+| Spec AC alignment | {✅/⚠️/❌} | {which AC checked} |
+| Unplanned changes | {✅ None / ⚠️ {N} files} | {file list} |
+| Plan alignment | {✅/⚠️/❌} | {details} |
+
+**Verdict:** {CLEAN — continue / WARNING — review needed / CRITICAL — pause required}
+```
+
+**If CRITICAL drift detected:**
+
+```
+⚠️ CRITICAL DRIFT DETECTED at checkpoint #{N}
+
+  {description of the drift}
+
+  Options:
+    1. [Fix now] — address the drift before continuing
+    2. [Defer to Phase 7] — continue implementation, fix in verification
+    3. [Change request] — scope has changed, run /speckit.product-forge.change-request
+    4. [Abort] — stop implementation
+```
+
+If WARNING: log it and continue (mention it to the user but don't block).
+If CLEAN: continue silently (just append to implementation-log.md).
 
 ---
 
@@ -107,6 +154,11 @@ Implementation surface:
   Files created:  {N}
   Files modified: {N}
 
+Progressive verification:
+  Checkpoints run: {N}
+  Warnings found:  {N}
+  Critical drifts: {N}
+
 Product Forge traceability chain:
   problem-discovery/ ✅ (Phase 0 — if ran)
   research/          ✅ (Phase 1)
@@ -125,6 +177,9 @@ phases:
 implement:
   tasks_completed: {N}
   tasks_total: {N}
+  progressive_checkpoints: {N}
+  progressive_warnings: {N}
+  progressive_critical: {N}
 last_updated: "{ISO timestamp}"
 ```
 
@@ -135,10 +190,10 @@ last_updated: "{ISO timestamp}"
 ```
 ✅ Implementation done.
 
-Next step: /speckit.product-forge.verify-full
-  (or insert any custom step before verification)
+Next step: /speckit.product-forge.code-review (Phase 6B)
+  (or /speckit.product-forge.verify-full to skip code review)
 ```
 
-> **Extension point:** Between implementation and verification, community commands
-> can be inserted — for example: a manual QA checkpoint, a code review request,
-> a PR creation step, or any team-specific process.
+> **Extension point:** Between implementation and code review, community commands
+> can be inserted — for example: a manual QA checkpoint, a PR creation step,
+> or any team-specific process.

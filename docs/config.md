@@ -12,7 +12,7 @@ All settings are optional — missing values will be asked at runtime.
 mkdir -p .product-forge
 
 # Copy the template
-cp path/to/speckit-product-forge/config-template.yml .product-forge/config.yml
+cp $(specify extension path product-forge)/config-template.yml .product-forge/config.yml
 
 # Edit with your project details
 nano .product-forge/config.yml
@@ -156,6 +156,42 @@ default_mockup_style: "project-styled"
 | `"project-styled"` | Agent scans codebase for CSS tokens and applies them |
 
 The user can always override this per-feature during Phase 2.
+
+---
+
+### Lifecycle Behavior
+
+```yaml
+progressive_verify_interval: 3
+```
+Number of completed tasks between progressive verification checkpoints during Phase 6 (Implementation).
+After every N completed tasks, a mini-verify runs checking task-code correspondence, spec AC alignment,
+unplanned changes, and plan alignment. Results are logged in `implementation-log.md`.
+Set to `0` to disable progressive verification.
+
+---
+
+```yaml
+auto_sync_between_phases: true
+```
+When `true` (default), the forge orchestrator automatically runs `sync-verify --quick` between
+every phase transition, checking only the artifact layers relevant to that transition.
+If CRITICAL drift is found, the transition is paused for user review.
+Set to `false` to skip automatic sync checks (you can still run `/speckit.product-forge.sync-verify` manually).
+
+---
+
+```yaml
+release_readiness: "optional"
+```
+
+Controls Phase 9 (Release Readiness) behavior:
+
+| Value | Behavior |
+|-------|----------|
+| `"optional"` | Ask the user after Phase 7/8 whether to run readiness check (default) |
+| `"required"` | Always run readiness check before marking feature complete |
+| `"skip"` | Never offer readiness check |
 
 ---
 

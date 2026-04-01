@@ -49,8 +49,11 @@ features/
     │
     ├── spec.md                              ← Phase 4: SpecKit specification
     ├── plan.md                              ← Phase 5: Technical plan (SpecKit)
-    ├── tasks.md                             ← Phase 5: Task breakdown (SpecKit)
+    ├── tasks.md                             ← Phase 5B: Task breakdown (SpecKit)
     ├── review.md                            ← Phase 3: Revalidation log
+    ├── pre-impl-review.md                   ← Phase 5C: Design + architecture + risk review [NEW v1.3]
+    ├── implementation-log.md                ← Phase 6: Progressive verification log [NEW v1.3]
+    ├── code-review.md                       ← Phase 6B: Multi-agent code review [NEW v1.3]
     ├── verify-report.md                     ← Phase 7: Verification report
     │
     ├── testing/                             ← Phase 8A artifacts [OPTIONAL]
@@ -69,7 +72,14 @@ features/
     │   ├── README.md                        ← Bug dashboard (P0–P4 counts, open/fixed/deferred)
     │   └── BUG-NNN.md × N                  ← One file per bug found during test run
     │
-    └── test-report.md                       ← Phase 8B: Final test report
+    ├── test-report.md                       ← Phase 8B: Final test report
+    ├── release-readiness.md                 ← Phase 9: Pre-ship readiness checklist [NEW v1.3]
+    ├── retrospective.md                     ← Post-launch retrospective
+    │
+    ├── sync-report.md                       ← Cross-cutting: Latest sync-verify report [NEW v1.3]
+    ├── sync-report.json                     ← Cross-cutting: Machine-readable sync data [NEW v1.3]
+    ├── change-log.md                        ← Cross-cutting: Change request history [NEW v1.3]
+    └── backlog.md                           ← Deferred changes for v2 [NEW v1.3, if any CRs deferred]
 ```
 
 ---
@@ -100,21 +110,28 @@ HTML files include an in-page navigation bar linking sibling screens.
 
 ---
 
-## .forge-status.yml Schema
+## .forge-status.yml Schema (v2)
 
 ```yaml
+schema_version: 2                      # schema version for migration detection
 feature: "feature-slug"               # kebab-case feature identifier
 created_at: "2026-03-28"              # ISO date
 phases:
-  research: pending                   # pending | in_progress | completed | skipped
+  problem_discovery: pending          # Phase 0 — optional
+  research: pending                   # pending | in_progress | completed | skipped | completed_with_known_issues
   product_spec: pending
   revalidation: pending               # uses "approved" instead of "completed"
   bridge: pending
-  plan_tasks: pending                 # covers both plan + tasks sub-phases
-  implement: pending
-  verify: pending
-  test_plan: pending                  # optional — "skipped" if user declines Phase 8A
-  test_run: pending                   # optional — "skipped" if user declines Phase 8B
+  plan: pending                       # Phase 5 — technical plan
+  tasks: pending                      # Phase 5B — task breakdown
+  pre_impl_review: pending            # Phase 5C — design + arch + risk [NEW v1.3]
+  implement: pending                  # Phase 6 — implementation
+  code_review: pending                # Phase 6B — multi-agent review [NEW v1.3]
+  verify: pending                     # Phase 7 — full traceability verification
+  test_plan: pending                  # Phase 8A — optional
+  test_run: pending                   # Phase 8B — optional
+  release_readiness: pending          # Phase 9 — optional [NEW v1.3]
+  retrospective: pending              # Post-launch [NEW v1.3]
 speckit_mode: ""                      # "classic" | "v-model" — set in Phase 4
 testing:                              # populated after Phase 8B
   final_pass_rate: ""                 # e.g. "94%"
@@ -122,7 +139,89 @@ testing:                              # populated after Phase 8B
   bugs_fixed: 0
   bugs_deferred: 0
   test_runs_total: 0
+gates: []                             # audit trail — see Gate Entry schema below [NEW v1.3]
+sync_runs:                            # sync-verify history [NEW v1.3]
+  last_run: ""                        # ISO timestamp of last sync-verify
+  total_runs: 0
+  last_drift_count: 0
+  last_critical_count: 0
+  last_verdict: ""                    # CONSISTENT | DRIFT DETECTED | CRITICAL DRIFT
+change_requests: []                   # CR-NNN references [NEW v1.3]
+# --- Phase-specific extension blocks (populated by supporting commands) ---
+problem:                              # populated by problem-discovery (Phase 0)
+  statement: ""
+  severity: ""
+  validation: ""
+  go_decision: ""
+research_dimensions:                  # populated by research (Phase 1)
+  competitors: ""
+  ux_patterns: ""
+  codebase: ""
+  tech_stack: ""
+  metrics_roi: ""
+input_richness_score: 0
+implement:                            # populated by implement (Phase 6)
+  tasks_completed: 0
+  tasks_total: 0
+  progressive_checkpoints: 0
+  progressive_warnings: 0
+  progressive_critical: 0
+api_docs:                             # populated by api-docs command
+  generated: false
+  openapi_path: ""
+  consistency_drift: 0
+security:                             # populated by security-check command
+  run: false
+  critical: 0
+  high: 0
+  verdict: ""
+tracking:                             # populated by tracking-plan command
+  generated: false
+  events_count: 0
+  funnels_count: 0
+retrospective:                        # populated by retrospective command
+  date: ""
+  days_post_launch: 0
+  research_accuracy: ""
 last_updated: "2026-03-28T10:00:00"   # ISO timestamp
+```
+
+### Phase State Values
+
+| Value | Meaning |
+|-------|---------|
+| `pending` | Phase not yet started |
+| `in_progress` | Phase currently executing |
+| `completed` | Phase finished successfully |
+| `skipped` | Phase intentionally skipped by user |
+| `approved` | Phase approved (used specifically by `revalidation`) |
+| `completed_with_known_issues` | Phase completed but with documented issues (used by `test_run`, `verify`) |
+
+> **Note:** Supporting commands (`api-docs`, `security-check`, `tracking-plan`) also write
+> completion status to `phases:` using their own keys (`api_docs`, `security_check`, `tracking_plan`).
+> These are not part of the main lifecycle flow but are tracked for status reporting.
+
+### Gate Entry Schema (within `gates:` array)
+
+```yaml
+- phase: "research"                   # phase name
+  decision: "approved"                # approved | approved_with_conditions | revised | skipped | aborted
+  timestamp: "2026-03-28T14:00:00"    # ISO timestamp
+  notes: ""                           # user's reasoning (optional)
+  conditions: []                      # conditions attached to approval
+  sync_result: "clean"                # quick sync result: clean | N_critical | N_warning
+```
+
+### Change Request Entry Schema (within `change_requests:` array)
+
+```yaml
+- id: "CR-001"
+  title: "Add notification sound selection"
+  status: "accepted"                  # accepted | deferred | rejected
+  timestamp: "2026-03-29T10:00:00"
+  artifacts_affected: 3
+  tasks_added: 2
+  phase_rollback: null                # phase name or null
 ```
 
 ---
@@ -278,3 +377,9 @@ Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → 
 | API test case IDs | `TC-API-NNN` | `TC-API-003` |
 | Regression test IDs | `TC-REG-NNN` | `TC-REG-002` |
 | Bug IDs | `BUG-NNN` (3 digits) | `BUG-001`, `BUG-012` |
+| Change request IDs | `CR-NNN` (3 digits) | `CR-001`, `CR-003` |
+| Drift finding IDs | `DRIFT-NNN` (3 digits) | `DRIFT-001`, `DRIFT-015` |
+| Code review finding IDs | `REV-NNN` (3 digits) | `REV-001`, `REV-042` |
+| Design finding IDs | `D-NNN` | `D-001`, `D-005` |
+| Architecture finding IDs | `A-NNN` | `A-001`, `A-003` |
+| Risk IDs | `R-NNN` | `R-001`, `R-008` |

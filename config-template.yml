@@ -60,6 +60,20 @@ default_wireframe_detail: "basic-html"
 # Options: "none" | "generic" | "project-styled"
 default_mockup_style: "project-styled"
 
+# ─── Lifecycle Behavior ────────────────────────────────────────────────────────
+
+# How often to run progressive verification during implementation (Phase 6)
+# Value = number of completed tasks between checkpoints. Set to 0 to disable.
+progressive_verify_interval: 3
+
+# Whether to run automatic quick sync-verify between phase transitions
+# When true, the forge orchestrator checks relevant artifact layers at each transition
+auto_sync_between_phases: true
+
+# Whether Phase 9 (Release Readiness) is required or optional
+# Options: "required" | "optional" | "skip"
+release_readiness: "optional"
+
 # ─── Advanced ──────────────────────────────────────────────────────────────────
 
 # Maximum token budget target per generated document (approximate)

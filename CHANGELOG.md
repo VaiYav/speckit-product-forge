@@ -6,6 +6,89 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.0] — 2026-04-01
+
+### Added — 5 new commands expanding the product lifecycle
+
+- **`speckit.product-forge.sync-verify`** — Cross-cutting 7-layer artifact consistency checker:
+  - Detects forward drift (earlier artifacts not reflected in later) and backward drift (later decisions that should update earlier)
+  - Checks 7 layers: research↔product-spec, product-spec↔spec.md, spec↔plan, plan↔tasks, tasks↔code, spec↔code, cross-links
+  - Each drift item: severity (CRITICAL/WARNING/INFO), direction, proposed resolution, human approval
+  - `--quick` mode runs automatically between forge phase transitions (configurable via `auto_sync_between_phases`)
+  - `--fix` mode applies approved resolutions after user confirmation
+  - Outputs: `sync-report.md`, `sync-report.json`
+
+- **`speckit.product-forge.pre-impl-review`** (Phase 5C) — Combined design, architecture, and risk gate:
+  - Design Review: state completeness (empty/loading/error/partial/offline), UX pattern compliance, accessibility pre-check, component reuse
+  - Architecture Review: structural checks, integration point validation, NFR coverage
+  - Risk Assessment: technical/scope/integration/rollback risks with likelihood×impact matrix
+  - Rollout strategy recommendation based on risk profile
+  - Optional for features with ≤5 tasks and no UI
+  - Outputs: `pre-impl-review.md`
+
+- **`speckit.product-forge.code-review`** (Phase 6B) — Multi-agent code review:
+  - 4 parallel review dimensions: Quality (SOLID, DRY), Security (OWASP surface scan), Patterns (vs codebase-analysis.md), Tests (coverage vs spec.md)
+  - Enriched with Product Forge context — not a generic linter
+  - Findings with CRITICAL/HIGH/MEDIUM/LOW severity and suggested code fixes
+  - Outputs: `code-review.md`
+
+- **`speckit.product-forge.release-readiness`** (Phase 9) — Pre-ship checklist:
+  - Feature flags & rollout: flag detection, rollout strategy, rollback plan
+  - Documentation: user docs, API docs status, changelog, migration guide
+  - Monitoring: metrics, alerts, dashboard panels, runbook
+  - Analytics: tracking plan status, event instrumentation
+  - Dependencies: environment readiness, infrastructure, security status
+  - Consolidates api-docs, security-check, and tracking-plan status
+  - Outputs: `release-readiness.md` with READY/CONDITIONAL/NOT READY verdict
+
+- **`speckit.product-forge.change-request`** — Formal scope change management:
+  - Captures change description, rationale, priority
+  - Impact analysis: which artifacts affected, effort delta, risk assessment
+  - Decision gate: Accept/Defer/Reject/Modify
+  - Propagates approved changes with `<!-- CR-NNN -->` markers across all artifacts
+  - Runs sync-verify after application
+  - Deferred changes logged in `backlog.md`
+  - Outputs: `change-log.md` (append-only)
+
+### Changed — Lifecycle expansion and quality improvements
+
+- **`forge.md`** (major rewrite) — Now orchestrates 13 phases + 2 cross-cutting commands (was 9 phases):
+  - Phase Map expanded with Phase 5C (Pre-Impl Review), Phase 6B (Code Review), Phase 9 (Release Readiness)
+  - Automatic quick sync-verify between every phase transition
+  - Gate audit trail: every gate decision recorded in `.forge-status.yml` `gates:` array
+  - Schema migration: auto-detects v1 `.forge-status.yml` and migrates to v2
+  - Cross-cutting commands (sync-verify, change-request) surfaced in operating rules
+
+- **`implement.md`** (enhanced) — Progressive verification during implementation:
+  - Mini-verify checkpoint every N tasks (configurable via `progressive_verify_interval`)
+  - Checks: task-code correspondence, spec AC alignment, unplanned changes, plan alignment
+  - Results logged in `implementation-log.md`
+  - CRITICAL drift pauses implementation with user options
+  - Handoff now suggests code-review as next step
+
+- **`status.md`** (enhanced) — Displays new phases, gate audit trail, sync history, change requests
+
+- **`.forge-status.yml` schema v2:**
+  - Added `schema_version: 2` for migration detection
+  - Split `plan_tasks` into separate `plan` and `tasks` fields
+  - Added phase fields: `pre_impl_review`, `code_review`, `release_readiness`, `retrospective`
+  - Added `gates:` array for audit trail
+  - Added `sync_runs:` section for sync-verify history
+  - Added `change_requests:` array for CR tracking
+
+- **`extension.yml`** — Version 1.3.0, 5 new command entries, 4 new tags
+
+- **`config-template.yml`** — 3 new config keys:
+  - `progressive_verify_interval` (default: 3) — tasks between progressive verify checkpoints
+  - `auto_sync_between_phases` (default: true) — automatic quick sync at phase transitions
+  - `release_readiness` (default: "optional") — required/optional/skip
+
+- **`docs/file-structure.md`** — Updated directory layout, schema v2 documentation, new naming conventions (CR-NNN, DRIFT-NNN, D-NNN, A-NNN, R-NNN)
+
+- **`README.md`** — Updated lifecycle diagram, 20-command table, file structure, installation version
+
+---
+
 ## [1.2.1] — 2026-03-30
 
 ### Changed — Breaking: `implement` split into 3 independent commands
@@ -172,6 +255,7 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.3.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.2...v1.1.3

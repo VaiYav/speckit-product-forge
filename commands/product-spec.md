@@ -492,11 +492,17 @@ Create `{FEATURE_DIR}/README.md` — top-level index for the entire feature:
 |-------|--------|-----------|
 | 1. Research | ✅ Complete | [research/](./research/README.md) |
 | 2. Product Spec | 🔄 In Progress | [product-spec/](./product-spec/README.md) |
-| 3. Revalidation | ⏳ Pending | — |
+| 3. Revalidation | ⏳ Pending | [review.md](./review.md) |
 | 4. SpecKit Bridge | ⏳ Pending | [spec.md](./spec.md) |
-| 5. Plan + Tasks | ⏳ Pending | [plan.md](./plan.md) · [tasks.md](./tasks.md) |
+| 5. Plan | ⏳ Pending | [plan.md](./plan.md) |
+| 5B. Tasks | ⏳ Pending | [tasks.md](./tasks.md) |
+| 5C. Pre-Impl Review | ⏳ Pending | [pre-impl-review.md](./pre-impl-review.md) |
 | 6. Implementation | ⏳ Pending | — |
+| 6B. Code Review | ⏳ Pending | [code-review.md](./code-review.md) |
 | 7. Verification | ⏳ Pending | [verify-report.md](./verify-report.md) |
+| 8A. Test Plan | ⏳ Pending | [testing/](./testing/) |
+| 8B. Test Run | ⏳ Pending | [test-report.md](./test-report.md) |
+| 9. Release Readiness | ⏳ Pending | [release-readiness.md](./release-readiness.md) |
 
 ## Quick Start
 
