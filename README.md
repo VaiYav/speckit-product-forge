@@ -9,6 +9,8 @@ patterns, and your codebase — craft an approved product spec — review design
 let SpecKit implement it with progressive verification — run multi-agent code review — then
 automatically generate and run Playwright tests with a bug-fix loop until the feature is ready to ship.
 
+**New in v1.4.0:** EDA Event Verification in bridge phase, Dependency Discovery between features, Codebase Constraint Analysis in research, Constitution Compliance auto-check in plan, and unified review.md format with Decision Log and Change History.
+
 **New in v1.3.0:** Cross-artifact sync-verify, pre-implementation review gate, code review phase,
 release readiness checklist, change request management, gate audit trail, and progressive verification.
 
@@ -38,11 +40,11 @@ The result: a **complete traceability chain** — problem → research → produ
 |---------|-------|-------------|
 | `/speckit.product-forge.forge` | All | **Main command.** Full lifecycle orchestrator with human gates |
 | `/speckit.product-forge.problem-discovery` | 0 | Validate the problem: JTBD analysis, interview script, Go/No-go |
-| `/speckit.product-forge.research` | 1 | Parallel multi-dimensional feature research (adaptive depth) |
+| `/speckit.product-forge.research` | 1 | Parallel research: competitors, UX, codebase (+ constraints & event patterns) **[v1.4]** |
 | `/speckit.product-forge.product-spec` | 2 | Interactive product spec creation with configurable detail |
-| `/speckit.product-forge.revalidate` | 3 | Iterative review and correction loop until approval |
-| `/speckit.product-forge.bridge` | 4 | Convert product-spec to SpecKit spec.md, choose Classic or V-Model |
-| `/speckit.product-forge.plan` | 5 | Generate technical plan from spec.md — standalone, exits after approval |
+| `/speckit.product-forge.revalidate` | 3 | Iterative review loop — Decision Log, Change History, OQR tracking **[v1.4]** |
+| `/speckit.product-forge.bridge` | 4 | Dependency Discovery → spec.md with EDA verification, NFR contracts, test spec **[v1.4]** |
+| `/speckit.product-forge.plan` | 5 | Technical plan + Constitution Compliance auto-check + cross-validation **[v1.4]** |
 | `/speckit.product-forge.tasks` | 5B | Generate task breakdown from plan.md — standalone, exits after approval |
 | `/speckit.product-forge.pre-impl-review` | 5C | **[NEW]** Design review + architecture review + risk assessment before coding |
 | `/speckit.product-forge.implement` | 6 | Execute implementation with progressive verification checkpoints |
@@ -84,8 +86,8 @@ The result: a **complete traceability chain** — problem → research → produ
 │                                                                              │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────────┐        │
 │  │ Competitor       │  │ UX/UI Patterns  │  │ Codebase Analysis    │        │
-│  │ Analysis         │  │ Research        │  │ Integration Points   │        │
-│  │ [MANDATORY]      │  │ [MANDATORY]     │  │ [MANDATORY]          │        │
+│  │ Analysis         │  │ Research        │  │ + Constraints +      │        │
+│  │ [MANDATORY]      │  │ [MANDATORY]     │  │ Event Patterns [MND] │        │
 │  └─────────────────┘  └─────────────────┘  └──────────────────────┘        │
 │  ┌─────────────────┐  ┌─────────────────┐                                   │
 │  │ Tech Stack       │  │ Metrics / ROI   │                                   │
@@ -116,26 +118,27 @@ The result: a **complete traceability chain** — problem → research → produ
 │                                                                              │
 │  Loop: show summary → collect feedback → apply changes → confirm            │
 │  Exits only on explicit user approval                                        │
-│  All revisions logged in review.md                                           │
+│  Revisions logged in review.md: Decision Log + Change History + OQR [v1.4] │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
    ▼ [Human gate: "APPROVED"]
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 4: SpecKit Bridge                                                     │
+│  PHASE 4: SpecKit Bridge                                                [v1.4] │
 │  /speckit.product-forge.bridge                                                       │
 │                                                                              │
-│  Synthesizes all artifacts → spec.md (enriched)                             │
+│  Dependency Discovery → Synthesizes all artifacts → spec.md (enriched)     │
+│  EDA Event Verification · NFR Measurement Contract · Testing Specification  │
 │  User chooses: Classic (plan → tasks → impl) or V-Model (full traceability) │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
    ▼ [Human gate: approve spec.md]
    │
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 5: Plan                                                               │
+│  PHASE 5: Plan                                                        [v1.4]  │
 │  /speckit.product-forge.plan                                                 │
 │                                                                              │
-│  SpecKit plan → cross-validate vs product-spec → approve                   │
+│  SpecKit plan → Constitution Compliance auto-check → cross-validate → approve │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
    ▼ [Human gate: approve plan]  ← extension point: insert custom step here

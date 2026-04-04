@@ -243,6 +243,11 @@ Context: feature, codebase path, tech stack.
    - Database/schema changes?
    - Breaking changes risk?
 5. Document current tech capabilities relevant to this feature
+6. **Identify architectural constraints** (critical — prevents design mistakes in spec/plan):
+   - Mandatory patterns the project enforces (e.g., resilience wrappers for external calls, specific naming conventions, ID format requirements from external services)
+   - Project constitution or ADRs (architectural decision records) that apply to this feature's domain
+   - Existing event or message patterns: exact identifiers, payload shapes, delivery guarantees
+   - Shared utilities already available (e.g., caching helpers, retry decorators, GDPR handlers) — reuse instead of reinventing
 
 **Output:** `{RESEARCH_DIR}/codebase-analysis.md`
 
@@ -271,6 +276,29 @@ Context: feature, codebase path, tech stack.
 | Service | {path} | Extend | {description} |
 | DB | {schema} | New collection | {description} |
 | UI | {path} | New component | {description} |
+
+## Codebase Constraints
+
+> Non-negotiable patterns and limitations discovered in the codebase.
+> These MUST be reflected in spec.md and plan.md — ignoring them causes design bugs.
+
+| Constraint | Source (file / ADR) | Impact on Feature Design |
+|------------|---------------------|--------------------------|
+| {e.g., all external service calls require a circuit breaker} | {path or ADR-NNN} | {must wrap X with circuit breaker} |
+| {e.g., external service requires UUID v4 IDs, not sequential} | {path} | {ID generation strategy must change} |
+| {e.g., cache keys follow `{module}:{entity}:{id}` pattern} | {constitution §IV} | {cache key design constraint} |
+| {e.g., events emitted only after DB persist} | {constitution §V / path} | {event emission order} |
+
+## Event / Message Patterns (if applicable)
+
+> If the project uses event-driven architecture, document existing patterns here.
+> These exact identifiers and payload shapes must be used in spec.md — invented names cause silent failures.
+
+| Event / Topic | Exact Identifier | Payload Interface | Source File | Notes |
+|---------------|-----------------|-------------------|-------------|-------|
+| {event name} | `{EXACT_VALUE}` | `{InterfaceName}` | {path} | {emitted by / consumed by} |
+
+> Leave empty and note "N/A — no EDA patterns detected" if not applicable.
 
 ## Data Model Impact
 {New schemas, migrations, relationships}
@@ -408,6 +436,7 @@ Create `{RESEARCH_DIR}/README.md`:
 | 🏆 Competitors | {1-sentence finding} |
 | 🎨 UX/UI | {1-sentence finding} |
 | 🔧 Codebase | {1-sentence finding} |
+| 🔒 Constraints | {top codebase constraint that will affect spec/plan} |
 | 📦 Tech Stack | {1-sentence finding — if researched} |
 | 📊 Metrics | {1-sentence finding — if researched} |
 

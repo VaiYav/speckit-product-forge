@@ -36,6 +36,11 @@ features_dir: "features"
 #   "v-model"  — always use full V-Model traceability
 default_speckit_mode: "ask"
 
+# Path to the project architecture constitution file (used in Phase 5 compliance check)
+# The constitution defines mandatory patterns: resilience, EDA rules, code quality, etc.
+# Leave empty to use the SpecKit default: .specify/memory/constitution.md
+# constitution_path: ".specify/memory/constitution.md"
+
 # ─── Research Defaults ─────────────────────────────────────────────────────────
 
 # Default competitors to always include in competitor analysis

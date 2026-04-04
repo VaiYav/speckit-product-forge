@@ -74,9 +74,60 @@ Key tech constraints:
 
 ---
 
+## Step 3.5: Constitution Compliance Check
+
+After SpecKit plan returns, automatically verify `plan.md` against the project constitution.
+
+**Locate the constitution file** (in priority order):
+1. Read `.product-forge/config.yml` → look for `constitution_path` key
+2. Fall back to `.specify/memory/constitution.md`
+3. If neither file exists → skip this step silently and note "No constitution found — compliance check skipped" in the approval summary
+
+Store resolved path as `CONSTITUTION_PATH`.
+
+For each section below, mark ✅ / ⚠️ / ❌ based on what's present in `plan.md`:
+
+**Resilience & External Services**
+- [ ] Every external service call has a resilience strategy (circuit breaker, retry policy, or documented degraded mode)
+- [ ] Rate limiting addressed for any public-facing endpoints
+- [ ] Timeout configuration mentioned for external calls
+
+**Data & Privacy**
+- [ ] If the feature stores user data: a data deletion handler is included (e.g., user deletion event listener)
+- [ ] Sensitive data fields identified and protection strategy described
+
+**Testing**
+- [ ] Coverage targets specified per service or module
+- [ ] Integration test strategy described (not just unit tests)
+- [ ] At least one test case listed per critical path in spec.md
+
+**EDA (skip if not applicable)**
+- [ ] Event handlers do not throw — errors are caught and logged, never propagated to the bus
+- [ ] Events are emitted after data is persisted, not before
+- [ ] Correlation / trace IDs are present in all event payloads
+- [ ] New events that don't exist yet are listed as tasks in the plan
+
+**Code Quality**
+- [ ] No circular dependencies between modules introduced by this feature
+- [ ] Functions and modules respect size conventions from the constitution
+
+Present results:
+
+```
+⚖️ Constitution Compliance: {Feature Name}
+
+✅ Passed:   {N} checks
+⚠️ Warnings: {list — present but needs attention}
+❌ Violated: {list — must be fixed before approval}
+```
+
+If ❌ violations found: add them as additional rows in the Cross-Validation table (Step 4).
+
+---
+
 ## Step 4: Cross-validate Plan vs Product Spec
 
-After SpecKit plan returns, read `plan.md` and cross-check against `product-spec/product-spec.md`:
+Read `plan.md` and cross-check against `product-spec/product-spec.md`:
 
 | Check | Status | Notes |
 |-------|--------|-------|
@@ -106,10 +157,15 @@ Plan sections: {N}
   • Backend services: {N}
   • Migrations / schema changes: {N}
 
-Cross-validation:
+Cross-validation (product spec):
   ✅ {N} checks passed
   ⚠️ {N} warnings: {list}
   ❌ {N} issues: {list}
+
+Constitution compliance:
+  ✅ {N} checks passed
+  ⚠️ {N} warnings: {list}
+  ❌ {N} violations: {list}
 
 Story coverage: {N}/{N} Must Have stories addressed
 ```

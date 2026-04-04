@@ -47,6 +47,29 @@ Read in this order (each enriches the spec.md we'll create):
 7. **research/ux-patterns.md** — UX recommendations
 8. **research/codebase-analysis.md** — integration points and technical constraints
 
+After reading, determine the **feature type**:
+
+- **Shared Infrastructure** — the feature exposes a reusable service, library, or API consumed by other features (signals: "platform", "service", "SDK", "provider", "engine", "shared", "foundation", or explicitly mentioned as a dependency by other features)
+- **End-User Feature** — the feature directly serves an end user (everything else)
+
+Store as `FEATURE_TYPE = shared_infrastructure | end_user`.
+This drives whether the Consumer Contract section is included in spec.md (Step 4).
+
+---
+
+## Step 2.5: Dependency Discovery
+
+Before writing the spec, identify related features that may block or overlap with this one.
+`{features_dir}` comes from `.product-forge/config.yml`.
+
+1. List all feature directories in `{features_dir}/` — read each `.forge-status.yml` for phase status
+2. For each feature that shares a domain keyword or module with the current feature:
+   - Determine the relationship: **blocks** / **complements** / **replaces** / **unrelated**
+3. If dependencies are found: populate the `## Prerequisites` section in `spec.md` (template below)
+4. If no related features found: **omit the Prerequisites section entirely** from `spec.md`
+
+> Skip silently if `{features_dir}/` is empty or doesn't exist.
+
 ---
 
 ## Step 3: Choose SpecKit Mode
@@ -74,6 +97,14 @@ The spec must be **richer than a standard SpecKit spec** because it's enriched w
 - Include all user stories with acceptance criteria
 - Include technical integration notes from codebase analysis
 - Be self-contained enough for SpecKit agents to work without reading all source documents
+
+**Conditional sections** (include or omit based on detection in Steps 2 and 2.5):
+
+| Section | Include when |
+|---------|-------------|
+| `## Prerequisites` | Step 2.5 found related features |
+| `## EDA Events` | Step 2 codebase-analysis.md shows event-driven patterns |
+| `## Consumer Contract` | `FEATURE_TYPE = shared_infrastructure` |
 
 ```markdown
 # Spec: {Feature Name}
@@ -103,6 +134,14 @@ This spec is backed by a full research phase covering:
 - **Codebase analysis:** {integration approach from codebase-analysis.md}
 
 > Deep-dive: [research/README.md](./research/README.md)
+
+---
+
+## Prerequisites
+
+| Priority | Feature | Status | Relationship | What's Needed |
+|----------|---------|--------|--------------|---------------|
+| P1 | {feature-slug} | {🟢 done / 🟡 partial / ⏳ pending} | blocks / complements | {what must exist before this feature can ship} |
 
 ---
 
@@ -170,6 +209,16 @@ Key need: {what they need from this feature}
 | Security | {relevant requirement} | — |
 | Scalability | {requirement} | — |
 
+## NFR Measurement Contract
+
+> Every NFR must have a corresponding measurable signal. Without this, the NFR cannot be verified.
+> Rule: if you can't define how to measure it, it is not a real NFR.
+
+| NFR | How to Measure | Signal / Query | Threshold |
+|-----|----------------|----------------|-----------|
+| {e.g., P95 latency ≤ 300ms} | {e.g., `api_response_time` event, p95 field} | {analytics query or dashboard} | {value} |
+| {e.g., Error rate < 0.5%} | {e.g., `request_failed` / `request_total`} | {query} | {value} |
+
 ---
 
 ## Technical Context
@@ -191,6 +240,70 @@ Key need: {what they need from this feature}
 ### Tech Stack Notes
 {Relevant tech stack decisions from research/tech-stack.md if available}
 
+### Codebase Constraints
+
+> From `research/codebase-analysis.md` — constraints the architecture must respect.
+
+| Constraint | Source | Impact |
+|------------|--------|--------|
+| {e.g., circuit breaker required for external calls} | {ADR or file path} | {how it shapes design} |
+| {e.g., ID format restrictions} | {source} | {impact} |
+
+---
+
+## EDA Events
+
+| Direction | Event Name | Exact Identifier | Payload Contract | Source File | Status |
+|-----------|------------|-----------------|-----------------|-------------|--------|
+| emits | {event} | `{EXACT_ENUM_OR_CONSTANT}` | {interface / schema ref} | {path} | ✅ exists / 🆕 to create |
+| listens | {event} | `{EXACT_ENUM_OR_CONSTANT}` | {interface / schema ref} | {path} | ✅ exists / 🆕 to create |
+
+> Every event marked 🆕 must become a task in tasks.md: "Define event [name] + payload interface".
+
+---
+
+## Consumer Contract
+
+> Include this section only when `FEATURE_TYPE = shared_infrastructure`.
+> Omit entirely for end-user features.
+>
+> Defines the public surface that downstream consumers must depend on.
+> Anything not listed here is an internal implementation detail and may change without notice.
+
+### Public API
+
+```typescript
+// The single exported surface consumers should use:
+// {ServiceName}.{method}(params: {InputType}): Promise<{OutputType}>
+//
+// Example:
+// const result = await this.{serviceName}.{method}({ userId, query });
+```
+
+### Consumer Utilities
+
+| Utility | Purpose | Usage |
+|---------|---------|-------|
+| `{FormatterName}` | {what it formats} | `{FormatterName}.format(rawResult)` |
+| `{AdapterName}` | {what it adapts} | `{AdapterName}.toPromptContext(data)` |
+
+### Fallback Behaviour
+
+| Failure Mode | What Consumers Receive | Consumer Action Required |
+|--------------|----------------------|--------------------------|
+| Service unavailable | `null` / empty result | Use cached or default value |
+| Partial result | Result with `partial: true` flag | Degrade gracefully |
+| Timeout | Throws `ServiceTimeoutError` | Catch and fall back |
+
+### Integration Pattern
+
+```typescript
+// Recommended consumer integration:
+// const raw = await this.{serviceName}.{method}(userId, input);
+// const context = {FormatterName}.format(raw);
+// // → inject context into downstream process
+```
+
 ---
 
 ## Acceptance Criteria
@@ -210,6 +323,33 @@ Each user story's AC is listed above. Additionally, the feature is considered co
 > Full metrics definition: [product-spec/metrics.md](./product-spec/metrics.md)
 
 Primary KPI: {metric name} — Target: {value} (Baseline: {current value})
+
+---
+
+## Testing Specification
+
+### Coverage Targets
+
+| Module / Service | Target Coverage | Test Type |
+|-----------------|----------------|-----------|
+| {module} | {e.g., ≥ 80%} | unit / integration |
+
+### Critical Test Cases
+
+Minimum required test cases (happy path + key edge cases per critical component):
+
+| # | Scenario | Input | Expected Output | Type |
+|---|----------|-------|----------------|------|
+| TC-001 | {happy path} | {input} | {expected} | unit / integration / e2e |
+| TC-002 | {error path} | {input} | {expected} | unit |
+| TC-003 | {edge case} | {input} | {expected} | unit |
+
+### E2E Scenarios
+
+| TC-ID | Scenario | Entry Point | Exit Condition |
+|-------|----------|------------|----------------|
+| TC-E2E-001 | {full happy path} | {starting state} | {success state} |
+| TC-E2E-002 | {failure/recovery} | {starting state} | {graceful error state} |
 
 ---
 
@@ -237,6 +377,27 @@ Key screens:
 
 ---
 
+## Step 4.5: EDA Event Verification
+
+Check `research/codebase-analysis.md` for the "Event / Message Patterns" section:
+- **If EDA patterns are detected**: proceed with verification below
+- **If no EDA patterns found**: remove `## EDA Events` section from `spec.md` entirely and skip this step
+
+For each event referenced in `spec.md § EDA Events`:
+
+1. **Search the codebase** for the exact event identifier (enum value, constant, or string literal)
+2. **Verify payload contract**: locate the interface or schema definition in the codebase
+3. **Check correlation / trace ID**: confirm the payload includes a request correlation or trace ID if the project convention requires it
+4. **Mark status**:
+   - ✅ exists → fill in the source file path in the EDA Events table
+   - 🆕 to create → ensure a task will be created in tasks.md for "Define event [name] + payload interface"
+
+Update `spec.md § EDA Events` table with verified source file paths and final statuses.
+
+> Skip silently if no EDA patterns detected in codebase-analysis.md.
+
+---
+
 ## Step 5: Validate spec.md Quality
 
 Before presenting, self-check:
@@ -245,6 +406,11 @@ Before presenting, self-check:
 3. Integration points section references actual paths from codebase-analysis.md
 4. No placeholder text left (no "TODO", no "{}")
 5. Links to product-spec/ and research/ are valid relative paths
+6. **[if `## EDA Events` section is present]** All events have verified status (✅ or 🆕) — no blank Status cells
+7. **[if `## NFR Measurement Contract` section is present]** Every NFR row has a non-empty Signal / Query column
+8. **[if `## Testing Specification` section is present]** At least 3 TC entries and at least 1 E2E scenario exist
+9. **[if `## Prerequisites` section is present]** All rows have a non-empty Relationship and What's Needed column
+10. **[if `## Consumer Contract` section is present]** Public API code block is filled in and Fallback Behaviour table has at least one row
 
 Fix any issues found silently.
 
@@ -260,7 +426,11 @@ Contents:
   • {N} Must Have stories + acceptance criteria
   • {N} Should Have stories
   • {N} Functional requirements
-  • {N} Non-functional requirements
+  • {N} Non-functional requirements + NFR Measurement Contract
+  • {N} EDA events verified  [or: "EDA not applicable — section omitted"]
+  • {N} dependencies discovered  [or: "No prerequisite features found"]
+  • Consumer Contract: included  [or: "end-user feature — section omitted"]
+  • {N} test cases + {N} E2E scenarios (Testing Specification)
   • {N} identified risks
   • Full links to {N} source documents
 

@@ -41,9 +41,32 @@ Also initialize `{FEATURE_DIR}/review.md` if it doesn't exist:
 
 ## Current Status: UNDER REVIEW
 
+## Open Questions Resolution
+
+> Track how open questions from product-spec.md were answered during revalidation.
+> Move resolved questions here instead of marking them ~~strikethrough~~ in the spec.
+
+| # | Question | Decision | Rationale | Resolved in Revision |
+|---|----------|----------|-----------|----------------------|
+<!-- Add rows as questions are resolved -->
+
+## Decision Log
+
+> Key decisions made during revalidation — not individual edits, but significant choices.
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+<!-- Append decisions as they are made -->
+
+## Change History
+
+> High-level version deltas — one line per revision.
+
+<!-- Format: v1.0 → v1.1: [summary of what changed] -->
+
 ## Revision History
 
-<!-- Revisions will be added below -->
+<!-- Individual revision records will be added below -->
 ```
 
 ---
@@ -158,6 +181,8 @@ Apply changes **sequentially** if they affect the same file, **in parallel** if 
 
 After all changes are applied, append to `{FEATURE_DIR}/review.md`:
 
+1. **Append to `## Revision History`:**
+
 ```markdown
 ## Revision #{N} — {date}
 
@@ -174,6 +199,13 @@ After all changes are applied, append to `{FEATURE_DIR}/review.md`:
 
 ---
 ```
+
+2. **Append to `## Change History`:**
+   `v1.{N-1} → v1.{N}: {1-line summary of the most important changes in this revision}`
+
+3. **If any open questions from product-spec.md were resolved**, move them from the spec to `## Open Questions Resolution` table.
+
+4. **If a significant scope or design decision was made**, record it in `## Decision Log`.
 
 ### 3E. Show Updated Summary
 
@@ -244,6 +276,28 @@ last_updated: "{ISO timestamp}"
 
 Update `{FEATURE_DIR}/README.md` phase status table:
 - Phase 3 Revalidation → ✅ Approved
+
+### 4B-post. Drift Check (Automatic)
+
+If `spec.md` already exists in `{FEATURE_DIR}/` (i.e., a previous bridge run created it):
+
+1. Compare key sections of `product-spec.md` against `spec.md`:
+   - User stories (Must Have): check for any added or removed stories during revalidation
+   - Out-of-scope list: check for scope changes
+   - Open Questions: check for newly resolved or added questions
+2. If divergence found, append a warning to `review.md`:
+
+```markdown
+## ⚠️ Drift Warning — {date}
+
+Product-spec was updated after spec.md was last generated.
+The following sections diverged:
+- {section}: {description of divergence}
+
+Action required: re-run `/speckit.product-forge.bridge` to regenerate spec.md.
+```
+
+> If `spec.md` does not yet exist, skip this check silently.
 
 ### 4C. Completion Message
 
