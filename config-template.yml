@@ -119,8 +119,15 @@ release_readiness: "optional"
 # Options:
 #   "lite"     — 5 phases: problem-discovery (opt) → product-spec → plan → implement → verify
 #   "standard" — full 14-phase lifecycle (recommended for most features)
-#   "v-model"  — standard + IEEE traceability via speckit:v-model-* skills
-# See docs/policy.md §4 for escalation and deselection rules.
+#   "v-model"  — standard bookends + V1–V13 delegated to the external
+#                V-Model Extension Pack (leocamello/spec-kit-v-model ≥0.5.0).
+#                REQUIRES that plugin to be installed separately:
+#                  specify extension add v-model \
+#                    --from https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.5.0.zip
+#                Without it, selecting v-model mode aborts with the install
+#                command — there is NO silent fallback to standard.
+# See docs/policy.md §4 for escalation and deselection rules, and
+# docs/v-model-integration.md for the full v-model orchestration contract.
 default_feature_mode: "standard"
 
 # ─── Skip-Reason Policy (v1.5.0) ───────────────────────────────────────────────

@@ -311,7 +311,16 @@ Selects the phase map for new features. Valid values:
 - `"lite"` — 5-phase lifecycle for small features, bug fixes, refactors.
   Phases: problem-discovery (opt) → product-spec → plan → implement → verify.
 - `"standard"` — full 14-phase lifecycle. Default.
-- `"v-model"` — standard plus IEEE traceability via `speckit:v-model-*`.
+- `"v-model"` — Product Forge keeps the bookends (problem-discovery,
+  research, tasks, implement, verify, test, release-readiness) and
+  delegates the middle (V1–V13: requirements, acceptance, system /
+  architecture / module design paired with system / integration / unit
+  test plans, trace, peer review, test results, audit report) to the
+  external [V-Model Extension Pack](https://github.com/leocamello/spec-kit-v-model)
+  (`leocamello/spec-kit-v-model` ≥ 0.5.0).
+  **Required install:** `specify extension add v-model --from https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.5.0.zip`.
+  Without it, selecting v-model mode aborts — there is no silent
+  fallback. See [`docs/v-model-integration.md`](./v-model-integration.md).
 
 Escalation: lite features can be promoted to standard mid-run when scope
 grows — see [`docs/policy.md §4`](./policy.md#4-feature-modes-e1).

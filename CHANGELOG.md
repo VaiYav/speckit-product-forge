@@ -6,6 +6,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.1] — 2026-04-24
+
+> Docs-only patch. No behavioural change — closes a documentation gap
+> on how users install the optional V-Model dependency.
+
+### Changed
+
+- **README.md** — new "V-Model mode (optional)" subsection under
+  Requirements that names the external [`leocamello/spec-kit-v-model`](https://github.com/leocamello/spec-kit-v-model)
+  plugin (≥0.5.0), includes the install command, and spells out
+  the "hard dependency only for v-model mode" rule with an explicit
+  "no silent fallback" note for regulated/safety-critical work.
+- **config-template.yml** — `feature_mode` comment expanded: the
+  `v-model` value now includes the install command for the external
+  plugin and the abort-on-missing rule.
+- **docs/config.md** — rewrite the v-model bullet in `feature_mode`
+  documentation to describe what Product Forge owns vs what the
+  V-Model plugin owns, include the install command, and link to
+  `docs/v-model-integration.md`.
+
+No functional code change. The plugin already aborted with the install
+command when v-model mode was selected without the dependency; this
+release just makes the dependency visible to users before they try.
+
+---
+
 ## [1.5.0] — 2026-04-19
 
 > Minor release (additive). Expansion of the lifecycle with portfolio view,
@@ -503,6 +529,7 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.5.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.2.1...v1.3.0

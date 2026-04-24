@@ -389,7 +389,7 @@ specify extension add product-forge --from https://github.com/VaiYav/speckit-pro
 ### Install (specific version)
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.5.0.zip
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.5.1.zip
 ```
 
 ### Update to latest
@@ -401,14 +401,14 @@ specify extension update product-forge --from https://github.com/VaiYav/speckit-
 ### Update to specific version
 
 ```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.5.0.zip
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.5.1.zip
 ```
 
 ### Verify installation
 
 ```bash
 specify extension list
-# Should show: product-forge  v1.5.0  enabled
+# Should show: product-forge  v1.5.1  enabled
 ```
 
 ---
@@ -459,6 +459,32 @@ Key settings:
 - **SpecKit** >= 0.1.0
 - **Agent with web search capabilities** — for research phase (Phases 1)
 - **Agent with file system access** — for codebase analysis and artifact creation
+
+### V-Model mode (optional, required only for `feature_mode: v-model`)
+
+- **[`leocamello/spec-kit-v-model`](https://github.com/leocamello/spec-kit-v-model)** >= 0.5.0 — external SpecKit extension that
+  implements the formal V-Model artifact progression (requirements →
+  system / architecture / module design, paired with system / integration /
+  unit test plans, trace checkpoints, peer review, test results ingestion,
+  audit report). Product Forge delegates phases V1–V13 to this plugin when
+  `feature_mode: v-model` is selected.
+
+  Install:
+  ```bash
+  specify extension add v-model \
+    --from https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.5.0.zip
+  ```
+
+> **Hard dependency only for v-model mode.** Without this plugin,
+> `lite` and `standard` modes work exactly the same — nothing degrades.
+> When you invoke `/speckit.product-forge.forge --mode=v-model` without
+> it, the orchestrator aborts with the install command above and does
+> **not** silently fall back to standard mode. This is intentional —
+> regulated / safety-critical work (medical IEC 62304, automotive
+> ISO 26262, avionics DO-178C) must not ship without the formal
+> artifacts. Domain selection lives in `v-model-config.yml` at the
+> project root and is read by the delegated commands. Full flow in
+> [docs/v-model-integration.md](./docs/v-model-integration.md).
 
 ### Phases 8A–8B: Testing
 

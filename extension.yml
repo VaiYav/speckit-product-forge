@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.5.0"
+  version: "1.5.1"
   description: "Full product lifecycle orchestrator with research, spec, plan, implement, verify, test, and release-readiness phases. v1.5 adds portfolio view, lite mode, brown-field backfill, monorepo support, V-Model optional integration, unit + integration test phases, monitoring/migration/i18n/experiment extensions, per-phase digests, and a learning loop. See README for the complete feature list."
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"
