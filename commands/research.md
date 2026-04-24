@@ -62,7 +62,7 @@ Before I start researching, I need to understand the feature better:
    (Leave blank to auto-discover 6–8 competitors)
 
 3. **Tech stack** — What technology does your project use?
-   (e.g., "NestJS + Vue 3 + Quasar + Capacitor" — or say "use config")
+   (e.g., "Node.js + Express + Postgres" or "Django + React" — or say "use config")
 
 4. **Domain** — What industry/domain is this for?
    (e.g., "astrology mobile app", "B2B SaaS fintech")
@@ -98,6 +98,32 @@ Dimensions: competitors ✅ · UX/UI ✅ · codebase ✅ {+ tech · metrics if o
 
 Starting research now. Any corrections before I launch?
 ```
+
+---
+
+## Step 2.5: Consult Prior Lessons
+
+Before launching parallel research, read the project-wide learning log at
+`.product-forge/lessons.md` (see [`docs/lessons-format.md`](../docs/lessons-format.md)).
+This is a lightweight no-LLM step.
+
+1. If the file does not exist → skip this step and note
+   *"No prior lessons log yet"* in the research index. Do not create the
+   file here; only retrospectives write to it.
+2. Read the file and extract all `Tags:` entries per block.
+3. Compute the new feature's implied tag set from:
+   - Project domain (from config).
+   - Tech stack elements mentioned in the feature description.
+   - Obvious domain keywords in the intake (push, payments, auth, schema, ...).
+4. Score each lesson block by tag overlap (number of matching tags).
+5. Select the top N blocks (default 5) with at least one tag match and
+   add them to the context passed to the research agents in Step 3.
+6. At the end of Step 3 output, include a new section in
+   `research/README.md` titled *"Prior lessons that apply"* listing the
+   selected blocks by title and date, each with a one-line relevance note.
+
+If no lessons match the new feature's tags, the section is omitted from
+`research/README.md`. Do not invent or synthesise lessons.
 
 ---
 
@@ -526,3 +552,20 @@ Show:
 Ask: *"Research complete — {N} dimensions analyzed, saved to `{RESEARCH_DIR}/`. Ready to proceed to Phase 2: Product Spec creation?"*
 
 If standalone: *"Next: `/speckit.product-forge.product-spec`"*
+
+---
+
+## Step 8: Phase Digest (required)
+
+Before returning, write `{FEATURE_DIR}/research/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
+its path on `.forge-status.yml` under `phases.research.digest_path`.
+
+The digest must include:
+- **Key decisions** — which research dimensions were run and the top 3 findings.
+- **Artifacts produced** — every file under `{FEATURE_DIR}/research/` with a one-line description.
+- **Open risks** — unresolved questions forwarded to product-spec.
+- **Handoff notes** — what product-spec needs to know that is not obvious from the file list.
+
+The orchestrator refuses to mark Phase 1 complete until `digest.md` exists.
+See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).

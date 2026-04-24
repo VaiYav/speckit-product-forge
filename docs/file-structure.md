@@ -383,3 +383,64 @@ Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → 
 | Design finding IDs | `D-NNN` | `D-001`, `D-005` |
 | Architecture finding IDs | `A-NNN` | `A-001`, `A-003` |
 | Risk IDs | `R-NNN` | `R-001`, `R-008` |
+| Task IDs | `T-NNN` (3 digits) | `T-001`, `T-042` |
+| Architecture Decision Record IDs | `ADR-NNN` | `ADR-001`, `ADR-005` |
+
+---
+
+## Appendix — File layout added in v1.5.0
+
+New directories and files that appear under `features/<slug>/` depending
+on which optional phases ran:
+
+```
+features/
+├── _portfolio/                           ← cross-feature outputs
+│   ├── portfolio.md                      ← `/portfolio` report
+│   └── flag-cleanup-YYYY-MM-DD.md        ← `/feature-flag-cleanup` reports
+├── _archived/                            ← archived features (future wave)
+└── <slug>/
+    ├── .forge-status.yml                 ← v3 schema (see docs/schema/)
+    ├── .forge-status.yml.lock            ← transient state lock (runtime.md §2)
+    ├── research/digest.md                ← [v1.5] phase digest (A4)
+    ├── product-spec/digest.md            ← [v1.5] phase digest (A4)
+    ├── plan/digest.md                    ← [v1.5] phase digest (A4)
+    ├── tasks/digest.md                   ← [v1.5] phase digest (A4)
+    ├── implement/digest.md               ← [v1.5] phase digest (A4)
+    ├── verify/digest.md                  ← [v1.5] phase digest (A4)
+    ├── failures/T-NNN.md                 ← [v1.5] per-failed-task logs
+    ├── i18n/                             ← [v1.5] Phase 4.5 harvest
+    │   ├── keys.yml
+    │   └── report.md
+    ├── migrations/                       ← [v1.5] Phase 5.5 migration-plan
+    │   ├── migration-plan.md
+    │   ├── forward.sql
+    │   ├── rollback.sql
+    │   ├── validation.sql
+    │   ├── backfill.md                   ← only if expand–migrate–contract
+    │   └── risk-matrix.md
+    ├── flags/registry.yml                ← [v1.5] Phase 9 output
+    ├── monitoring/                       ← [v1.5] Phase 9 + 9.5
+    │   ├── dashboard.json
+    │   ├── alerts.yml
+    │   └── slo.md
+    ├── experiment/                       ← [v1.5] Phase 9B
+    │   ├── experiment-design.md
+    │   └── experiment.yml
+    └── gaps-report.md                    ← [v1.5] only for backfilled features
+```
+
+Project-level new files:
+
+```
+.product-forge/
+├── config.yml                            ← project config (existing)
+└── lessons.md                            ← [v1.5] append-only learning log
+scripts/                                  ← [v1.5]
+├── migrate-status-v2-to-v3.js            ← stamps schema_version: 3 lazily
+├── acquire-lock.sh                       ← state-lock helpers (runtime.md §2.7)
+└── release-lock.sh
+```
+
+Banner rule: every artifact written by `/backfill` carries a
+`BACKFILLED ARTIFACT` banner at the top of the file.

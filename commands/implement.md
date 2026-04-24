@@ -185,7 +185,51 @@ last_updated: "{ISO timestamp}"
 
 ---
 
-## Step 6: Handoff
+## Step 6: Phase Digest (required)
+
+Before handoff, write `{FEATURE_DIR}/implement/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
+its path on `.forge-status.yml` under `phases.implement.digest_path`.
+
+The digest must include:
+- **Key decisions** — deviations from `plan.md`, shortcuts taken, intentional TODOs left for follow-up.
+- **Artifacts produced** — implementation log, new/modified source files grouped by module.
+- **Open risks** — areas not covered by progressive verify, untested paths, known-tricky code.
+- **Handoff notes** — where code-review and verify-full should focus first.
+
+The orchestrator also records each completed task on `.forge-status.yml` under
+`task_log[]` with `status`, `paths` (copied from the task's `Paths:` line in
+tasks.md), `commit_sha` (when a commit per task is produced), and
+timestamps. If a task failed, write `failures/<task-id>.md` and point the
+`failure_log_path` field to it.
+
+The `paths` field is the canonical source for `portfolio` file-conflict
+detection — see [`commands/portfolio.md §Step 3`](./portfolio.md). Always
+copy paths verbatim from tasks.md; if the tasks.md line said `unknown`,
+record `paths: []` here and the portfolio command will count this task
+as "path-unknown" rather than silently missing it.
+
+**Monorepo mode:** paths carry the workspace prefix (e.g.
+`backend:src/users.ts`). Preserve the prefix exactly when copying to
+`task_log[].paths`. After each task completes, the orchestrator
+updates `scope.paths` on `.forge-status.yml` with the union of
+workspaces referenced across all completed tasks. If `scope.paths`
+grows beyond the set originally declared by bridge, set
+`scope.cross_workspace: true` and surface it as a gate condition on the
+next phase transition (see [runtime.md §9.5](../docs/runtime.md#95-cross-workspace-change-propagation)).
+
+**Test execution during progressive verify:** in monorepo mode, read
+`codebase.workspace_type` from config and build the test command from
+the template in [runtime.md §9.3](../docs/runtime.md#93-test-runner-resolution).
+Run tests scoped to the workspaces affected by the last N completed
+tasks, not the whole monorepo.
+
+The orchestrator refuses to mark Phase 6 complete until `digest.md` exists.
+See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+
+---
+
+## Step 7: Handoff
 
 ```
 ✅ Implementation done.

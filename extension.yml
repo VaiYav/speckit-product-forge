@@ -3,8 +3,8 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.3.0"
-  description: "Full product lifecycle: problem discovery → research → product spec → SpecKit → pre-impl review → implement → code review → verify → test → release readiness → retrospective. With cross-artifact sync-verify and change request management."
+  version: "1.5.0"
+  description: "Full product lifecycle orchestrator with research, spec, plan, implement, verify, test, and release-readiness phases. v1.5 adds portfolio view, lite mode, brown-field backfill, monorepo support, V-Model optional integration, unit + integration test phases, monitoring/migration/i18n/experiment extensions, per-phase digests, and a learning loop. See README for the complete feature list."
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"
   license: "MIT"
@@ -12,6 +12,37 @@ extension:
 
 requires:
   speckit_version: ">=0.1.0"
+
+# Optional extensions. These are NOT hard dependencies — the plugin works
+# without them. Each entry tells the user which sibling extension unlocks
+# which feature set, how to install it, and when Product Forge expects it.
+#
+# At runtime, commands that need an optional extension first detect its
+# presence (by checking for one of its commands). If missing, they either
+# (a) fall back gracefully with an advisory message or (b) instruct the
+# user to install it when the feature is mandatory.
+optional_extensions:
+  - id: "v-model"
+    name: "V-Model Extension Pack"
+    version: ">=0.5.0"
+    repository: "https://github.com/leocamello/spec-kit-v-model"
+    install: |
+      specify extension add v-model \
+        --from https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.5.0.zip
+    purpose: >
+      Enables `feature_mode: v-model`. Provides the formal V-Model
+      artifact progression (IEEE 29148 requirements, IEEE 1016 system
+      design, IEEE 42010 / Kruchten 4+1 architecture, DO-178C / ISO 26262
+      module design) plus ISO 29119 test plans at every level and a
+      regulatory-grade traceability matrix. Required for regulated
+      domains (medical IEC 62304, automotive ISO 26262, avionics DO-178C).
+    detection_command: "speckit.v-model.requirements"
+    triggered_by: "feature_mode: v-model"
+    fallback: >
+      When the plugin is not installed and the user selects v-model mode,
+      Product Forge aborts with the install command above. It does NOT
+      silently fall back to standard mode — safety-critical work must not
+      proceed without the formal artifacts.
 
 provides:
   commands:
@@ -99,9 +130,37 @@ provides:
       file: "commands/change-request.md"
       description: "Cross-cutting: Formal scope change management with impact analysis, effort delta, and artifact propagation"
 
+    - name: "speckit.product-forge.portfolio"
+      file: "commands/portfolio.md"
+      description: "Cross-cutting: Portfolio view across all features. Feature table, file-conflict matrix, dependency graph, suggested merge order. Read-only scan."
+
+    - name: "speckit.product-forge.backfill"
+      file: "commands/backfill.md"
+      description: "Brown-field entry: reverse-engineers a Product Forge feature folder from existing code. Generates retro product-spec, plan, tasks, status file with backfilled: true, and a gaps-report of missing artifacts."
+
+    - name: "speckit.product-forge.monitoring-setup"
+      file: "commands/monitoring-setup.md"
+      description: "Phase 9.5 (opt): builds real monitoring artifacts — NewRelic dashboard JSON, alerts.yml, SLO doc — from plan NFRs and tracking-plan. Wraps newrelic-dashboard-builder."
+
+    - name: "speckit.product-forge.migration-plan"
+      file: "commands/migration-plan.md"
+      description: "Phase 5.5 (opt, conditional): zero-downtime migration plan with forward.sql, rollback.sql, validation.sql, backfill plan, and risk matrix when plan.md introduces schema changes. Wraps db-migration-manager / mongodb-ops."
+
+    - name: "speckit.product-forge.i18n-harvest"
+      file: "commands/i18n-harvest.md"
+      description: "Opt-in post-bridge step: extracts user-facing strings from wireframes/spec, generates namespaced locale keys, and stubs TODO entries in every configured locale. Wraps i18n-workflow."
+
+    - name: "speckit.product-forge.experiment-design"
+      file: "commands/experiment-design.md"
+      description: "Phase 9B (opt): pre-registered A/B plan — hypothesis, MDE, sample size, exposure rules, guardrails, decision rule — before shipping a flag-gated feature. Wraps feature-flag-ab-testing."
+
+    - name: "speckit.product-forge.feature-flag-cleanup"
+      file: "commands/feature-flag-cleanup.md"
+      description: "Cross-cutting stale-flag audit. Scans every flags/registry.yml, cross-checks codebase, produces removal recipes for flags past cleanup_after. Read-only; wraps feature-flag-manager."
+
     - name: "speckit.product-forge.retrospective"
       file: "commands/retrospective.md"
-      description: "Post-launch retrospective: predicted vs actual metrics, NewRelic/analytics data, research accuracy audit, lessons learned"
+      description: "Post-launch retrospective: predicted vs actual metrics, NewRelic/analytics data, research accuracy audit, lessons learned appended to .product-forge/lessons.md"
 
 tags:
   - "process"
@@ -117,6 +176,25 @@ tags:
   - "code-review"
   - "release-readiness"
   - "change-management"
+  - "portfolio"
+  - "backfill"
+  - "lite-mode"
+  - "monitoring"
+  - "migration"
+  - "i18n"
+  - "experiment"
+  - "flag-cleanup"
+  - "learning-loop"
+  - "state-lock"
+  - "digest"
+  - "drift-budget"
+  - "monorepo"
+  - "v-model-integration"
+  - "unit-testing"
+  - "integration-testing"
+  - "testing-strategy"
+  - "workspace-aware"
+  - "optional-extensions"
 
 # Project configuration — copy to .product-forge/config.yml in your project root
 # See config-template.yml and docs/config.md for full documentation
@@ -130,17 +208,17 @@ config:
   project_name:
     description: "Project name used as context in all research agents"
     required: false
-    example: "My Zodiac AI"
+    example: "Acme Workflow"
 
   project_tech_stack:
     description: "Brief tech stack description passed to research agents"
     required: false
-    example: "NestJS + Vue 3 + Quasar + Capacitor"
+    example: "Node.js + Express + Postgres"
 
   project_domain:
     description: "Domain/industry for competitor and UX research context"
     required: false
-    example: "astrology mobile app"
+    example: "B2B SaaS productivity tool"
 
   features_dir:
     description: "Directory where feature artifacts are stored"

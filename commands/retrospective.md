@@ -265,7 +265,31 @@ Based on the data:
 
 ---
 
-## Step 5: Update Status
+## Step 5: Append Lessons to the Project Log
+
+Before updating status, turn the retrospective findings into lesson blocks
+for the cross-feature learning log.
+
+1. Extract candidate lessons. Sources:
+   - Large deltas between predicted and actual metrics.
+   - Post-launch incidents or bugs tracked to root cause.
+   - Manual edits the team had to make to generated artifacts during implement.
+   - Rules of thumb stated in §4 "Lessons learned" of `retrospective.md`.
+2. For each candidate, draft a block in the format described in
+   [`docs/lessons-format.md`](../docs/lessons-format.md) §2.
+3. Show the drafted blocks to the user and ask for confirmation or edits.
+   Reject blocks that are:
+   - Project-specific trivia with no general applicability.
+   - Restatements of published best practices with no project evidence.
+   - Negative assessments of individuals (policy: no blame).
+4. Append confirmed blocks to `.product-forge/lessons.md`. Create the file
+   if it does not exist. Never overwrite existing blocks.
+5. Record the count on `.forge-status.yml` under
+   `phases.retrospective.lessons_added`.
+
+---
+
+## Step 6: Update Status
 
 Update `.forge-status.yml`:
 
@@ -281,12 +305,13 @@ retrospective:
   error_rate: "{N}%"
   open_issues: {N}
   research_accuracy: "{N}/10"
+  lessons_added: {N}                  # number of blocks appended to lessons.md in Step 5
 last_updated: "{ISO timestamp}"
 ```
 
 ---
 
-## Step 6: Present Results
+## Step 7: Present Results
 
 ```
 📊 Retrospective Complete: {Feature Name}

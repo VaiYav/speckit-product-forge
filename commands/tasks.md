@@ -81,7 +81,32 @@ After SpecKit tasks returns, read `tasks.md` and check:
 | Dependency order is sensible? (data model before service before controller) | ✅/⚠️/❌ | |
 
 If ❌ found: surface specific gaps (e.g., "US-003 has no task"), ask user how to resolve.
-If only ✅/⚠️: proceed to approval gate.
+If only ✅/⚠️: proceed to Step 4.1.
+
+### Step 4.1: Structural validation (hard checks — never ship past these)
+
+Before proceeding to the approval gate, also run these two structural
+checks. Failures are hard errors — fix and regenerate, do not gate.
+
+1. **Task ID uniqueness.** Collect every `T-NNN` / `TNNN` identifier in
+   `tasks.md`. If any ID appears twice or more, abort with:
+   *"Duplicate task ID {id} on lines {n1}, {n2}. Task IDs must be
+   unique — rename and re-run tasks."* This prevents ambiguous
+   `task_log[]` entries downstream.
+
+2. **Workspace-prefix validation (monorepo only).** If the project
+   config has a `codebase.paths` block, every `Paths:` line with a
+   prefix (`<workspace>:<relative-path>`) MUST use a workspace name
+   that appears as a key in `codebase.paths`. On mismatch abort with:
+   *"Unknown workspace '{prefix}' on task {id}. Known workspaces:
+   {list from config}. Fix the Paths: line or add the workspace to
+   .product-forge/config.yml."* Lines without a prefix are accepted
+   in single-root mode and rejected in monorepo mode with
+   *"Missing workspace prefix on task {id} — monorepo mode requires
+   '<workspace>:<path>' format."* Lines written as `Paths: unknown`
+   are always accepted (exploratory tasks).
+
+Both checks are deterministic and cheap. Neither requires an LLM pass.
 
 ---
 
@@ -126,7 +151,70 @@ last_updated: "{ISO timestamp}"
 
 ---
 
-## Step 6: Handoff
+## Step 6: Phase Digest (required)
+
+Before handoff, write `{FEATURE_DIR}/tasks/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
+its path on `.forge-status.yml` under `phases.tasks.digest_path`.
+
+The digest must include:
+- **Key decisions** — task count, parallelizable groups, dependency shape, any XL-sized tasks flagged.
+- **Artifacts produced** — `tasks.md`.
+- **Open risks** — tasks that need extra review (mega-tasks, high-risk areas, unfamiliar territory).
+- **Handoff notes** — which tasks implement should start with; recommended commit granularity.
+
+The orchestrator also records each task's `size` on `.forge-status.yml` under
+`task_log[].size`. Supported sizes: `XS` (≤1 h), `S` (≤ half-day), `M` (≤ 1 day),
+`L` (≤ 2 days), `XL` (> 2 days — flag for decomposition).
+
+Each task in `tasks.md` MUST declare the files it will touch using a
+`Paths:` line immediately under the task title. This is the primary
+source for file-conflict detection in
+[`portfolio`](./portfolio.md).
+
+**Single-root project** example:
+
+```markdown
+- [ ] T007 — Add push token storage to User schema
+      Paths: src/modules/users/users.schema.ts, src/modules/users/users.service.ts
+      Size: S
+```
+
+**Monorepo project** — prefix each path with the workspace name from
+`codebase.paths`:
+
+```markdown
+- [ ] T007 — Add push token storage to User schema
+      Paths: backend:src/modules/users/users.schema.ts, backend:src/modules/users/users.service.ts
+      Size: S
+
+- [ ] T012 — Render token status in settings screen
+      Paths: frontend:src/features/settings/push-token.vue
+      Size: M
+```
+
+A single task may touch multiple workspaces — list them all:
+
+```markdown
+- [ ] T015 — Share validation logic
+      Paths: shared:src/validation/token.ts, backend:src/modules/users/users.service.ts, frontend:src/features/settings/push-token.vue
+      Size: M
+```
+
+When paths are not knowable in advance (exploratory tasks), write
+`Paths: unknown` explicitly rather than omitting — the portfolio command
+uses presence of the line to decide accuracy level.
+
+The orchestrator also updates `.forge-status.yml` `scope.paths` with
+the union of workspaces referenced across all tasks, and sets
+`scope.cross_workspace: true` when more than one workspace is touched.
+
+The orchestrator refuses to mark Phase 5B complete until `digest.md` exists.
+See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+
+---
+
+## Step 7: Handoff
 
 ```
 ✅ Tasks approved and saved to {FEATURE_DIR}/tasks.md

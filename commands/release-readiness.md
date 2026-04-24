@@ -42,55 +42,97 @@ Load artifacts:
 
 ---
 
-## Step 1: Feature Flag & Rollout
+## Step 1: Feature Flags, Rollout, and Rollback
 
-### 1A: Feature Flag Detection
+This step consolidates scanning, strategy, and artifact production into
+one pipeline. It replaces the previous scan-then-report-then-create
+structure with a single scan → build → verify flow.
 
-Scan codebase for feature flag patterns:
-- Search for feature flag frameworks: `LaunchDarkly`, `Unleash`, `GrowthBook`, `flagsmith`, custom `isFeatureEnabled`, `featureFlags`, `FEATURE_*` env vars
-- Search implementation files (from tasks.md) for flag references
+### 1A: Scan for flag candidates (input)
 
-| Check | Status | Details |
-|-------|:------:|---------|
-| Feature flag framework detected? | {✅ Yes: {framework} / ❌ No / N-A} | |
-| Feature wrapped in flag? | {✅/❌/N-A} | {flag name or "not found"} |
-| Flag default value (off) | {✅/❌/N-A} | {default state} |
-| Flag cleanup plan | {✅/❌/N-A} | {when to remove flag} |
+Search the codebase for feature-flag patterns. The results feed Step 1D.
+No standalone report is produced — this is the input to the registry
+builder.
 
-### 1B: Rollout Strategy
+Patterns searched:
+- Framework SDK imports: `LaunchDarkly`, `Unleash`, `GrowthBook`, `flagsmith`.
+- Custom predicates: `isFeatureEnabled(...)`, `flags.get(...)`,
+  `useFlag(...)`, `featureFlags.*`.
+- Environment variables matching `FEATURE_*`, `ENABLE_*`, `*_ENABLED`.
+- Any reference inside files listed in `task_log[].paths`.
 
-Based on risk profile (from `pre-impl-review.md` if exists, or inferred from plan.md):
+Record every candidate with: key, reference locations, inferred default,
+branch that represents the treatment.
 
+### 1B: Build rollout strategy (input)
+
+Derive from:
+- `pre-impl-review.md` risk level (if present).
+- `plan.md` — data migrations, breaking API changes.
+- `spec.md` — user-facing surface area, success metrics.
+
+Produce a rollout plan object (feeds into Step 1D and into
+`release-readiness.md` §Rollout Plan):
+
+```yaml
+strategy: "{canary | percentage | internal-first | big-bang}"
+stages:
+  - { name: "internal", duration: "1d" }
+  - { name: "canary-5",  duration: "3d" }
+  - { name: "25%",       duration: "3d" }
+  - { name: "100% GA",   duration: "—" }
+rollback_triggers:
+  - "error_rate > 5% for 5m"
+  - "p95_ms > <NFR target> for 10m"
+  - "<custom metric from spec>"
 ```
-Recommended rollout strategy: {strategy}
 
-Rationale:
-  - Risk level: {from pre-impl-review or inferred}
-  - Data migrations: {yes/no — from plan.md}
-  - Breaking API changes: {yes/no — from plan.md}
-  - User-facing: {yes/no — from spec.md}
+### 1C: Build rollback plan (input)
 
-Rollout stages:
-  1. {stage 1: e.g., "Internal team (1 day)"}
-  2. {stage 2: e.g., "5% canary (3 days)"}
-  3. {stage 3: e.g., "25% (3 days)"}
-  4. {stage 4: e.g., "100% GA"}
+Derive from plan, data migration plan (if Phase 5.5 ran), and flag
+strategy. Produce:
 
-Rollback trigger criteria:
-  - Error rate > {threshold}
-  - P95 latency > {threshold}
-  - {custom metric from spec.md success criteria}
+```yaml
+reversible: true | conditional | false
+mechanism: "feature_flag" | "revert_deploy" | "migration_rollback"
+data_concerns:
+  - "reversible DB migration — see migrations/rollback.sql"
+  - "cache keys change — plan cache flush"
+steps:
+  - "Flip flag to OFF"
+  - "Announce in #releases"
+  - "Monitor error rate for 10m"
 ```
 
-### 1C: Rollback Plan
+### 1D: Produce flag registry (active)
 
-| Check | Status | Details |
-|-------|:------:|---------|
-| Can feature be disabled instantly? | {✅ Feature flag / ⚠️ Deployment required / ❌ No rollback path} | |
-| Database migrations reversible? | {✅/⚠️ Partially/❌ Irreversible/N-A} | {migration details} |
-| API backwards compatible? | {✅/❌/N-A} | {breaking changes if any} |
-| Data format changes reversible? | {✅/❌/N-A} | {format changes if any} |
-| Rollback steps documented? | {✅/❌} | |
+Actively build `{FEATURE_DIR}/flags/registry.yml` from the scan in Step 1A
+and the strategy in Step 1B. If a `feature-flag-manager` skill is
+installed, delegate the provider-side registration (create-only, no
+production toggling). If not, write the registry file only and mark
+"manual registration" as an action item.
+
+Registry shape:
+
+```yaml
+# {FEATURE_DIR}/flags/registry.yml
+flags:
+  - key: "{flag-key}"
+    feature: "{feature-slug}"
+    default: false
+    owner: "{team-or-user}"
+    rollout_plan: "{strategy from Step 1B}"
+    cleanup_after: "{ISO date — when the flag becomes dead code}"
+    kill_switch: true
+    experiment: false     # set to true to trigger Phase 9B experiment-design
+```
+
+Record file path on `.forge-status.yml` under
+`release_readiness.flag_registry_path`.
+
+No standalone "Feature Flag Detection" or "Rollback Plan" report tables.
+The artifacts produced in 1D and the sections later compiled into
+`release-readiness.md` are the only outputs of Step 1.
 
 ---
 
@@ -127,40 +169,49 @@ Analyze spec.md user stories — does this feature need user docs?
 
 ---
 
-## Step 3: Monitoring & Observability
+## Step 3: Monitoring & Observability (scan + build in one pass)
 
-### 3A: Metrics
+### 3A: Derive SLI candidates (input)
 
-From `research/metrics-roi.md` and `spec.md` success criteria:
+Extract SLI candidates from three sources, deduplicated:
+- `spec.md` NFRs (latency targets, error-rate bounds, availability).
+- `research/metrics-roi.md` predicted KPIs.
+- `tracking/tracking-plan.md` events that imply rate/latency SLIs.
 
-| Metric | Defined? | Instrumented? | Alert Rule |
-|--------|:--------:|:-------------:|-----------|
-| {metric from spec success criteria} | {✅/❌} | {✅/❌} | {proposed alert or "none"} |
+Each SLI candidate has: name, target, measurement window, source.
 
-### 3B: Alerts
+### 3B: Derive alert candidates (input)
 
-Propose alert rules for critical paths:
+From the SLI list above, propose alert rules:
 
 | Alert | Condition | Severity | Channel |
 |-------|-----------|:--------:|---------|
-| Error rate spike | `error_rate > 5% for 5min` | P1 | {PagerDuty/Slack/etc.} |
-| Latency degradation | `p95 > {threshold}ms for 10min` | P2 | |
-| {feature-specific} | {condition} | {severity} | |
+| Error rate spike | `error_rate > 5% for 5m` | P1 | {project default} |
+| Latency degradation | `p95_ms > <target> for 10m` | P2 | {project default} |
+| {feature-specific} | ... | ... | ... |
 
-### 3C: Dashboard
+### 3C: Build monitoring artifacts (active)
 
-Propose dashboard panels:
+Actively produce:
 
-```
-Recommended dashboard: {Feature Name} — Release Monitoring
+- `{FEATURE_DIR}/monitoring/dashboard.json` — NerdGraph-compatible dashboard,
+  generated via the installed `newrelic-dashboard-builder` skill when
+  available.
+- `{FEATURE_DIR}/monitoring/alerts.yml` — alert policies from Step 3B.
+- `{FEATURE_DIR}/monitoring/slo.md` — SLI/SLO doc with error budget.
 
-Panels:
-  1. Request volume (time series, last 24h)
-  2. Error rate (time series, with baseline)
-  3. P95 response time (time series, with target line)
-  4. {feature-specific metric} (counter/gauge)
-  5. Feature flag state (if applicable)
-```
+Read-only output — do not call the NewRelic API directly to push the
+dashboard. The user applies the JSON manually after review, or invokes
+`/speckit.product-forge.monitoring-setup` (Phase 9.5) to extend it.
+
+If no provider skill is installed, write `alerts.yml` and `slo.md` and
+mark "dashboard.json: provider skill missing" as an action item.
+
+Record paths on `.forge-status.yml` under
+`release_readiness.monitoring_paths`.
+
+No standalone scan-and-report tables. Steps 3A and 3B are inputs; Step 3C
+is the only output.
 
 ---
 
@@ -329,7 +380,14 @@ gates:
 ## Operating Principles
 
 1. **Consolidator.** This phase ties together api-docs, security-check, tracking-plan status. Don't duplicate their work — check if they've been run and surface their results.
-2. **Practical.** Don't require perfection. Some features ship with known limitations — document them.
-3. **Risk-proportional.** A small config change needs a lighter checklist than a new payment flow.
-4. **Team-aware.** Consider that shipping involves coordination — other people need to know.
-5. **Measurable.** Every "ready" claim should be verifiable: alert exists, flag configured, docs written.
+2. **Artifact producer, not just checker.** Steps 1D and 3D produce real
+   flag-registry and monitoring artifacts. Don't fall back to "confirm a
+   dashboard exists somewhere" — either produce the artifact or log an
+   action item.
+3. **Practical.** Don't require perfection. Some features ship with known limitations — document them.
+4. **Risk-proportional.** A small config change needs a lighter checklist than a new payment flow.
+5. **Team-aware.** Consider that shipping involves coordination — other people need to know.
+6. **Measurable.** Every "ready" claim should be verifiable: alert exists, flag configured, docs written.
+7. **Graceful degradation.** If a required provider skill
+   (feature-flag-manager, newrelic-dashboard-builder) is missing, the step
+   is skipped with an action item rather than aborting the gate.

@@ -183,7 +183,24 @@ last_updated: "{ISO timestamp}"
 
 ---
 
-## Step 6: Handoff
+## Step 6: Phase Digest (required)
+
+Before handoff, write `{FEATURE_DIR}/plan/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
+its path on `.forge-status.yml` under `phases.plan.digest_path`.
+
+The digest must include:
+- **Key decisions** — tech choices, module boundaries, major data model shapes, top 3 NFRs.
+- **Artifacts produced** — `plan.md` and any ADRs created during planning.
+- **Open risks** — unresolved architectural trade-offs or dependencies.
+- **Handoff notes** — what tasks generation must keep in mind (sequencing hints, shared work).
+
+The orchestrator refuses to mark Phase 5 complete until `digest.md` exists.
+See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+
+---
+
+## Step 7: Handoff
 
 ```
 ✅ Plan approved and saved to {FEATURE_DIR}/plan.md

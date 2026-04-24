@@ -157,6 +157,7 @@ For each finding, create an entry:
 | **Layer** | {1-7}: {layer name} |
 | **Direction** | Forward (earlier → later) / Backward (later → earlier) |
 | **Severity** | CRITICAL / WARNING / INFO |
+| **Category** | structural / cosmetic (see §3A) |
 | **Source artifact** | {file path} |
 | **Target artifact** | {file path} |
 | **Evidence** | {specific text or reference from source} |
@@ -166,8 +167,72 @@ For each finding, create an entry:
 **Proposed resolution:**
 {Specific change to make — which file, what to add/update/remove}
 
+**Auto-resolvable:** {true if category is cosmetic AND auto_resolve.cosmetic is enabled}
+
 **Approval:** [ ] Approve / [ ] Reject / [ ] Defer
 ```
+
+---
+
+## Step 3A: Drift Category & Budget (D11)
+
+Every DRIFT item is classified into one of two categories before severity
+assessment. Severity (CRITICAL/WARNING/INFO) and category are independent —
+category controls *auto-resolution eligibility*; severity controls *gate
+behavior*.
+
+### Categories
+
+| Category | Examples | Auto-resolve eligible? |
+|----------|----------|------------------------|
+| **structural** | Missing requirement, renamed field, different data shape, divergent API contract, removed user story, phase skip with no reason, **Markdown heading-level shift** (changes parsed tree and anchor identity), **renamed section heading** (breaks cross-links) | **Never.** Always human-in-the-loop. |
+| **cosmetic** | Trailing whitespace, bullet-list indentation drift, bullet style (`-` vs `*`), fenced-code language hint missing, stale `last_updated` timestamp, Windows vs Unix line endings, redundant blank lines | Only when `sync_verify.auto_resolve.cosmetic: true` in project config (default `false`). |
+
+Heuristic: if a drift item can change the *meaning* of what any artifact
+says — **including the parsed document structure, anchor identity, or
+cross-link resolution** — it is structural. If it only changes whitespace
+or inconsequential byte-level details that leave the parsed AST and all
+anchors intact — it is cosmetic.
+
+**Link anchors are structural.** Any change that modifies the auto-generated
+slug of a heading (renaming a heading, changing its level, altering its
+text beyond whitespace) is structural because other files may cross-link
+to that slug.
+
+### Budget
+
+Read `sync_verify.drift_budget` from `.product-forge/config.yml`:
+
+```yaml
+sync_verify:
+  drift_budget:
+    cosmetic: 20    # default
+    structural: 0   # default — structural drift always gates
+```
+
+Apply:
+
+- **structural count > drift_budget.structural** → verdict is **CRITICAL
+  DRIFT** regardless of severity. The command fails the gate.
+- **cosmetic count > drift_budget.cosmetic** → WARNING only. Reporter
+  notes *"cosmetic budget exceeded ({count}/{budget}) — consider cleanup
+  pass or raise the budget."* The gate still passes.
+- **cosmetic count ≤ budget** → reported but does not affect verdict.
+
+### Auto-resolve opt-in
+
+If `sync_verify.auto_resolve.cosmetic: true` AND the run was invoked
+with `--fix`:
+
+1. Apply cosmetic resolutions in a dedicated commit-equivalent write
+   (atomic, lock-protected).
+2. Print a bordered warning:
+   > ⚠️ Applied {N} cosmetic auto-resolutions. Review diff before next gate.
+3. List every changed path in the report under
+   `## Auto-resolutions applied`.
+
+Structural resolutions are **never** auto-applied, even with `--fix`.
+They always require per-item approval in Step 5.
 
 ---
 
@@ -326,3 +391,5 @@ In quick mode:
 5. **Layer-aware.** Only check layers where both sides exist. Don't report "drift" for artifacts that haven't been created yet.
 6. **Direction-aware.** Distinguish forward drift (spec not in code) from backward drift (code decisions not in spec). Both matter but have different fix strategies.
 7. **Cumulative history.** Each run appends to sync history in .forge-status.yml. Trends matter.
+8. **Category discipline.** Structural drift is never auto-resolved. Cosmetic drift is auto-resolved only when the user explicitly opts in via `sync_verify.auto_resolve.cosmetic: true`. Auto-fix is an advisor turned into an editor — require deliberation, never default it on.
+9. **Budget as advice, not automation.** The drift budget exists to surface neglect, not to approve sloppiness. Exceeding the budget produces a warning; it does not silently accept drift.

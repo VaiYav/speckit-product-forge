@@ -369,3 +369,65 @@ Runs sync-verify after application.
 | `/speckit.product-forge.api-docs` | Generate OpenAPI 3.1 + Postman collection from plan.md |
 | `/speckit.product-forge.security-check` | OWASP audit scoped to detected surfaces |
 | `/speckit.product-forge.tracking-plan` | Analytics events, funnels, SDK snippets |
+
+---
+
+## Appendix A — Phases added in v1.5.0
+
+### Phase 4.5: i18n Harvest (optional, conditional)
+
+**Command:** `/speckit.product-forge.i18n-harvest`
+**Trigger:** multi-locale project detected.
+**Output:** `features/{slug}/i18n/keys.yml` + per-locale stubs.
+**Gate:** user approves harvested keys.
+
+### Phase 5.5: Migration Plan (optional, conditional)
+
+**Command:** `/speckit.product-forge.migration-plan`
+**Trigger:** `plan.md` Data Model section introduces schema changes.
+**Output:** `features/{slug}/migrations/migration-plan.md`, `forward.sql`, `rollback.sql`, `validation.sql`, optionally `backfill.md`.
+**Gate:** user approves strategy and scripts.
+
+### Phase 9.5: Monitoring Setup (optional)
+
+**Command:** `/speckit.product-forge.monitoring-setup`
+**Trigger:** after Phase 9.
+**Output:** `features/{slug}/monitoring/dashboard.json`, `alerts.yml`, `slo.md`.
+**Gate:** user confirms artifacts before ship.
+
+### Phase 9B: Experiment Design (optional, conditional)
+
+**Command:** `/speckit.product-forge.experiment-design`
+**Trigger:** `flags/registry.yml` has a flag with `experiment: true`.
+**Output:** `features/{slug}/experiment/experiment-design.md` + `experiment.yml`.
+**Gate:** user pre-registers hypothesis and decision rule before ship.
+
+## Appendix B — Cross-cutting commands added in v1.5.0
+
+### Portfolio
+
+**Command:** `/speckit.product-forge.portfolio`
+**Output:** `features/_portfolio/portfolio.md` (feature table, file-conflict matrix, dependency graph, suggested merge order).
+**Read-only.** Runnable any time.
+
+### Backfill
+
+**Command:** `/speckit.product-forge.backfill`
+**Brown-field entry.** Creates `features/<slug>/` from existing code with `backfilled: true` on status file and a gaps-report.
+
+### Feature Flag Cleanup
+
+**Command:** `/speckit.product-forge.feature-flag-cleanup`
+**Output:** `features/_portfolio/flag-cleanup-{date}.md` with removal recipes for stale flags.
+**Read-only in v1.5.0** (`--apply` reserved for a later wave).
+
+## Appendix C — Feature modes (v1.5.0)
+
+| Mode | Active phases | Excluded phases |
+|------|---------------|-----------------|
+| `lite` | problem-discovery (opt), product-spec, plan, implement, verify | everything else → `status: "not_applicable"` |
+| `standard` | all phases per the matrix above | — |
+| `v-model` | standard + V-Model artifact phases via `speckit:v-model-*` | — |
+
+See [`docs/policy.md §4`](./policy.md#4-feature-modes-e1) for mode
+selection, escalation triggers, and deselection rules.

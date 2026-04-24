@@ -330,6 +330,23 @@ Report saved: verify-report.md
 
 ---
 
+## Phase Digest (required)
+
+Before returning, write `{FEATURE_DIR}/verify/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
+its path on `.forge-status.yml` under `phases.verify.digest_path`.
+
+The digest must include:
+- **Key decisions** — overall verdict (clean / blocked), which CRITICAL findings drove the verdict.
+- **Artifacts produced** — `verify-report.md`.
+- **Open risks** — WARNING-level findings that were acknowledged but not fixed, with reason.
+- **Handoff notes** — what test-plan and release-readiness should watch for.
+
+The orchestrator refuses to mark Phase 7 complete until `digest.md` exists.
+See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+
+---
+
 ## Verification Principles
 
 1. **Read-only.** Never modify source files. Only write `verify-report.md`.

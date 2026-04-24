@@ -126,7 +126,7 @@ This is a loop. Repeat until the user approves.
 Wait for the user's response. It will be one of:
 1. **List of changes** — proceed to 3B
 2. **Questions** — answer them directly, then ask again for changes
-3. **"APPROVED" / "LGTM" / "все ок" / "approve"** — proceed to Step 4 (approval)
+3. **"APPROVED" / "LGTM" / "looks good" / "approve"** — proceed to Step 4 (approval)
 4. **Partial changes + approval signal** — apply changes first, then re-confirm
 
 ### 3B. Parse and Confirm Changes
@@ -232,7 +232,7 @@ Go to Step 3A and wait for the next response.
 
 ## Step 4: Final Approval
 
-When the user approves (keywords: "APPROVED", "LGTM", "все ок", "👍", "approve", "ready"):
+When the user approves (keywords: "APPROVED", "LGTM", "looks good", "approve", "ready"):
 
 ### 4A. Final Consistency Check
 

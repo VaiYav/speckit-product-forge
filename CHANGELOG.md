@@ -6,6 +6,196 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.0] — 2026-04-19
+
+> Minor release (additive). Expansion of the lifecycle with portfolio view,
+> brown-field entry, lite mode, full monorepo support, optional V-Model
+> integration, unit + integration test phases, and operational readiness
+> artifacts. Schema v3 for `.forge-status.yml` is **additive over v2** — no
+> breaking change to existing features; a lazy migration stamps
+> `schema_version: 3` on first write.
+
+### Added — 7 new commands
+
+- **`speckit.product-forge.portfolio`** — Cross-cutting portfolio view. Scans
+  every `features/*/.forge-status.yml`, produces feature table, file-conflict
+  matrix, dependency graph (Mermaid), and suggested merge order. Read-only.
+- **`speckit.product-forge.backfill`** — Brown-field entry. Reverse-engineers
+  a feature folder from existing code: retro product-spec, plan, simplified
+  tasks, `.forge-status.yml` with `backfilled: true`, and a gaps-report of
+  missing artifacts.
+- **`speckit.product-forge.monitoring-setup`** (Phase 9.5, opt) — Produces
+  real NewRelic-compatible dashboard JSON, alert rules, and SLI/SLO doc
+  from plan NFRs and tracking-plan events. Wraps `newrelic-dashboard-builder`.
+- **`speckit.product-forge.migration-plan`** (Phase 5.5, opt, conditional) —
+  Generates zero-downtime migration plan with `forward.sql`, `rollback.sql`,
+  `validation.sql`, backfill plan, and risk matrix when plan.md introduces
+  schema changes. Wraps `db-migration-manager` / `mongodb-ops`.
+- **`speckit.product-forge.i18n-harvest`** (post-bridge, opt) — Extracts
+  user-facing strings from wireframes/spec, generates feature-namespaced
+  locale keys, stubs TODO entries in every configured locale. Wraps
+  `i18n-workflow`.
+- **`speckit.product-forge.experiment-design`** (Phase 9B, opt) — Forces a
+  pre-registered A/B plan — hypothesis, MDE, sample size, exposure rules,
+  guardrails, decision rule — before shipping a flag-gated feature. Wraps
+  `feature-flag-ab-testing`.
+- **`speckit.product-forge.feature-flag-cleanup`** — Cross-cutting stale-flag
+  audit. Scans every `flags/registry.yml`, cross-checks codebase, produces
+  removal recipes for flags past `cleanup_after`. Read-only; wraps
+  `feature-flag-manager`.
+
+### Added — Monorepo support (first-class)
+
+- **`codebase.paths` block** in project config, with `workspace_type`
+  (`pnpm | yarn | npm | turbo | nx | rush | lerna | none`) driving test-
+  runner resolution. Legacy `codebase_path` still supported.
+- **`scope.paths`**, **`scope.cross_workspace`**, **`scope.primary`** on
+  `.forge-status.yml` — names which workspaces a feature touches.
+- **Workspace-prefixed paths** in `tasks.md` and `task_log[].paths` (e.g.
+  `backend:src/users.ts`).
+- **Per-workspace conflict matrix** in `/portfolio` with grouped "By
+  workspace" section.
+- **Affected-only test execution** in implement + test-run when running
+  under nx / turbo / pnpm workspaces.
+- **Cross-workspace change propagation** — scope widens automatically
+  when a change request touches code outside the original scope;
+  recorded as gate condition.
+- Documented in [runtime.md §9](docs/runtime.md#9-monorepo-aware-operations-b15),
+  [config.md Paths](docs/config.md).
+
+### Added — V-Model integration (optional extension)
+
+- **`optional_extensions`** block in `extension.yml` declaring
+  [leocamello/spec-kit-v-model](https://github.com/leocamello/spec-kit-v-model)
+  (≥0.5.0) as an opt-in dependency.
+- **`feature_mode: v-model`** is now a real mode, not a stub. When
+  selected, `forge.md` detects the V-Model extension and delegates the
+  middle of the lifecycle (V1–V13) to its 14 commands: requirements,
+  acceptance, system / architecture / module design paired with system /
+  integration / unit test plans, trace, peer-review, test-results
+  ingestion, audit report.
+- **No silent fallback**: if V-Model plugin is absent, v-model mode
+  aborts with the install command. Regulated work must not degrade.
+- **Domain selection** via `v-model-config.yml`
+  (`iec_62304 | iso_26262 | do_178c | generic`).
+- New [docs/v-model-integration.md](docs/v-model-integration.md) covers
+  the full phase map, detection, fallback rules, status-file additions.
+
+### Added — Testing strategy (universal)
+
+- New [docs/testing-strategy.md](docs/testing-strategy.md) — universal
+  (framework-agnostic) pyramid, when unit vs integration vs contract vs
+  E2E, per-layer coverage criteria, anti-patterns, flaky-test handling,
+  test-data management, monorepo-aware execution.
+- **`test-plan.md` §5E Unit Tests (TC-UNIT-NNN)** — derived from module
+  boundaries + behavioural acceptance criteria. Framework-agnostic.
+- **`test-plan.md` §5F Integration Tests (TC-INT-NNN)** — beyond endpoint
+  contracts: service↔DB, service↔cache, event emitter↔listener,
+  middleware stacks, cross-workspace integration.
+- **`test-run.md` §4E Unit** and **§4F Integration** — non-browser
+  execution with the same auto-fix loop; §4F handles testcontainers /
+  docker-compose / in-memory / shared-DB isolation strategies.
+
+### Added — Structural capabilities
+
+- **`.forge-status.yml` schema v3** — Additive over v2. New fields:
+  `feature_mode`, `backfilled`, `v2_native`, phase `started_at`/`completed_at`/`tokens_in`
+  /`tokens_out`/`tool_calls`/`digest_path`/`skipped`/`skip_reason`, `task_log[]`
+  (renamed from early-draft `tasks[]` to avoid collision with `phases.tasks`)
+  with `size` (XS/S/M/L/XL), `paths`, and `commit_sha`, `gates[].approvals`,
+  `gates[].skip_reason`, `dependencies.depends_on` /
+  `depended_on_by`, `role_approvals.solo_mode` /
+  `required_roles_per_phase`. New `status` enum value `not_applicable` for
+  out-of-mode and backfilled phases. Full spec in
+  [`docs/schema/forge-status-v3.schema.yml`](docs/schema/forge-status-v3.schema.yml).
+  Migration rules in [`docs/schema/migration-v2-to-v3.md`](docs/schema/migration-v2-to-v3.md).
+  Optional helper script `scripts/migrate-status-v2-to-v3.ts`.
+- **State-lock protocol** — `.forge-status.yml.lock` file-based lock with
+  TTL-based takeover. Prevents concurrent-writer corruption between the
+  orchestrator and sub-skills. Documented in
+  [`docs/runtime.md §2`](docs/runtime.md#2-state-lock-protocol).
+- **Per-phase digests** — Every major phase (`research`, `product_spec`,
+  `plan`, `tasks`, `implement`, `verify`) now writes `<phase>/digest.md`.
+  Runtime refuses to mark a phase completed without a digest. Downstream
+  phases (verify-full, portfolio, retrospective) read digests first to keep
+  context budgets small. Template:
+  [`docs/templates/phase-digest.md`](docs/templates/phase-digest.md).
+- **Lite mode** — New `feature_mode` field selects a 5-phase map
+  (`problem-discovery` opt → `product-spec` → `plan` → `implement` → `verify`)
+  for small features. Escalation to standard is append-only. Details in
+  [`docs/policy.md §4`](docs/policy.md#4-feature-modes-e1).
+- **Skip-reason policy** — Skipping an optional phase now requires a
+  free-text reason when `require_skip_reason: true` (default). Reason is
+  persisted on both the phase and the gate entry. Enforced by all skippable
+  commands. Details in [`docs/policy.md §3`](docs/policy.md#3-skip-reason-policy-e2).
+- **Learning loop** — `.product-forge/lessons.md` append-only log. Written
+  by `retrospective` at launch close, read by `research` as a new dimension
+  ("Prior lessons that apply") scored by tag overlap. Format in
+  [`docs/lessons-format.md`](docs/lessons-format.md).
+- **Drift budget** — `sync-verify` now categorizes drift as `structural`
+  (always human-in-the-loop) or `cosmetic` (whitespace, ordering, stale
+  dates). Opt-in `sync_verify.auto_resolve.cosmetic` auto-fixes whitelisted
+  drift only; structural drift never auto-resolves. Budget warns when
+  cosmetic count exceeds threshold.
+- **Release-readiness becomes an artifact producer** — Step 1D now invokes
+  `feature-flag-manager` to produce `flags/registry.yml`; Step 3D invokes
+  `newrelic-dashboard-builder` to produce `monitoring/dashboard.json`,
+  `alerts.yml`, `slo.md`. Graceful fallback when provider skills are missing.
+
+### Changed
+
+- **`commands/forge.md` refactored.** Operating rules moved to
+  [`docs/policy.md`](docs/policy.md); runtime flow (config, state lock,
+  detection, resume, pre-flight, sync, gate audit, digest enforcement,
+  context budget) moved to [`docs/runtime.md`](docs/runtime.md); status
+  schema narrative moved to [`docs/schema.md`](docs/schema.md). The
+  orchestrator file now focuses on phase delegation and the mode-
+  resolution entry. No behavioral change; cross-references only.
+- **`config-template.yml`** — New keys: `default_feature_mode`,
+  `require_skip_reason`, `sync_verify.drift_budget.{cosmetic, structural}`,
+  `sync_verify.auto_resolve.cosmetic`.
+- **`research.md` Step 2.5** — Consults `.product-forge/lessons.md` for
+  matching prior lessons and surfaces them in `research/README.md`.
+- **`retrospective.md` Step 5** — Drafts lesson blocks, confirms with user,
+  appends to `lessons.md`, records count in `phases.retrospective.lessons_added`.
+
+### Release-prep hardening
+
+Surfaced by the plugin test plan dry-run and closed before release:
+
+- **Broken historical refs removed** from `CHANGELOG.md`, `README.md`,
+  and `docs/how-it-works-v2.md` — pointed to archive directories that
+  are not in this tree.
+- **Policy.md §3 tightened** — empty skip reasons under
+  `require_skip_reason: true` now explicitly reject the gate and
+  re-prompt; no `skipped` gate entry is written until a non-empty
+  reason is supplied.
+- **Enum validation** added to `commands/forge.md` Mode Resolution and
+  `docs/runtime.md §4` pre-flight — invalid `feature_mode`,
+  `phases.<name>.status`, or `gates[].decision` values abort with a
+  clear message instead of falling through silently.
+- **`tasks.md` Step 4.1** — hard structural checks for task-ID
+  uniqueness and monorepo workspace-prefix validation. Duplicates and
+  unknown workspace names now abort the phase with a pointer to the
+  offending line instead of propagating into `task_log[]`.
+- **Test-plan self-references** — smoke and Layer B criteria updated
+  to exclude `docs/qa/plugin-test-plan.md` (which legitimately names
+  the patterns being searched for).
+
+### Migration notes
+
+- **No action required.** Existing features continue to work. First time a
+  v1.5.0-aware skill writes to a feature's `.forge-status.yml`, it stamps
+  `schema_version: 3` and may populate new optional fields as it runs.
+- **Optional:** run `scripts/migrate-status-v2-to-v3.ts` once to stamp
+  every feature at once.
+- **Monorepo support (GitHub issue #1)** remains unchanged in this release.
+  Schema v3 fields reserve room for it (`dependencies`, `backfilled`) but
+  the codebase-path configuration remains single-path. Tracked for a
+  follow-up release.
+
+---
+
 ## [1.3.0] — 2026-04-01
 
 ### Added — 5 new commands expanding the product lifecycle

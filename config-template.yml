@@ -10,18 +10,52 @@
 project_name: "My Project"
 
 # Brief tech stack description (helps research agents find relevant libraries)
-# Examples: "NestJS + Vue 3 + Quasar", "Next.js + Supabase", "Django + React"
+# Examples:
+#   "Node.js + Express + Postgres"
+#   "Next.js + Supabase"
+#   "Django + React + Celery"
+#   "Go + gRPC + CockroachDB"
+#   "Ruby on Rails + Sidekiq"
+#   "Spring Boot + Kafka + MySQL"
+#   ".NET 8 + SQL Server + Azure"
 project_tech_stack: ""
 
 # Domain/industry (helps competitor and UX research focus)
-# Examples: "astrology mobile app", "B2B SaaS fintech", "e-commerce marketplace"
+# Examples:
+#   "B2B SaaS productivity tool"
+#   "consumer mobile fitness app"
+#   "e-commerce marketplace"
+#   "developer tooling / CLI"
+#   "enterprise workflow automation"
+#   "content platform / social"
 project_domain: ""
 
 # ─── Paths ─────────────────────────────────────────────────────────────────────
 
-# Path to the project codebase relative to this config file
-# Used by codebase analysis agent and project-styled mockup generation
+# Single-root project (backwards-compatible with pre-v1.5 configs).
+# Use this if your project has ONE codebase at one path. Leave `codebase`
+# block below unset; keep `codebase_path` only.
 codebase_path: "."
+
+# Monorepo mode (v1.5+). When `codebase` is set, it takes precedence over
+# `codebase_path` and every command becomes workspace-aware. Features
+# declare which workspace(s) they touch via `scope.paths` on .forge-status.yml.
+#
+# `paths` maps short workspace names (used in tasks.md `Paths:` lines and
+# in portfolio reports) to relative directories under `root`.
+#
+# `workspace_type` lets test-plan / test-run / implement pick the correct
+# runner. Supported: pnpm | yarn | npm | turbo | nx | rush | lerna | none.
+# Set to "none" for plain multi-path layouts without a workspace manager.
+#
+# codebase:
+#   root: "."
+#   workspace_type: "pnpm"
+#   paths:
+#     backend:  "apps/api"
+#     frontend: "apps/web"
+#     shared:   "packages/shared"
+#     mobile:   "apps/mobile"
 
 # Directory where Product Forge feature artifacts are stored
 # Avoid changing this after features have been created
@@ -78,6 +112,36 @@ auto_sync_between_phases: true
 # Whether Phase 9 (Release Readiness) is required or optional
 # Options: "required" | "optional" | "skip"
 release_readiness: "optional"
+
+# ─── Feature Mode (v1.5.0) ─────────────────────────────────────────────────────
+
+# Default phase map selected when a new feature is created.
+# Options:
+#   "lite"     — 5 phases: problem-discovery (opt) → product-spec → plan → implement → verify
+#   "standard" — full 14-phase lifecycle (recommended for most features)
+#   "v-model"  — standard + IEEE traceability via speckit:v-model-* skills
+# See docs/policy.md §4 for escalation and deselection rules.
+default_feature_mode: "standard"
+
+# ─── Skip-Reason Policy (v1.5.0) ───────────────────────────────────────────────
+
+# When true, skipping an optional phase requires a free-text reason that is
+# persisted in gates[].skip_reason and phases.<name>.skip_reason.
+# See docs/policy.md §3.
+require_skip_reason: true
+
+# ─── Sync-Verify Drift Budget (v1.5.0) ─────────────────────────────────────────
+
+# Drift budget controls how sync-verify categorizes and reports differences.
+# Values are upper bounds per feature: exceeding cosmetic→warning, structural→gate.
+sync_verify:
+  drift_budget:
+    cosmetic: 20          # whitespace, ordering, date churn — tolerable
+    structural: 0         # field meaning, contract shape — always gated
+  # Whitelist of drift categories that sync-verify may auto-resolve.
+  # Only "cosmetic" is supported; opt-in by setting to true.
+  auto_resolve:
+    cosmetic: false
 
 # ─── Advanced ──────────────────────────────────────────────────────────────────
 

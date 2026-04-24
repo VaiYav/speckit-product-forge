@@ -1,0 +1,194 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# .forge-status.yml — SCHEMA v3
+# ──────────────────────────────────────────────────────────────────────────────
+# This file documents the shape of `.forge-status.yml` produced by Product Forge
+# v1.5.0 and later. It is a reference document, not an executable JSON Schema.
+#
+# Design principles:
+#   - Additive over v2: every v2 field is preserved with identical semantics.
+#   - All new fields are OPTIONAL so v2 files remain valid v3 files.
+#   - Writers may omit fields they do not use; readers must tolerate absence.
+#   - `schema_version: 3` indicates new-writer output. Absence or `2` means
+#     the file was last written by pre-v1.5.0 code and should be treated as v2.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Version marker. Must be an integer. Presence of `3` means new-writer output.
+schema_version: 3
+
+# Feature slug. Immutable once set.
+feature: "example-feature-slug"
+
+# ISO-8601 date. Immutable once set.
+created_at: "2026-04-19"
+
+# ISO-8601 timestamp. Updated on every write.
+last_updated: "2026-04-19T12:00:00Z"
+
+# NEW in v3.
+# Drives phase map selection. Valid values: "lite" | "standard" | "v-model".
+# Default: "standard" if omitted.
+feature_mode: "standard"
+
+# NEW in v3.
+# Set to `true` by the `backfill` command when this feature was reverse-engineered
+# from existing code rather than authored through the full lifecycle.
+backfilled: false
+
+# NEW in v3.
+# Marks a feature as v1.5.0-native (vs lazily-migrated v1.3/v1.4). Used by
+# the digest-enforcement rule in docs/runtime.md §8.3 to decide whether
+# missing digests are CRITICAL (v2-native) or WARNING + stub (grandfathered).
+# Writers: new features created by v1.5.0+ orchestrator set this to true
+#          on the initial write.
+# Absence is equivalent to `false` — i.e. grandfathered.
+v2_native: true
+
+# Legacy v2 field — preserved.
+# Valid values: "classic" | "v-model" | "ask".
+speckit_mode: "classic"
+
+# Per-phase status map.
+# v2 stored only a status string per phase. v3 expands each entry into an object
+# while keeping the key set compatible. The orchestrator always reads `status`
+# first; all other fields are optional instrumentation.
+#
+# Valid status values:
+#   pending         — not started
+#   in_progress     — currently running
+#   completed       — finished and accepted
+#   skipped         — user explicitly chose to skip an optional phase
+#   not_applicable  — phase was never in scope for this feature (e.g. phases
+#                     outside a lite-mode map, or phases not run for a
+#                     backfilled feature reverse-engineered from code)
+# The skip-reason policy in docs/policy.md §3 applies ONLY to `skipped`;
+# `not_applicable` is exempt.
+phases:
+  problem_discovery:
+    status: "completed"            # see valid values above
+    started_at: "2026-04-18T09:00:00Z"   # NEW
+    completed_at: "2026-04-18T09:45:00Z" # NEW
+    tokens_in: 12000               # NEW — tokens consumed by this phase
+    tokens_out: 3500               # NEW
+    tool_calls: 14                 # NEW
+    digest_path: "problem-discovery/digest.md"  # NEW — see A4 digest template
+    skipped: false                 # NEW — true if status == "skipped"
+    skip_reason: null              # NEW — required when skipped=true (E2 policy)
+  research:
+    status: "completed"
+  product_spec:
+    status: "completed"
+  revalidation:
+    status: "approved"             # keeps v2 "approved" literal for this phase
+  bridge:
+    status: "completed"
+  plan:
+    status: "completed"
+  tasks:
+    status: "completed"
+  pre_impl_review:
+    status: "completed"
+  implement:
+    status: "in_progress"
+  code_review:
+    status: "pending"
+  verify:
+    status: "pending"
+  test_plan:
+    status: "pending"
+  test_run:
+    status: "pending"
+  release_readiness:
+    status: "pending"
+  retrospective:
+    status: "pending"
+
+# Legacy v2 field — preserved.
+testing:
+  final_pass_rate: ""
+  bugs_found: 0
+  bugs_fixed: 0
+  bugs_deferred: 0
+  test_runs_total: 0
+
+# NEW in v3.
+# Per-task instrumentation. Populated by the `implement` phase as work proceeds.
+# Empty list if the feature has not yet produced tasks.md.
+#
+# Renamed from the initial v3 draft's top-level `tasks:` to `task_log:` to
+# remove the name collision with `phases.tasks` (the Phase 5B: Tasks entry).
+# Both keys coexist in v3 files and mean different things:
+#   phases.tasks.status — whether Phase 5B has been completed
+#   task_log[]          — per-individual-task runtime log
+task_log:
+  - id: "T001"                     # matches task id in tasks.md
+    size: "M"                      # XS | S | M | L | XL  (D4 T-shirt sizing)
+    status: "completed"            # pending | in_progress | completed | failed | skipped
+    paths: ["back/src/modules/users/users.service.ts"]  # files the task touches
+    commit_sha: "abc1234"          # short or full SHA of the commit that closed the task
+    started_at: "2026-04-19T10:00:00Z"
+    completed_at: "2026-04-19T11:15:00Z"
+    failure_log_path: null         # optional path to failures/<id>.md if status == "failed"
+
+# Gate audit trail. Extended from v2.
+# Each entry records a human-in-the-loop decision at a phase boundary.
+gates:
+  - phase: "plan"
+    decision: "approved"           # approved | approved_with_conditions | revised | skipped | aborted
+    timestamp: "2026-04-19T10:00:00Z"
+    notes: ""
+    conditions: []
+    sync_result: "clean"           # clean | N_critical | N_warning
+
+    # NEW in v3 — role-based approvals.
+    # If `role_approvals.solo_mode` is true (see below), this block is omitted.
+    # Otherwise this records who approved, per role.
+    approvals:
+      pm:
+        approved_by: "alice@example.com"
+        at: "2026-04-19T10:00:00Z"
+      eng:
+        approved_by: "bob@example.com"
+        at: "2026-04-19T10:03:00Z"
+      qa: null                     # null == pending; object == approved
+
+    # NEW in v3 — skip_reason attached at the gate, not at the phase.
+    skip_reason: null              # required when decision == "skipped"
+
+# Legacy v2 field — preserved.
+sync_runs:
+  last_run: "2026-04-19T10:00:00Z"
+  total_runs: 3
+  last_drift_count: 0
+  last_critical_count: 0
+  last_verdict: "clean"
+
+# Legacy v2 field — preserved.
+change_requests: []
+
+# NEW in v3. Cross-feature dependency graph used by `portfolio` (B1).
+# Both lists contain feature slugs from sibling `features/<slug>/` directories.
+# Managed manually for now; auto-detection deferred to a later wave.
+dependencies:
+  depends_on: []                   # features that must ship before this one
+  depended_on_by: []               # features blocked by this one
+
+# NEW in v3. Monorepo scope — which workspaces this feature touches.
+# Populated only when the project config has the `codebase.paths` block
+# (monorepo mode). In single-root mode this field is omitted.
+#
+# Writers: bridge sets initial scope from product-spec; implement updates
+#          it from actual `task_log[].paths` workspace prefixes.
+# Readers: portfolio (for per-workspace conflict matrix), test-plan
+#          (for test runner selection), verify-full (for scoped code scan).
+scope:
+  paths: ["backend", "frontend"]   # workspace names from codebase.paths
+  cross_workspace: true            # true when len(paths) > 1
+  primary: "backend"               # default workspace for ambiguous operations
+
+# NEW in v3. Role approval configuration.
+# In solo-dev projects, set solo_mode: true — gates require a single approval.
+# In team projects, use required_roles per phase to demand multi-role sign-off.
+role_approvals:
+  solo_mode: true
+  # When solo_mode: false, this block is consulted:
+  required_roles_per_phase: {}     # e.g. { pre_impl_review: ["pm", "eng"], release_readiness: ["pm", "eng", "qa"] }

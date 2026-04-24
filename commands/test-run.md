@@ -268,6 +268,102 @@ Compare actual response status and body vs expected in test case.
 
 Execute each `TC-REG-*` test case.
 
+### 4E: Unit Tests (TC-UNIT-NNN)
+
+Non-browser. Runs via the detected test framework (Vitest / Jest /
+pytest / go test / cargo test / RSpec / PHPUnit / etc.). No Playwright
+context, no browser, no auth setup.
+
+```
+🧪 Running Unit Tests (TC-UNIT-NNN)...
+  Framework: {detected}
+  Workspace filter: {scope.paths joined}
+  Affected-only: {true if tasks touched paths; false runs full suite}
+```
+
+**Execution pattern per test case:**
+
+1. Read the TC-UNIT from `testing/test-cases.md`.
+2. Locate the existing source test file (if any) or the file the test
+   belongs in by convention (`*.spec.ts`, `*_test.go`, etc.).
+3. Resolve the workspace-scoped command (monorepo mode — see
+   [runtime.md §9.3](../docs/runtime.md#93-test-runner-resolution)):
+   - Single-root pnpm: `pnpm test --run -t "TC-UNIT-{NNN}"`
+   - Monorepo pnpm: `pnpm --filter={workspace} test --run -t "TC-UNIT-{NNN}"`
+   - pytest: `pytest -k "TC_UNIT_{NNN}"`
+   - go test: `go test -run TestTCUnit{NNN} ./...`
+4. Execute, capture stdout + stderr + exit code.
+5. Parse result: PASS / FAIL / SKIP.
+6. Record in `testing/results-{run_n}.json` with duration and stack on
+   FAIL.
+
+**Evidence on failure** — no screenshot (non-browser). Capture:
+- Full test output (stdout + stderr).
+- Source diff if implementation changed between runs.
+- Heap snapshot (opt-in, for memory-sensitive tests).
+
+Test results are ingested into the same triage + auto-fix loop as
+browser tests (Step 6–8). The fix pattern differs slightly: unit
+fixes are usually pure-logic patches, so the fix diff is small and
+the retest is single-task.
+
+### 4F: Integration Tests (TC-INT-NNN)
+
+Non-browser. May need a backing service (DB, cache, queue) started via
+docker-compose or testcontainers. Heavier than unit but lighter than
+E2E.
+
+```
+🔗 Running Integration Tests (TC-INT-NNN)...
+  Backing services: {list, e.g. "postgres-test, redis-test"}
+  Started via: {testcontainers | docker-compose | in-memory | shared}
+```
+
+**Pre-flight for 4F:**
+
+1. Read `testing/test-plan.md` §5F to find the backing services per
+   TC-INT case.
+2. If `testcontainers` — ensure Docker socket is available; skip
+   gracefully with a warning if not, record as BLOCKED.
+3. If `docker-compose` — start the referenced compose file in
+   detached mode, wait for health checks, verify service endpoints.
+4. If `in-memory` stand-in (miniredis, SQLite) — initialised by the
+   test itself, no pre-flight.
+5. If `shared test DB` — acquire a transaction scope that will roll
+   back on test completion.
+
+**Execution pattern per test case:**
+
+1. Resolve the command per workspace_type (same templates as 4E).
+2. Pass environment variables with connection strings to backing
+   services (typically `TEST_DATABASE_URL`, `TEST_REDIS_URL`).
+3. Execute. Each test runs in its own transaction (rolled back) or
+   its own container (torn down).
+4. Capture exit code, duration, and any collected coverage data.
+5. Parse result.
+6. Record in `testing/results-{run_n}.json`.
+
+**Evidence on failure:**
+- Full test output.
+- Last 100 lines of relevant backing-service logs (DB query log,
+  Redis MONITOR output, queue events).
+- Container state dump (`docker inspect`) if using testcontainers /
+  docker-compose.
+- Schema / migration state snapshot (for DB integration failures).
+
+**Isolation guarantees:**
+- Every 4F test must start and end with the same backing-service state
+  the next test expects. Enforced via transactions, containers, or
+  explicit truncate steps.
+- A test that depends on prior test state is a bug; log it as a
+  quarantine candidate (see flaky-test handling in
+  [testing-strategy.md §7](../docs/testing-strategy.md#7-flaky-test-handling)).
+
+**Monorepo note:** a cross-workspace TC-INT (e.g. frontend apiClient
+hitting backend /users) runs under the runner of `scope.primary`. If
+`scope.primary` is ambiguous, default to the consumer workspace
+(frontend in the example).
+
 ---
 
 ## Step 5: Collect and Triage All Results
@@ -278,12 +374,14 @@ After all test types complete, aggregate:
 📊 Test Run #{RUN_N} Results
 ══════════════════════════════════════════
 
-  Smoke Tests:      {N_pass}/{N_total} PASS  {N_fail} FAIL
-  E2E Tests:        {N_pass}/{N_total} PASS  {N_fail} FAIL
-  API Tests:        {N_pass}/{N_total} PASS  {N_fail} FAIL
-  Regression Tests: {N_pass}/{N_total} PASS  {N_fail} FAIL
-                    ─────────────────────────────────────
-  Total:            {N_pass}/{N_total} PASS  {N_fail} FAIL
+  Unit Tests:        {N_pass}/{N_total} PASS  {N_fail} FAIL
+  Integration Tests: {N_pass}/{N_total} PASS  {N_fail} FAIL  {N_block} BLOCKED
+  Smoke Tests:       {N_pass}/{N_total} PASS  {N_fail} FAIL
+  E2E Tests:         {N_pass}/{N_total} PASS  {N_fail} FAIL
+  API Tests:         {N_pass}/{N_total} PASS  {N_fail} FAIL
+  Regression Tests:  {N_pass}/{N_total} PASS  {N_fail} FAIL
+                     ─────────────────────────────────────
+  Total:             {N_pass}/{N_total} PASS  {N_fail} FAIL
   Pass Rate:        {%%}
 
   ❌ Failed tests:

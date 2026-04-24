@@ -251,6 +251,114 @@ Identify existing features that could be affected by this change:
 [...]
 ```
 
+### 5E: Unit Test Cases (TC-UNIT-NNN)
+
+Derive from `plan.md` module boundaries and `spec.md` behavioural
+acceptance criteria. Targets per
+[testing-strategy.md §2](../docs/testing-strategy.md#2-which-layer-for-what)
+Unit layer:
+
+- Pure functions, validators, formatters, parsers.
+- Service methods with dependency injection (external deps faked).
+- Domain primitives (money math, date arithmetic, identity).
+- UI components whose behaviour depends only on props (render output,
+  event emissions).
+
+**Do NOT write TC-UNIT for:** pure wiring (controllers that only
+delegate), framework code, or simple getters/setters. Push those
+either down (into the unit that contains logic) or up to integration.
+
+```markdown
+## Unit Tests (TC-UNIT-NNN)
+
+| ID | Unit | Workspace | Scenario | Input | Expected | Covers |
+|----|------|-----------|----------|-------|----------|--------|
+| TC-UNIT-001 | validateEmail | shared | Rejects empty string | "" | { ok: false, reason: "empty" } | FR-003 |
+| TC-UNIT-002 | validateEmail | shared | Rejects missing @ | "foo" | { ok: false, reason: "format" } | FR-003 |
+| TC-UNIT-003 | validateEmail | shared | Accepts valid RFC 5322 | "a@b.com" | { ok: true } | FR-003 |
+| TC-UNIT-004 | UserService.register | backend | First registration wins on race | two concurrent calls, same email | exactly one `created`, one `duplicate` | FR-007 |
+| TC-UNIT-005 | PriceFormatter | frontend | Formats amount under 1 unit | 0.42 | "0.42 USD" | UI-012 |
+[...]
+```
+
+Fields:
+- **Unit** — fully-qualified name (class / method / function / component).
+- **Workspace** — monorepo-only; in single-root omit column.
+- **Scenario** — the behaviour, not the implementation. Names should
+  survive a rename of the unit under test.
+- **Covers** — story ID, functional requirement ID, or ADR ID.
+
+For each distinct unit, produce a target coverage note in the summary:
+
+```markdown
+### Unit Coverage Targets
+
+| Unit | Workspace | Target branches | Priority |
+|------|-----------|-----------------|----------|
+| validateEmail | shared | 4 of 4 | P0 |
+| UserService.register | backend | 8 of 9 (skip: legacy NULL path) | P0 |
+| PriceFormatter | frontend | 6 of 6 | P1 |
+```
+
+**In monorepo mode,** unit test IDs remain globally unique
+(`TC-UNIT-NNN`) but group by workspace in the summary so workspace
+teams can filter their slice.
+
+### 5F: Integration Test Cases (TC-INT-NNN)
+
+Integration tests beyond endpoint contracts. Target the boundaries
+where behaviour crosses a real collaborator (DB, cache, queue, event
+bus, filesystem, external HTTP). Per
+[testing-strategy.md §2](../docs/testing-strategy.md#2-which-layer-for-what)
+Integration layer.
+
+Derive from `plan.md` data model, `research/codebase-analysis.md` event
+patterns, and `spec.md` NFRs (e.g. "quota enforced across concurrent
+requests").
+
+```markdown
+## Integration Tests (TC-INT-NNN)
+
+| ID | Collaboration | Workspace | Scenario | Fixture / backing | Expected | Covers |
+|----|---------------|-----------|----------|-------------------|----------|--------|
+| TC-INT-001 | UserService ↔ Postgres | backend | Register persists row | Testcontainers Postgres 15 | row exists, unique constraint honoured | FR-007 |
+| TC-INT-002 | UserService ↔ Redis | backend | Session cached with TTL | miniredis | key present at 299s, absent at 301s | NFR-session |
+| TC-INT-003 | RegisterCommand → UserCreated event | backend | Saga compensates on listener failure | in-memory event bus | rollback applied, metric emitted | FR-007 |
+| TC-INT-004 | UserRepository migrations | backend | v2 → v3 upgrade preserves rows | test DB loaded with v2 data | all rows present, columns added | MIG-003 |
+| TC-INT-005 | Frontend apiClient ↔ backend /users | cross-workspace | Handles 401 with refresh token | MSW mock + real token endpoint | retries once, succeeds on second attempt | FR-009 |
+[...]
+```
+
+Fields:
+- **Collaboration** — which two (or more) components interact and over
+  what boundary.
+- **Fixture / backing** — testcontainers, in-memory stand-in, shared
+  test DB with rollback, MSW mocks, etc. Name the specific tool.
+- **Covers** — requirement / NFR / migration ID.
+
+Anti-patterns to reject in this section (see
+[testing-strategy.md §4](../docs/testing-strategy.md#4-anti-patterns-to-reject)):
+
+- Every collaborator stubbed (it's a unit test in disguise).
+- Shared mutable state across tests (use transaction rollback or
+  per-test fresh containers).
+- "Retry on flake" — diagnose, do not paper over.
+
+```markdown
+### Integration Coverage Targets
+
+| Boundary | Workspace | Minimum % | Notes |
+|----------|-----------|-----------|-------|
+| Service ↔ DB (every repository method) | backend | 90% | Real Postgres via testcontainers. |
+| Event emitter ↔ listener (every pair) | backend | 100% | Include idempotency retest. |
+| Frontend apiClient ↔ each endpoint | cross-workspace | 80% | MSW mocks acceptable; one real contract test per endpoint. |
+```
+
+**In monorepo mode,** a TC-INT may span two or more workspaces
+(listed as `cross-workspace`) — see TC-INT-005 example. These tests
+run under whichever workspace's runner is configured as the "primary"
+for the feature (`scope.primary`).
+
 ---
 
 ## Step 6: Generate Playwright Test Files

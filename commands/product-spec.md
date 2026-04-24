@@ -537,3 +537,20 @@ Show the user:
 3. Summary of key product decisions captured
 
 Ask: *"Product spec complete with [N] documents. All cross-linked via product-spec/README.md. Ready to proceed to Phase 3: Revalidation? Or would you like to review and adjust any document now?"*
+
+---
+
+## Step 9: Phase Digest (required)
+
+Before returning, write `{FEATURE_DIR}/product-spec/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
+its path on `.forge-status.yml` under `phases.product_spec.digest_path`.
+
+The digest must include:
+- **Key decisions** — target users, scope boundaries, top 3 user stories.
+- **Artifacts produced** — every document in `product-spec/` with one-line descriptions.
+- **Open risks** — any NEEDS-CLARIFICATION items unresolved and why.
+- **Handoff notes** — what revalidation and bridge need to verify.
+
+The orchestrator refuses to mark Phase 2 complete until `digest.md` exists.
+See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).

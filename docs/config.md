@@ -25,14 +25,14 @@ nano .product-forge/config.yml
 ### Project Identity
 
 ```yaml
-project_name: "My Zodiac AI"
+project_name: "Acme Workflow"
 ```
 Human-readable project name. Used in all research prompts, report headers, and competitor search queries. The more specific, the better the research quality.
 
 ---
 
 ```yaml
-project_tech_stack: "NestJS + Vue 3 + Quasar + Capacitor"
+project_tech_stack: "Node.js + Express + Postgres"
 ```
 Brief tech stack description. Helps research agents:
 - Find stack-specific libraries and packages
@@ -63,20 +63,71 @@ Examples:
 
 ### Paths
 
+Two layouts are supported: single-root (legacy, still works) and
+monorepo (v1.5+, first-class).
+
+#### Single-root
+
 ```yaml
 codebase_path: "."
 ```
-Relative path to the project codebase from the config file location.
-Used by:
+
+Relative path from the config file to the project codebase. Used by:
 - Codebase analysis agent (Phase 1)
 - Project-styled mockup generator (Phase 2)
+- Every other phase that scans code
 
-If your codebase is in a subdirectory:
+If the codebase is in a subdirectory:
+
 ```yaml
 codebase_path: "./src"
-# or for monorepos:
-codebase_path: "./apps/mobile"
 ```
+
+#### Monorepo (v1.5+)
+
+Set the `codebase` block to declare multiple workspaces. When present,
+`codebase` takes precedence over `codebase_path` and every command
+becomes workspace-aware.
+
+```yaml
+codebase:
+  root: "."
+  workspace_type: "pnpm"        # pnpm | yarn | npm | turbo | nx | rush | lerna | none
+  paths:
+    backend:  "apps/api"
+    frontend: "apps/web"
+    shared:   "packages/shared"
+```
+
+Workspace names (`backend`, `frontend`, `shared`) are used in:
+- `tasks.md` `Paths:` line prefix (e.g. `Paths: backend:src/users.ts`)
+- `.forge-status.yml` `scope.paths` list
+- `task_log[].paths` (workspace-prefixed)
+- `portfolio.md` conflict matrix (per-workspace column)
+
+`workspace_type` lets the orchestrator pick the right test runner:
+
+| workspace_type | Test command template |
+|----------------|----------------------|
+| `pnpm` | `pnpm --filter=<workspace> test` |
+| `yarn` | `yarn workspace <workspace> test` |
+| `npm` | `npm test -w <workspace>` |
+| `turbo` | `turbo run test --filter=<workspace>` |
+| `nx` | `nx test <workspace>` |
+| `rush` | `rush test --to <workspace>` |
+| `lerna` | `lerna run test --scope=<workspace>` |
+| `none` | Plain `cd <path> && <detected command>` |
+
+#### Migration from single-root to monorepo
+
+Existing features continue to work. When you add a `codebase` block:
+- Existing `.forge-status.yml` files without `scope` are treated as
+  feature-scope-unknown — portfolio downgrades their accuracy to
+  `module-level`. No data loss.
+- New features get `scope.paths` populated automatically at feature
+  creation based on the first `Paths:` annotation in tasks.md.
+- You can retroactively set scope on an old feature by adding a
+  `scope.paths` block to its `.forge-status.yml`.
 
 ---
 
@@ -245,3 +296,75 @@ PRODUCT_FORGE_PROJECT_NAME="My App" \
 PRODUCT_FORGE_CODEBASE_PATH="./src" \
 /speckit.product-forge.forge
 ```
+
+---
+
+## Appendix — Config keys added in v1.5.0
+
+### Feature mode
+
+```yaml
+default_feature_mode: "standard"
+```
+
+Selects the phase map for new features. Valid values:
+- `"lite"` — 5-phase lifecycle for small features, bug fixes, refactors.
+  Phases: problem-discovery (opt) → product-spec → plan → implement → verify.
+- `"standard"` — full 14-phase lifecycle. Default.
+- `"v-model"` — standard plus IEEE traceability via `speckit:v-model-*`.
+
+Escalation: lite features can be promoted to standard mid-run when scope
+grows — see [`docs/policy.md §4`](./policy.md#4-feature-modes-e1).
+
+---
+
+### Skip-reason policy
+
+```yaml
+require_skip_reason: true
+```
+
+When `true`, skipping an optional phase prompts for a free-text reason
+that is persisted on the gate entry and on the phase. When `false`,
+skips are accepted silently. See
+[`docs/policy.md §3`](./policy.md#3-skip-reason-policy-e2).
+
+Note: phases set to `status: "not_applicable"` (lite-mode exclusions,
+backfilled features) are exempt from this policy — they were never in
+scope for the feature.
+
+---
+
+### Sync-verify drift budget
+
+```yaml
+sync_verify:
+  drift_budget:
+    cosmetic: 20
+    structural: 0
+  auto_resolve:
+    cosmetic: false
+```
+
+- `drift_budget.cosmetic` — tolerable count of cosmetic drift items per
+  feature. Exceeding produces WARNING only.
+- `drift_budget.structural` — MUST stay 0 in almost every project.
+  Structural drift always fails the gate.
+- `auto_resolve.cosmetic` — when `true` AND `sync-verify --fix` is
+  invoked, cosmetic drift is automatically resolved. Structural drift is
+  **never** auto-resolved.
+
+See [`commands/sync-verify.md §3A`](../commands/sync-verify.md) for the
+category catalog.
+
+---
+
+## Appendix — Runtime artifacts referenced by config
+
+These are not config keys but paths the config indirectly controls:
+
+| Path | Purpose | Created by |
+|------|---------|-----------|
+| `.product-forge/lessons.md` | append-only learning log | `retrospective` |
+| `scripts/migrate-status-v2-to-v3.js` | lazy schema migration helper | ships with plugin |
+| `scripts/acquire-lock.sh` / `release-lock.sh` | state-lock helpers | ships with plugin |
