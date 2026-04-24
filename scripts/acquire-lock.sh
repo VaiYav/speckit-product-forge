@@ -39,27 +39,38 @@ if [[ ! -d "$feature_dir" ]]; then
   exit 64
 fi
 
-# If a lock exists, decide whether to take over.
+# If a lock exists, decide whether to take over. The staleness check uses
+# the TTL stored in the EXISTING lock payload, not the caller's TTL — the
+# caller's value applies only to the new lock being acquired.
 if [[ -e "$lock_path" ]]; then
   existing_epoch=""
+  existing_ttl=""
   if [[ -r "$lock_path" ]]; then
-    # Extract acquired_at epoch via a tolerant grep; avoid hard dependency on jq.
+    # Tolerant grep extraction; avoid hard dependency on jq.
     existing_iso="$(grep -oE '"acquired_at"[[:space:]]*:[[:space:]]*"[^"]+"' "$lock_path" 2>/dev/null \
       | head -n1 \
       | sed -E 's/.*"acquired_at"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')" || existing_iso=""
+    existing_ttl="$(grep -oE '"ttl_seconds"[[:space:]]*:[[:space:]]*[0-9]+' "$lock_path" 2>/dev/null \
+      | head -n1 \
+      | sed -E 's/.*"ttl_seconds"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/')" || existing_ttl=""
     if [[ -n "$existing_iso" ]]; then
       # BSD date on macOS has different flags than GNU date; try both.
       existing_epoch="$(date -u -d "$existing_iso" +'%s' 2>/dev/null || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$existing_iso" +'%s' 2>/dev/null || true)"
     fi
   fi
 
+  # If the lock's stored ttl is unreadable, fall back to the caller's ttl
+  # as a conservative estimate — stale-takeover should still work even on
+  # a lock written by an older version that omitted the field.
+  effective_ttl="${existing_ttl:-$ttl_seconds}"
+
   if [[ -n "$existing_epoch" ]]; then
     age=$(( now_epoch - existing_epoch ))
-    if (( age < ttl_seconds )); then
-      echo "lock held by another writer (age=${age}s < ttl=${ttl_seconds}s): $lock_path" >&2
+    if (( age < effective_ttl )); then
+      echo "lock held by another writer (age=${age}s < lock_ttl=${effective_ttl}s): $lock_path" >&2
       exit 75
     else
-      echo "stale lock (age=${age}s >= ttl=${ttl_seconds}s) — taking over: $lock_path" >&2
+      echo "stale lock (age=${age}s >= lock_ttl=${effective_ttl}s) — taking over: $lock_path" >&2
       rm -f "$lock_path"
     fi
   else
@@ -68,23 +79,29 @@ if [[ -e "$lock_path" ]]; then
   fi
 fi
 
-# Atomic acquisition: create a directory first (POSIX mkdir is atomic),
-# then move the JSON payload into place.
+# Atomic acquisition via `ln`. Unlike BSD `mv -n` (which silently skips
+# on existing target with exit 0, defeating the race guard), `ln` exits
+# non-zero on existing target on both GNU and BSD — a real signal we can
+# branch on. If `ln` succeeds, we also verify the resulting file contains
+# our session_id; this protects against filesystems where hardlinks
+# unexpectedly coalesce or where a concurrent writer won a nanosecond race.
 tmp_lock="${lock_path}.new.$$"
 cat > "$tmp_lock" <<EOF
 {"pid": $$, "session_id": "$session_id", "acquired_at": "$now_iso", "ttl_seconds": $ttl_seconds}
 EOF
 
-# `mv -n` refuses to overwrite an existing file (POSIX-portable since
-# coreutils 8.26; on older macOS systems use the fallback below).
-if ! mv -n "$tmp_lock" "$lock_path" 2>/dev/null; then
-  # Fallback: `ln` is atomic and also refuses to overwrite.
-  if ! ln "$tmp_lock" "$lock_path" 2>/dev/null; then
-    rm -f "$tmp_lock"
-    echo "race: another writer acquired the lock first" >&2
-    exit 75
-  fi
+if ! ln "$tmp_lock" "$lock_path" 2>/dev/null; then
   rm -f "$tmp_lock"
+  echo "race: another writer acquired the lock first" >&2
+  exit 75
+fi
+
+# Verify we actually hold the lock — guards against the corner case where
+# `ln` is not strictly atomic on the underlying filesystem.
+rm -f "$tmp_lock"
+if ! grep -q "\"session_id\"[[:space:]]*:[[:space:]]*\"$session_id\"" "$lock_path" 2>/dev/null; then
+  echo "race: lock acquired by another session" >&2
+  exit 75
 fi
 
 echo "lock acquired: $lock_path" >&2
