@@ -389,7 +389,7 @@ specify extension add product-forge --from https://github.com/VaiYav/speckit-pro
 ### Install (specific version)
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.3.0.zip
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.5.0.zip
 ```
 
 ### Update to latest
@@ -401,14 +401,14 @@ specify extension update product-forge --from https://github.com/VaiYav/speckit-
 ### Update to specific version
 
 ```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.3.0.zip
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.5.0.zip
 ```
 
 ### Verify installation
 
 ```bash
 specify extension list
-# Should show: product-forge  v1.3.0  enabled
+# Should show: product-forge  v1.5.0  enabled
 ```
 
 ---

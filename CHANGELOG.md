@@ -196,6 +196,64 @@ Surfaced by the plugin test plan dry-run and closed before release:
 
 ---
 
+## [1.4.0] — 2026-04-04
+
+> Minor release. Spec quality and lifecycle hardening across research,
+> bridge, plan, and revalidation phases. No new commands — every
+> improvement extends an existing phase with stricter validation,
+> richer artifacts, or new self-checks.
+
+### Added
+
+- **Codebase Constraint Analysis** in `research` — the codebase-analysis
+  dimension now captures concrete constraints (exact identifiers,
+  payload interfaces, source paths) and Event / Message Patterns, so
+  downstream phases see real integration shape instead of abstractions.
+- **Dependency Discovery** in `bridge` (Step 2.5) — bridge now walks
+  sibling features' status files and surfaces upstream dependencies
+  before writing `spec.md`, preventing silent coupling.
+- **EDA Event Verification** in `bridge` (Step 4.5) — when the plan
+  touches an event bus, bridge verifies every produced event has a
+  declared consumer contract and vice-versa; missing pairs are raised
+  as CRITICAL before spec.md is approved.
+- **Constitution Compliance auto-check** in `plan` (Step 3.5) — reads
+  the project's constitution (configurable path: `config.yml` →
+  `.specify/memory/constitution.md` → skip) and auto-flags plan
+  sections that violate declared principles. Results surfaced in the
+  Approval Gate.
+- **Feature-type detection** in `bridge` (`shared_infrastructure` vs
+  `end_user`) driving a conditional section table — infrastructure
+  features don't need UX sections, end-user features don't need
+  internal-API contracts. Removes boilerplate without removing
+  information.
+- **Unified `review.md` format** in `revalidate` — every revision now
+  writes four sub-sections: Open Questions Resolution (OQR), Decision
+  Log, Change History, and the agent-notes block. Step 4B-post runs a
+  drift-check between product-spec and spec.md after each approval
+  round.
+
+### Changed
+
+- `commands/bridge.md` — `spec.md` template extended with Prerequisites,
+  NFR Measurement Contract, Codebase Constraints, Consumer Contract,
+  Testing Specification. Step 5 self-checks expanded from 6 to 10
+  with conditional guards based on feature type.
+- `commands/plan.md` — Approval Gate now shows constitution-compliance
+  results alongside cross-validation status.
+- `commands/revalidate.md` — `review.md` init extended with OQR table
+  and Decision Log; Step 3D writes all four sub-sections per revision;
+  drift-check runs automatically after every approval.
+- `config-template.yml` — `constitution_path` key added (commented
+  out by default) under the SpecKit Integration block.
+
+### Migration notes
+
+- **No action required.** All changes are additive. Existing features
+  keep working; new features (or re-runs of a phase) pick up the
+  richer templates automatically.
+
+---
+
 ## [1.3.0] — 2026-04-01
 
 ### Added — 5 new commands expanding the product lifecycle
@@ -445,6 +503,8 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.5.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.1.3...v1.2.0
