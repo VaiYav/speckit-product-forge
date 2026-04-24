@@ -244,8 +244,8 @@ through phases with known expected outputs.
 | phase names consistent across forge.md Phase Map / Mode Resolution / `## Phase N:` sections | grep `^## Phase ` in commands/forge.md + count rows in Phase Map table + count non-V rows in Mode Resolution | all three show 18 phases |
 | schema field catalog in schema.md ↔ fields in schema YAML | parse both and compare key sets | no field missing from either side |
 | no `v2.0`, `v2.0.0`, `v2 Evolution` in shipped files | `grep -rn 'v2\.0\|2\.0\.0' . --include='*.md' --include='*.yml' \| grep -v 'docs/qa/plugin-test-plan.md'` | 0 matches. The test plan itself mentions these literals when describing what to check for — excluded via `grep -v` above. |
-| no project-specific names ("My Zodiac AI", "NestJS + Vue 3 + Quasar", "astrology mobile app", "Zodiac") | `grep -rni 'my zodiac\|my_zodiac\|mzai\|zodiac ai\|nestjs + vue\|cosmic glass' . --include='*.md' --include='*.yml'` | 0 matches in any shipped file |
-| no Cyrillic in shipped files | `find . -type f \( -name '*.md' -o -name '*.yml' \) -exec grep -l -P '[А-Яа-яЁё]' {} \;` | empty output |
+| no leaked authoring-context names | grep for identifiers from the environment the plugin was originally authored in (product names, internal codenames, specific tech-stack strings). Reviewers should adapt the pattern to their own context; the shipped check is: `grep -rniE 'authoring-project-name-1\|authoring-project-name-2' . --include='*.md' --include='*.yml'` | 0 matches in any shipped file |
+| no Cyrillic in shipped files | `rg -l '[\u0400-\u04FF]' --glob '*.{md,yml}'` (or PCRE: `find . -type f \( -name '*.md' -o -name '*.yml' \) -exec grep -l -P '[\x{0400}-\x{04FF}]' {} \;`) | empty output |
 | extension.yml version == "1.5.0" | `grep '^  version:' extension.yml` | `version: "1.5.0"` |
 | extension.yml optional_extensions block well-formed | parse YAML and assert `optional_extensions[0].id == "v-model"`, `.version`, `.install`, `.detection_command` all present | all fields non-empty |
 | `task_log[]` not called `tasks[]` in normative files | `grep -rn '\btasks\[\]' . --include='*.md' --include='*.yml' \| grep -v schema.md \| grep -v 'docs/adr\|docs/brainstorms\|docs/reviews'` | matches only in comments explaining the historical rename |
@@ -351,8 +351,8 @@ Minimal sanity run — ~15 minutes of manual work:
 5. Open `commands/forge.md`, confirm the Phase Map has 18 rows including 4.5 / 5.5 / 9.5 / 9B, and the Mode Resolution table has all 13 V-Model rows.
 6. Verify all new v1.5 docs are present: `docs/v-model-integration.md`, `docs/testing-strategy.md`, `docs/qa/plugin-test-plan.md` (this file), `docs/runtime.md §9 Monorepo-Aware Operations`, `docs/schema/forge-status-v3.schema.yml`.
 7. `grep -rn 'v2\.0\|2\.0\.0' . --include='*.md' --include='*.yml' | grep -v 'docs/qa/plugin-test-plan.md'` — must return 0 matches in any shipped file.
-8. `grep -rni 'my zodiac\|mzai\|nestjs + vue\|cosmic glass' . --include='*.md' --include='*.yml' | grep -v 'docs/qa/plugin-test-plan.md'` — must return 0 matches in any shipped file.
-9. `find . -type f \( -name '*.md' -o -name '*.yml' \) -exec grep -l -P '[А-Яа-яЁё]' {} \; | grep -v 'docs/qa/plugin-test-plan.md'` — must return no files in shipped tree.
+8. Grep the tree for any identifiers specific to the authoring environment (product names, internal codenames, app-specific tech stack strings). Reviewers should add their own patterns — the shipped check is a placeholder: `grep -rniE 'authoring-project-name-1\|authoring-project-name-2' . --include='*.md' --include='*.yml'` — must return 0 matches in any shipped file.
+9. `rg -l '[\u0400-\u04FF]' --glob '*.{md,yml}'` — must return no files in the shipped tree. (Unicode range U+0400–U+04FF covers the Cyrillic block.)
 10. `grep -rn 'docs/adr\|docs/brainstorms\|docs/reviews' . --include='*.md' | grep -v 'docs/qa/plugin-test-plan.md'` — must return 0 matches. If non-test-plan files reference the removed historical directories, those are broken links that need to be cleaned up before release.
 
 If all ten pass, the plugin has no gross regressions. Deeper validation

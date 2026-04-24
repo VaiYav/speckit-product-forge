@@ -65,7 +65,7 @@ Before I start researching, I need to understand the feature better:
    (e.g., "Node.js + Express + Postgres" or "Django + React" — or say "use config")
 
 4. **Domain** — What industry/domain is this for?
-   (e.g., "astrology mobile app", "B2B SaaS fintech")
+   (e.g., "consumer productivity app", "B2B SaaS fintech")
 
 5. **Constraints** — Any hard constraints I should know?
    (technical, budget, timeline, legal, platform)

@@ -47,7 +47,7 @@ Examples:
 ---
 
 ```yaml
-project_domain: "astrology mobile app"
+project_domain: "consumer productivity app"
 ```
 Domain and industry context. Used for:
 - Targeting competitor search to relevant apps
