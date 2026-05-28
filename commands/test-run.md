@@ -20,6 +20,12 @@ You read each test case's steps from `testing/test-cases.md`, open the browser,
 execute each action, take screenshots as evidence, and record PASS / FAIL.
 The `.spec.ts` files generated in Phase 8A are for CI/CD pipelines — they are NOT used here.
 
+**Journey mapping (Theme H):** every test case carries its `JRN`/`STEP`/`EDGE` ids
+(from `product-spec/journeys/journeys.yml`). When a case fails, record the failing
+`JRN`/`STEP` (or `EDGE`) id in the `bugs/BUG-NNN.md` record and update the matching
+row in `traceability.yml`, so a failure points straight back to the journey step it
+broke. Run order stays Smoke → E2E (per `e2e_runner: playwright-cli`).
+
 ## User Input
 
 ```text

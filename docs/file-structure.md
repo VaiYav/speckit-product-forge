@@ -22,14 +22,20 @@ features/
     │   ├── tech-stack.md                    ← [OPTIONAL] Library recommendations
     │   └── metrics-roi.md                   ← [OPTIONAL] Business impact
     │
+    ├── design-system/                       ← [IF UI] harvested, read-only (v1.6)
+    │   ├── manifest.yml                     ← components (CMP-*) + tokens + selectors
+    │   └── manifest.md                      ← human-readable companion
+    │
+    ├── traceability.yml                     ← [v1.6] live matrix (REQ→US→JRN→…→TEST→EVT)
+    │
     ├── product-spec/                        ← Phase 2 artifacts
     │   ├── README.md                        ← Spec index + document map
     │   ├── product-spec.md                  ← Main PRD document
     │   │
-    │   ├── user-journey.md                  ← User flows (single file)
-    │   │   OR                               ← OR decomposed (large features):
-    │   ├── user-journey-{flow-name}.md      ← One file per major flow
-    │   ├── user-journey-{flow-name}.md
+    │   ├── journeys/                        ← [v1.6] structured journeys (E2E source of truth)
+    │   │   ├── journeys.yml                 ← authoritative machine-readable index
+    │   │   ├── JRN-001-{slug}.md            ← one file per journey (JRN/STEP/EDGE)
+    │   │   └── JRN-002-{slug}.md
     │   │
     │   ├── wireframes.md                    ← Wireframes (single .md file)
     │   │   OR                               ← OR:
@@ -42,10 +48,11 @@ features/
     │
     │   ├── metrics.md                       ← [OPTIONAL] KPIs and success criteria
     │   │
-    │   └── mockups/                         ← [OPTIONAL] High-fidelity HTML mockups
-    │       ├── index.html                   ← Navigation hub (links all screens)
-    │       ├── mockup-{screen-1}.html
-    │       └── mockup-{screen-2}.html
+    │   └── mockups/                         ← [IF UI] clickable design-system prototype
+    │       ├── index.html                   ← clickable hub (links all screens)
+    │       ├── mockup-{screen-1}.html       ← uses real CMP-* components + tokens
+    │       ├── mockup-{screen-2}.html
+    │       └── component-map.yml            ← [v1.6] region → CMP-* → code path
     │
     ├── spec.md                              ← Phase 4: SpecKit specification
     ├── plan.md                              ← Phase 5: Technical plan (SpecKit)
@@ -366,7 +373,11 @@ Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → 
 | What | Convention | Example |
 |------|-----------|---------|
 | Feature directory | `kebab-case` | `push-notification-preferences` |
-| User journey files | `user-journey-{flow}.md` | `user-journey-settings.md` |
+| Journey files | `JRN-NNN-{slug}.md` | `JRN-001-save-prefs.md` |
+| Journey IDs | `JRN-NNN` / `STEP-NNN` / `EDGE-NNN` | `JRN-001`, `STEP-002`, `EDGE-001` |
+| Component IDs | `CMP-{Name}` | `CMP-Button`, `CMP-Modal` |
+| Contract IDs | `API-{name}` | `API-getPrefs`, `API-savePrefs` |
+| Telemetry event IDs | `EVT-{name}` | `EVT-prefs_saved` |
 | Wireframe files | `wireframe-{screen}.html` | `wireframe-home-screen.html` |
 | Mockup files | `mockup-{screen}.html` | `mockup-settings-panel.html` |
 | Feature slug in YAML | `kebab-case` | `push-notification-preferences` |

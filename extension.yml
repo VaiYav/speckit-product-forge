@@ -58,6 +58,10 @@ provides:
       file: "commands/product-spec.md"
       description: "Phase 2: Interactive product specification with configurable detail levels and auto-decomposition"
 
+    - name: "speckit.product-forge.design-system-harvest"
+      file: "commands/design-system-harvest.md"
+      description: "Phase 2 helper: harvest a read-only manifest of the project's in-code design system (components, tokens, Storybook) to ground mockups, component decomposition, and UI verification"
+
     - name: "speckit.product-forge.revalidate"
       file: "commands/revalidate.md"
       description: "Phase 3: Iterative revalidation and correction cycle until user approval"
@@ -190,6 +194,10 @@ tags:
   - "drift-budget"
   - "monorepo"
   - "v-model-integration"
+  - "design-system"
+  - "structured-journeys"
+  - "playwright-e2e"
+  - "interaction-convention"
   - "unit-testing"
   - "integration-testing"
   - "testing-strategy"

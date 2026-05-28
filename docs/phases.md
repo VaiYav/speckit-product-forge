@@ -80,10 +80,17 @@ conducts a brief interview, then generates all documents.
 |------|---------|
 | `product-spec/README.md` | Yes |
 | `product-spec/product-spec.md` | Yes |
-| `product-spec/user-journey.md` (or multiple) | Yes |
+| `product-spec/journeys/journeys.yml` + `JRN-*.md` (structured, E2E source of truth — see [docs/journeys.md](./journeys.md)) | Yes |
 | `product-spec/wireframes.md` (or folder) | Yes |
 | `product-spec/metrics.md` | Optional |
-| `product-spec/mockups/index.html` + screens | Optional |
+| `design-system/manifest.yml` + `manifest.md` (harvested, read-only) | If UI |
+| `product-spec/mockups/index.html` + screens (clickable, design-system-grounded) | If UI |
+| `product-spec/mockups/component-map.yml` (region → `CMP-*` → code path) | If UI |
+
+> **Design system (helper):** `/speckit.product-forge.design-system-harvest`
+> discovers the project's in-code design system and emits the read-only
+> `design-system/manifest.yml` that grounds mockups, component decomposition, and
+> UI verification. The design system stays in code as the single source of truth.
 
 ---
 
@@ -264,8 +271,11 @@ Findings use `REV-NNN` IDs with CRITICAL/HIGH/MEDIUM/LOW severity.
 
 ### What happens
 
-Auto-detects test setup, generates test cases for every user story,
-creates runnable Playwright `.spec.ts` files.
+Auto-detects test setup and generates test cases. E2E specs are generated
+**directly from `product-spec/journeys/journeys.yml`** (one Playwright spec per
+`JRN`; steps → actions, edges → assertions; selectors from
+`mockups/component-map.yml`). `playwright-cli` is the committed default runner
+(`e2e_runner: playwright-cli`). See [docs/journeys.md](./journeys.md).
 
 ### Test types generated
 

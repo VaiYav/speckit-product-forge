@@ -179,10 +179,18 @@ Also update `.gitignore` to add `testing/env.md` if not already present.
 ## Step 5: Extract Test Cases from Feature Artifacts
 
 Read and synthesize:
-1. `product-spec/product-spec.md` → Must Have user stories + acceptance criteria
-2. `product-spec/user-journey*.md` → All user flows, steps, decision branches
-3. `spec.md` → Acceptance criteria (may be more detailed than product-spec)
-4. `research/ux-patterns.md` → Edge cases and state inventory
+1. `product-spec/journeys/journeys.yml` → **authoritative E2E source** — every
+   `JRN`/`STEP`/`EDGE` (see [docs/journeys.md](../docs/journeys.md)).
+2. `product-spec/product-spec.md` → Must Have user stories + acceptance criteria
+3. `product-spec/mockups/component-map.yml` → stable selectors per `CMP-*` region
+4. `spec.md` → Acceptance criteria (may be more detailed than product-spec)
+5. `research/ux-patterns.md` → additional edge cases and state inventory
+
+> **Journey-driven generation (Theme H):** E2E cases are generated **directly from
+> `journeys.yml`** — one Playwright spec per `JRN`, each `STEP.action` → a
+> Playwright action, each `STEP.expect`/`EDGE.then` → an assertion, with selectors
+> resolved from `component-map.yml`. `playwright-cli` is the committed default
+> runner (config: `e2e_runner: playwright-cli`).
 
 Build a structured test case matrix:
 
@@ -200,20 +208,23 @@ Derive 4–8 critical-path scenarios that answer: "does the feature basically wo
 [...]
 ```
 
-### 5B: E2E Test Cases (per user journey)
+### 5B: E2E Test Cases (generated from `journeys.yml`)
 
-For each user journey file, create test cases for:
-- Primary happy path (all steps complete)
-- Each alternative path
-- Each error scenario from the journey
+For each `JRN` in `journeys.yml` create test cases:
+- One **happy-path** case covering all `STEP`s in order.
+- One case per **`EDGE`** (alternate / error / boundary), keyed by its priority.
+
+Map every case back to its journey IDs so coverage is checkable in
+`traceability.yml` and `verify-full` (a Must-Have `JRN` or P0/P1 `EDGE` without a
+TC is a failure).
 
 ```markdown
-## E2E Tests: {Journey Name} (TC-E2E-NNN)
+## E2E Tests: {JRN-NNN journey title} (TC-E2E-NNN)
 
-| ID | Journey | Scenario | Preconditions | Steps | Expected | Story |
-|----|---------|----------|--------------|-------|----------|-------|
-| TC-E2E-001 | {journey} | Happy path | {preconditions} | {numbered steps} | {outcome} | US-001 |
-| TC-E2E-002 | {journey} | Empty state | No data | Navigate to feature | Empty state UI shown | US-001 |
+| ID | Journey | Covers | Scenario | Steps (JRN/STEP) | Expected | Story |
+|----|---------|--------|----------|------------------|----------|-------|
+| TC-E2E-001 | JRN-001 | STEP-001..002 | Happy path | STEP-001 → STEP-002 | {success state} | US-001 |
+| TC-E2E-002 | JRN-001 | EDGE-001 | Save fails (500) | STEP-002 + EDGE-001 | error toast, revert | US-001 |
 [...]
 ```
 
@@ -361,13 +372,18 @@ for the feature (`scope.primary`).
 
 ---
 
-## Step 6: Generate Playwright Test Files
+## Step 6: Generate Playwright Test Files (from journeys)
 
-If E2E Playwright tests are selected, generate actual `.spec.js` / `.spec.ts` test files.
+Generate one `.spec.ts` **per `JRN`** in `journeys.yml`. Translate mechanically:
+`STEP.action` → a Playwright action; `STEP.expect` / `EDGE.then` → an assertion.
+Resolve selectors from `mockups/component-map.yml` / `design-system/manifest.yml`
+(`CMP-*` → its stable `selector`, e.g. `[data-cmp='button']`); fall back to
+`data-testid` only when no component selector exists. Tag each test with its
+`JRN`/`STEP`/`EDGE` ids in a comment so Phase 8B can map failures back.
 
 Create `{TESTING_DIR}/playwright-tests/` folder.
 
-For each E2E test group:
+For each journey:
 
 ```typescript
 // {TESTING_DIR}/playwright-tests/{feature-slug}-{journey-name}.spec.ts
