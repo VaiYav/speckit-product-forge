@@ -435,6 +435,10 @@ For **detailed HTML**: agent scans `{codebase_path}` for CSS variables and desig
 
 ### 4E. Mockups — clickable prototype + component map (if UI)
 
+**Skip this step entirely** when `MOCKUP_STYLE = "No mockups"` (user chose wireframes
+only) or the feature has no UI — do not create `mockups/` or `component-map.yml`, and
+note "mockups skipped" in the digest. Otherwise:
+
 Mockups are grounded in `design-system/manifest.yml` (from §2E,
 `design-system-harvest`), so they map 1:1 to real components.
 

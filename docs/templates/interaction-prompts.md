@@ -36,7 +36,7 @@ Maps to `gates[].decision` ∈ `approved | revised | skipped | rolled_back | abo
   (or type your own answer)
 ```
 
-Persist the choice as `feature_mode` (+ `track` for express) on `.forge-status.yml`.
+Persist the choice as `feature_mode` (express is a first-class mode value) on `.forge-status.yml`.
 
 ---
 

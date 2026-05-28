@@ -40,6 +40,7 @@ Parse the input:
 | 0. Problem Discovery *(opt)* | `speckit.product-forge.problem-discovery` | `problem-discovery/problem-statement.md` | Go / No-go decision |
 | 1. Research | `speckit.product-forge.research` | `research/` folder with ≥2 files | User approves research |
 | 2. Product Spec | `speckit.product-forge.product-spec` | `product-spec/README.md` exists | User approves product spec |
+| 2H. Design System Harvest *(UI features; helper within Phase 2)* | `speckit.product-forge.design-system-harvest` | `design-system/manifest.yml` exists | Auto / `not_applicable` for backend-only |
 | 3. Revalidation | `speckit.product-forge.revalidate` | `review.md` with status `APPROVED` | User explicitly approves |
 | 4. Bridge → SpecKit | `speckit.product-forge.bridge` | `spec.md` exists in FEATURE_DIR | User approves spec.md |
 | 4.5. i18n Harvest *(opt, conditional)* | `speckit.product-forge.i18n-harvest` | `i18n/keys.yml` exists | User approves harvested keys |
@@ -55,6 +56,7 @@ Parse the input:
 | 9. Release Readiness *(opt)* | `speckit.product-forge.release-readiness` | `release-readiness.md` + `monitoring/dashboard.json` + `flags/registry.yml` | User confirms readiness |
 | 9.5. Monitoring Setup *(opt)* | `speckit.product-forge.monitoring-setup` | `monitoring/slo.md` + `alerts.yml` | User confirms monitoring artifacts |
 | 9B. Experiment Design *(opt, conditional)* | `speckit.product-forge.experiment-design` | `experiment/experiment-design.md` + `experiment.yml` | User pre-registers plan |
+| 10. Spec Merge *(living spec; after release-readiness)* | `speckit.product-forge.spec-merge` | canonical `specs/` updated; change archived | User confirms merge of delta specs |
 
 > **Conditional triggers:**
 > - Phase 4.5 runs when the project has multiple locales.
@@ -71,6 +73,7 @@ Parse the input:
 > **Cross-cutting commands** (runnable at any time):
 > - `/speckit.product-forge.sync-verify` — artifact consistency across layers
 > - `/speckit.product-forge.change-request` — formal scope change with impact analysis
+> - `/speckit.product-forge.spec-merge` — merge delta specs into canonical `specs/` + archive (living spec)
 > - `/speckit.product-forge.portfolio` — cross-feature view, conflicts, merge order
 > - `/speckit.product-forge.feature-flag-cleanup` — stale flag audit
 
@@ -121,19 +124,22 @@ intake step before fixing the mode (see [docs/policy.md §4.0](../docs/policy.md
 2. Present a structured **`Track`** prompt (see
    [interaction-prompts.md](../docs/templates/interaction-prompts.md)) recommending
    one of `express | lite | standard | v-model`, with the recommended option first.
-3. Write the chosen value to `feature_mode` (and `track: "express"` when express).
+3. Write the chosen value to **`feature_mode`** (`express | lite | standard |
+   v-model`). "Track" is just the user-facing word for the choice at intake; the
+   persisted field is `feature_mode` (express is a first-class mode value — see
+   [docs/schema.md](../docs/schema.md)). There is no separate `track` field.
 
 Triage may recommend a **downgrade** for a brand-new feature (e.g. `standard → lite`)
 — this is distinct from escalation (§"Escalation" below), which only goes upward
 once artifacts exist.
 
-### Express track
+### Express mode
 
-When `track: express`, run only `product-spec` (minimal: one journey + acceptance
-criteria) → `plan` (inline) → `implement` → `verify`, then offer completion. All
-other phases are `status: "not_applicable"`. Express is append-only escalatable to
-lite/standard if the change grows (gains UI, a second module, or a schema/contract
-change). See [docs/policy.md §4.1](../docs/policy.md#41-phase-maps).
+When `feature_mode: express`, run only `product-spec` (minimal: one journey +
+acceptance criteria) → `plan` (inline) → `implement` → `verify`, then offer
+completion. All other phases are `status: "not_applicable"`. Express is append-only
+escalatable to lite/standard if the change grows (gains UI, a second module, or a
+schema/contract change). See [docs/policy.md §4.1](../docs/policy.md#41-phase-maps).
 
 ## Flow Mode (gated vs fluid)
 
@@ -159,10 +165,10 @@ Before executing any phase, resolve the feature mode:
    field, write to `.forge-status.yml`, and confirm with the user that
    changing mode mid-feature is intentional.
 4. **Validate.** The resolved value MUST be one of
-   `"lite" | "standard" | "v-model"`. If anything else (typo, unknown
+   `"express" | "lite" | "standard" | "v-model"`. If anything else (typo, unknown
    literal, non-string) appears — either in the status file, config
    default, or `--mode=` override — abort immediately with:
-   *"Invalid feature_mode: '{value}'. Expected one of lite, standard,
+   *"Invalid feature_mode: '{value}'. Expected one of express, lite, standard,
    v-model. Fix .forge-status.yml or .product-forge/config.yml and
    re-run."* Do NOT silently fall through to standard. The same
    validation applies to every `phases.<name>.status` read during
@@ -690,15 +696,42 @@ Update `.forge-status.yml`: `experiment_design.status = completed` (or `skipped`
 
 ---
 
+## Phase 10: Spec Merge *(living spec)*
+
+After release-readiness (or at completion), offer to fold this feature's **delta
+specs** into the canonical `specs/` source of truth and archive the change:
+
+```
+🗂 Spec Merge (Phase 10)
+
+Merge this change's ADDED/MODIFIED/REMOVED requirements into canonical specs/
+and archive the change with audit history (living, spec-anchored source of truth).
+
+  1. [Run spec-merge] (recommended once the feature is shipped/verified)
+  2. [Skip — I'll merge later]
+```
+
+If user confirms → **Delegate to:** `speckit.product-forge.spec-merge`. Then
+update `.forge-status.yml`: `spec_merge.status = completed` (or `skipped` /
+`not_applicable` when the project has no canonical `specs/`).
+
+---
+
 ## Completion
 
 When all active phases are complete:
 
+> **Mode-aware summary.** Only list artifacts the active mode actually produced.
+> In `express` mode there is no `research/` or `spec.md` (lines marked
+> "standard mode"); in `lite` mode research/revalidation/bridge are absent; in
+> `fluid` mode list whatever phases the user chose to run. Print the traceability
+> chain for the resolved `feature_mode`, not the standard one.
+
 ```
 ✅ Product Forge Complete: {Feature Name}
 
-📦 Artifacts:
-  research/             — {N} research documents              (standard mode)
+📦 Artifacts (only those produced by this feature's mode):
+  research/             — {N} research documents              (standard / v-model)
   product-spec/         — {N} product spec documents
   spec.md               — SpecKit specification               (standard mode)
   plan.md               — Technical plan
@@ -723,12 +756,14 @@ When all active phases are complete:
    and ready for production.
 ```
 
-Traceability chain (standard mode):
+Traceability chain (print the one matching the resolved `feature_mode`):
 
 ```
-Research ✅ → Product Spec ✅ → Approved ✅ → spec.md ✅
-→ Plan ✅ → Tasks ✅ → Reviewed ✅ → Code ✅
-→ Code Review ✅ → Verified ✅ → Tested ✅ → Ship Ready ✅
+standard: Research ✅ → Product Spec ✅ → Approved ✅ → spec.md ✅
+  → Plan ✅ → Tasks ✅ → Reviewed ✅ → Code ✅
+  → Code Review ✅ → Verified ✅ → Tested ✅ → Ship Ready ✅ → Spec Merged ✅
+lite:     Product Spec ✅ → Plan ✅ → Code ✅ → Verified ✅
+express:  Product Spec ✅ → Plan ✅ → Code ✅ → Verified ✅
 ```
 
 Offer:

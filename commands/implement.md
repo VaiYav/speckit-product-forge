@@ -69,9 +69,13 @@ Key context for implementation agents:
 
 ## Step 2.5: Test-first "Red" gate (v1.6, Theme D)
 
-Per the spec-kit Red gate: for each Must-Have story/journey, the test tasks marked
-test-first in `tasks.md` (Step 4.3) MUST be written and confirmed **failing**
-before their implementation tasks run. Run the relevant tests, confirm they fail
+Scope: this gate covers **unit and contract tests** (the layers exercised by the
+progressive-verify checkpoints in this phase) — it does NOT move the optional
+Phase 8 browser **E2E** suite earlier. E2E remains journey-driven in Phases 8A/8B.
+
+Per the spec-kit Red gate: for each Must-Have story/journey, the unit/contract test
+tasks marked test-first in `tasks.md` (Step 4.3) MUST be written and confirmed
+**failing** before their implementation tasks run. Run the relevant tests, confirm they fail
 for the right reason, and note it in `implementation-log.md`. Only then proceed to
 implement those tasks. (Skippable only when the user explicitly opts out via a
 structured prompt — record the skip reason.)

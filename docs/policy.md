@@ -12,7 +12,11 @@ to it instead of repeating rules in their own files.
 
 ## 1. Operating Rules
 
-1. **One phase at a time.** Never skip ahead or run phases in parallel.
+1. **One phase at a time.** Never run phases in parallel. Under the default
+   `flow_mode: gated` they also run in strict order. Under `flow_mode: fluid`
+   (§4.0.1) phases still run one at a time but the user may choose the order among
+   the currently-runnable phases (dependencies are enablers, not strict gates);
+   `sync-verify` and the gate audit trail still apply.
 2. **Human gate after every phase.** After each sub-skill completes, summarize the outcome and present a **structured gate prompt** (see [interaction.md](./interaction.md) and the `Gate` template in [templates/interaction-prompts.md](./templates/interaction-prompts.md)) offering:
    - **Approve** → proceed to next phase
    - **Revise** → re-run same phase with feedback
@@ -128,7 +132,8 @@ track** via a structured `Track` prompt (see
 | Regulated / safety-critical | `v-model` | Audit-grade traceability. |
 
 The recommendation is a default, not a mandate — the user may pick any track. The
-chosen value is written to `feature_mode` (and `track: express` when express).
+chosen value is written to `feature_mode` (express is a first-class mode value;
+"track" is only the user-facing word at intake — there is no separate `track` field).
 Unlike escalation (§4.2), triage may recommend a **downgrade** (e.g.
 `standard → lite`) for a new feature before any artifacts exist.
 

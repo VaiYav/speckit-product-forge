@@ -99,7 +99,7 @@ Readers (including older sub-skills still on the v2 shape) MUST:
 | `feature` | yes | feature slug. |
 | `created_at` | yes | ISO-8601 date. |
 | `last_updated` | yes | ISO-8601 timestamp; updated on every write. |
-| `feature_mode` | no | `"lite" | "standard" | "v-model"`. Defaults to `"standard"`. |
+| `feature_mode` | no | `"express" | "lite" | "standard" | "v-model"`. Defaults to `"standard"`. `"express"` (v1.6) is the lightest track: product_spec → plan → implement → verify. Phase keys `design_system_harvest` (v1.6, UI features) and `spec_merge` (v1.6, living-spec merge) are also valid `phases.<name>` entries. |
 | `backfilled` | no | `true` if feature was reverse-engineered by `/backfill`. Defaults to `false`. |
 | `v2_native` | no | `true` for features created by v1.5.0+ (field name is historical — retained for compat). Drives digest enforcement (runtime.md §8.3). Defaults to `false` (i.e. grandfathered). |
 | `speckit_mode` | no | preserved from v2. |

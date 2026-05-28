@@ -377,3 +377,25 @@ These are not config keys but paths the config indirectly controls:
 | `.product-forge/lessons.md` | append-only learning log | `retrospective` |
 | `scripts/migrate-status-v2-to-v3.js` | lazy schema migration helper | ships with plugin |
 | `scripts/acquire-lock.sh` / `release-lock.sh` | state-lock helpers | ships with plugin |
+
+---
+
+## v1.6.0 Config Keys
+
+New keys introduced with the flow improvements (also defined inline in
+[`config-template.yml`](../config-template.yml)):
+
+| Key | Type / Values | Default | Purpose |
+|-----|---------------|---------|---------|
+| `flow_mode` | `gated` \| `fluid` | `gated` | Sequencing model. `gated` = one phase at a time, in order. `fluid` = "actions, not phases": any runnable phase on demand, dependencies as enablers (see [policy §4.0.1](./policy.md) and [runtime](./runtime.md)). |
+| `default_track_hint` | `express` \| `lite` \| `standard` | `standard` | Default track the intake/triage step offers when nothing else is specified. The persisted value is `feature_mode` (express is a first-class mode). |
+| `e2e_runner` | `playwright-cli` \| `none` | `playwright-cli` | E2E runner. Specs are generated from `product-spec/journeys/journeys.yml` (see [docs/journeys.md](./journeys.md)). `playwright-cli` is the first-class default. |
+| `telemetry.product_analytics` | `posthog` \| `amplitude` \| `none` | `none` | Product-analytics backend used by `retrospective` (funnels/retention) and `experiment-design` via MCP. |
+| `telemetry.error_tracking` | `sentry` \| `none` | `none` | Error-tracking backend used by `retrospective` and `monitoring-setup` via MCP. |
+| `telemetry.dashboards` | `posthog` \| `sentry` \| `newrelic` \| `none` | `newrelic` | Dashboard/alert backend used by `monitoring-setup`. |
+| `design_system.components_path` | path | auto-detect | Component-library root harvested by `design-system-harvest`. |
+| `design_system.tokens_path` | path | auto-detect | Design-token location (json/css/ts). |
+| `design_system.storybook` | bool | auto-detect | Harvest components from Storybook when present. |
+
+> The design system is kept **in code** as the single source of truth; Product
+> Forge harvests a read-only `design-system/manifest.yml` and never duplicates it.

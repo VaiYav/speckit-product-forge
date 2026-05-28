@@ -25,7 +25,8 @@ created_at: "2026-04-19"
 last_updated: "2026-04-19T12:00:00Z"
 
 # NEW in v3.
-# Drives phase map selection. Valid values: "lite" | "standard" | "v-model".
+# Drives phase map selection. Valid values: "express" | "lite" | "standard" | "v-model".
+# "express" (v1.6) is the lightest track — product_spec → plan → implement → verify.
 # Default: "standard" if omitted.
 feature_mode: "standard"
 
@@ -77,6 +78,8 @@ phases:
     status: "completed"
   product_spec:
     status: "completed"
+  design_system_harvest:           # NEW v1.6 — Phase 2 helper (UI features only)
+    status: "completed"            # not_applicable for backend-only features
   revalidation:
     status: "approved"             # keeps v2 "approved" literal for this phase
   bridge:
@@ -99,6 +102,8 @@ phases:
     status: "pending"
   release_readiness:
     status: "pending"
+  spec_merge:                      # NEW v1.6 — living-spec merge into canonical specs/
+    status: "pending"              # runs after release-readiness; not_applicable when no canonical specs/
   retrospective:
     status: "pending"
 

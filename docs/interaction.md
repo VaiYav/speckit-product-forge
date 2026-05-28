@@ -96,8 +96,8 @@ naturally-related toggles into one `multiSelect` question to limit round-trips.
 3. **Recommend, don't decide.** Put the recommended option first and label it;
    never auto-select on the user's behalf at a mandatory gate.
 4. **One decision per prompt** (except deliberately grouped `multiSelect` toggles).
-5. **Record the answer.** Gate decisions → `gates[]`; mode/track → `feature_mode`
-   / `track`; skip reasons → `skip_reason`.
+5. **Record the answer.** Gate decisions → `gates[]`; mode/track choice →
+   `feature_mode` (express is a mode value); skip reasons → `skip_reason`.
 6. **Keep labels stable.** Reuse the standard headers (`Gate`, `Track`,
    `Next step`) so the experience is predictable across phases.
 

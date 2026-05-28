@@ -455,3 +455,29 @@ scripts/                                  ← [v1.5]
 
 Banner rule: every artifact written by `/backfill` carries a
 `BACKFILLED ARTIFACT` banner at the top of the file.
+
+## Appendix — File layout added in v1.6.0
+
+```
+specs/                                    ← canonical source of truth (living spec)
+└── <domain>/spec.md                      ← stable REQ-* requirements; merged by spec-merge
+
+features/
+├── _archived/<date>-<slug>/              ← completed changes archived by spec-merge
+└── <slug>/
+    ├── traceability.yml                  ← live matrix (REQ→US→JRN→FR→CMP→API→TASK→code→TEST→EVT)
+    ├── design-system/                    ← harvested, read-only (UI features)
+    │   ├── manifest.yml                  ← CMP-* components + tokens + selectors
+    │   └── manifest.md
+    ├── contracts/                        ← contract-first (bridge/plan), validated by api-docs
+    │   ├── openapi.yaml                   ← HTTP endpoints (API-* ids)
+    │   └── asyncapi.yaml                  ← events (API-* ids)
+    ├── specs/<domain>/spec.md            ← delta spec for this change (ADDED/MODIFIED/REMOVED)
+    └── product-spec/
+        ├── journeys/journeys.yml + JRN-*.md   ← structured journeys (E2E source of truth)
+        └── mockups/component-map.yml          ← region → CMP-* → code path
+```
+
+New `phases.<name>` keys on `.forge-status.yml`: `design_system_harvest` (Phase 2
+helper, UI features), `spec_merge` (post-release living-spec merge). New
+`feature_mode` value: `express`. See [schema.md](./schema.md).
