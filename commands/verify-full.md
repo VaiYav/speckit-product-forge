@@ -2,7 +2,9 @@
 name: speckit.product-forge.verify-full
 description: >
   Phase 7: Full traceability verification across the entire Product Forge chain.
-  Checks: code ↔ tasks ↔ plan ↔ spec.md ↔ product-spec ↔ research.
+  Consumes the live traceability.yml matrix and checks: code ↔ tasks ↔ plan ↔
+  spec.md ↔ product-spec ↔ research, plus journey↔E2E coverage, UI↔design-system,
+  FE↔BE contract drift, and doc↔code reconciliation.
   Produces a structured verify-report.md with CRITICAL/WARNING/PASSED findings.
   Use with: "verify full", "check traceability", "/speckit.product-forge.verify-full"
 ---
@@ -52,6 +54,18 @@ Read every artifact in the feature directory:
 
 Also read the implementation: use codebase_path from config to find all files
 created/modified during implementation. Reference `tasks.md` for file paths if listed.
+
+**Also load (v1.6) the live traceability + UX/contract artifacts when present:**
+- `traceability.yml` — the **live matrix** (consume it; do not re-derive the chain
+  from scratch). See [docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md).
+- `product-spec/journeys/journeys.yml` — journeys (`JRN/STEP/EDGE`) for coverage.
+- `design-system/manifest.yml` + `product-spec/mockups/component-map.yml` — for the
+  UI-uses-real-components check.
+- API/event contracts (OpenAPI + AsyncAPI from bridge/plan) — for FE↔BE drift.
+
+> **Consume the matrix (Theme C):** when `traceability.yml` exists, Layers 1–4 read
+> the matrix rows instead of recomputing links, and the report is computed FROM the
+> matrix. Re-derive from raw artifacts only for rows the matrix leaves null.
 
 ---
 
@@ -170,6 +184,61 @@ Flags:
 
 ---
 
+### Layer 7: Journey ↔ E2E Coverage (v1.6, Theme H)
+
+Using `journeys.yml` + `traceability.yml`:
+- Every Must-Have `JRN` has ≥1 `TC-E2E`/`TC-SMK`.
+- Every P0/P1 `EDGE` has a test case.
+
+Flags:
+- Must-Have journey with no E2E test → ❌ CRITICAL
+- P0/P1 edge case with no test → ❌ CRITICAL; P2/P3 without test → ⚠️ WARNING
+
+---
+
+### Layer 8: UI ↔ Design System (v1.6, Theme E)
+
+Using `component-map.yml` + `design-system/manifest.yml` + code:
+- Every mapped region's component (`CMP-*`) is actually used at its `target_path`.
+- The built UI uses real design-system components (not ad-hoc re-implementations of
+  components that exist in the manifest).
+
+Flags:
+- Mapped component not found at its target path → ❌ CRITICAL
+- UI re-implements a component that exists in the manifest → ⚠️ WARNING
+
+---
+
+### Layer 9: FE ↔ BE Contract Drift (v1.6, Theme F)
+
+Using the API/event contracts (OpenAPI + AsyncAPI):
+- Every `API-*` contract referenced by a journey/row is implemented on the backend
+  (route/handler exists) AND called by the frontend (client call exists).
+- FE client calls and BE handlers match the contract shape (path, method, payload).
+
+Flags:
+- Contract with no backend implementation, or FE call to an undefined contract →
+  ❌ CRITICAL
+- Shape mismatch (param/payload differs from contract) → ❌ CRITICAL
+- Contract defined but unused → ⚠️ WARNING
+
+---
+
+### Layer 10: Doc ↔ Code Reconciliation (v1.6, Theme G)
+
+Both directions, using the matrix + canonical `specs/` (if present):
+- Every documented requirement/endpoint/component maps to code (**unimplemented
+  docs**).
+- Every significant code path maps to a documented requirement/task
+  (**undocumented code** / orphan).
+
+Flags:
+- Documented behavior with no implementing code → ❌ CRITICAL
+- Significant undocumented code path (no matrix row, no task) → ⚠️ WARNING
+- On drift, note the suggested canonical-spec update for `spec-merge` (Theme B).
+
+---
+
 ## Step 4: Generate verify-report.md
 
 Write `{FEATURE_DIR}/verify-report.md`:
@@ -245,6 +314,34 @@ Write `{FEATURE_DIR}/verify-report.md`:
 | All README links valid | ✅/⚠️/❌ |
 | product-spec/README.md complete | ✅/⚠️/❌ |
 | research/README.md complete | ✅/⚠️/❌ |
+
+---
+
+## Layer 7: Journey ↔ E2E Coverage
+
+| Journey / Edge | Test Case | Status |
+|----------------|-----------|--------|
+| JRN-001 (Must) | TC-E2E-001 | ✅ |
+| EDGE-001 (P1) | TC-E2E-002 | ✅/❌ |
+
+## Layer 8: UI ↔ Design System
+
+| Region | Component (CMP-) | Target path | Used? |
+|--------|------------------|-------------|-------|
+| save bar | CMP-Button | frontend:…/SaveBar.tsx | ✅/❌ |
+
+## Layer 9: FE ↔ BE Contract Drift
+
+| Contract (API-) | BE impl | FE call | Shape match | Status |
+|-----------------|---------|---------|-------------|--------|
+| API-savePrefs | ✅ | ✅ | ✅ | ✅ |
+
+## Layer 10: Doc ↔ Code Reconciliation
+
+| Item | Documented | In code | Status |
+|------|-----------|---------|--------|
+| FR-003 | ✅ | ✅ | ✅ |
+| {orphan code path} | ❌ | ✅ | ⚠️ undocumented |
 
 ---
 

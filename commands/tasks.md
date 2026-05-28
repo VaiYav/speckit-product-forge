@@ -108,6 +108,26 @@ checks. Failures are hard errors — fix and regenerate, do not gate.
 
 Both checks are deterministic and cheap. Neither requires an LLM pass.
 
+### Step 4.2: Seed the live traceability matrix (v1.6, Theme C)
+
+Create/update `{FEATURE_DIR}/traceability.yml` (see
+[docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md)).
+For each requirement row, fill `tasks: [TASK-*]` now (other columns — `code`,
+`tests`, `events` — are filled by later phases). This is the single live matrix
+that `verify-full` consumes instead of re-deriving the chain.
+
+For UI work, each frontend task SHOULD reference the design-system component(s) it
+implements (`CMP-*` from `product-spec/mockups/component-map.yml`) and its target
+path, so the component map and tasks stay linked. For backend work, reference the
+`API-*` contract(s) the task implements.
+
+### Step 4.3: Test-first task ordering (v1.6, Theme D)
+
+Per the spec-kit "Red" gate: for each Must-Have story/journey, order the test task
+(`TC-*`) **before** its implementation task so tests can be written and confirmed
+failing before code (enforced at the Phase 5B→6 boundary by `implement`). Mark
+these test tasks explicitly in `tasks.md`.
+
 ---
 
 ## Step 5: Tasks Approval Gate

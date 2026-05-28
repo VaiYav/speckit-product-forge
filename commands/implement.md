@@ -58,10 +58,23 @@ Task groups: {N}
   ...
 
 Key context for implementation agents:
-  • Wireframes/mockups: {FEATURE_DIR}/product-spec/mockups/
-  • User journeys:      {FEATURE_DIR}/product-spec/user-journey*.md
+  • Mockups + component map: {FEATURE_DIR}/product-spec/mockups/ (+ component-map.yml)
+  • Design system manifest:  {FEATURE_DIR}/design-system/manifest.yml (use real CMP-* components)
+  • Structured journeys:     {FEATURE_DIR}/product-spec/journeys/journeys.yml
   • Acceptance criteria in spec.md — reference these for each task group
+  • Live matrix:             {FEATURE_DIR}/traceability.yml (fill code paths as you go)
 ```
+
+---
+
+## Step 2.5: Test-first "Red" gate (v1.6, Theme D)
+
+Per the spec-kit Red gate: for each Must-Have story/journey, the test tasks marked
+test-first in `tasks.md` (Step 4.3) MUST be written and confirmed **failing**
+before their implementation tasks run. Run the relevant tests, confirm they fail
+for the right reason, and note it in `implementation-log.md`. Only then proceed to
+implement those tasks. (Skippable only when the user explicitly opts out via a
+structured prompt — record the skip reason.)
 
 ---
 
@@ -102,6 +115,7 @@ pause implementation and run a mini-verify checkpoint:
 2. **Spec drift check:** Compare completed work against `spec.md` acceptance criteria — are AC being met?
 3. **Unplanned changes check:** Identify files modified that are NOT referenced by any task in `tasks.md`
 4. **Plan alignment check:** Verify implementation approach matches `plan.md` architecture (e.g., correct layers, correct data model)
+5. **Matrix update (v1.6, Theme C):** fill the `code` paths (and component usage for UI) for the just-completed rows in `traceability.yml`, setting `status: implemented`. For UI tasks, confirm the real `CMP-*` component from `component-map.yml` was used (not a re-implementation).
 
 **Checkpoint output** — append to `{FEATURE_DIR}/implementation-log.md`:
 

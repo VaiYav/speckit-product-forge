@@ -134,6 +134,10 @@ provides:
       file: "commands/change-request.md"
       description: "Cross-cutting: Formal scope change management with impact analysis, effort delta, and artifact propagation"
 
+    - name: "speckit.product-forge.spec-merge"
+      file: "commands/spec-merge.md"
+      description: "Cross-cutting (living spec): merge a feature's delta specs (ADDED/MODIFIED/REMOVED) into canonical specs/ and archive the change with audit history (spec-anchored source of truth)"
+
     - name: "speckit.product-forge.portfolio"
       file: "commands/portfolio.md"
       description: "Cross-cutting: Portfolio view across all features. Feature table, file-conflict matrix, dependency graph, suggested merge order. Read-only scan."
@@ -198,6 +202,9 @@ tags:
   - "structured-journeys"
   - "playwright-e2e"
   - "interaction-convention"
+  - "living-spec"
+  - "delta-specs"
+  - "traceability-matrix"
   - "unit-testing"
   - "integration-testing"
   - "testing-strategy"
