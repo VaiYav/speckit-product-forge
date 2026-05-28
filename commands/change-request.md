@@ -81,7 +81,7 @@ For each existing artifact, analyze how the change affects it:
 | Artifact | Exists? | Impact | Changes Needed |
 |----------|:-------:|:------:|---------------|
 | product-spec/product-spec.md | {✅/❌} | {None/Minor/Major} | {description of changes} |
-| product-spec/user-journey*.md | {✅/❌} | {None/Minor/Major} | {new flow or modified flow} |
+| product-spec/journeys/journeys.yml | {✅/❌} | {None/Minor/Major} | {new/modified JRN/STEP/EDGE} |
 | product-spec/wireframes* | {✅/❌} | {None/Minor/Major} | {new screen or modified screen} |
 | spec.md | {✅/❌} | {None/Minor/Major} | {new US-NNN, new FR-NNN, modified AC} |
 | plan.md | {✅/❌} | {None/Minor/Major} | {new component, modified architecture} |
@@ -159,7 +159,7 @@ If ACCEPTED:
 ### 4A: Update Artifacts (in dependency order)
 
 1. **product-spec/product-spec.md** — Add/modify user stories with `<!-- CR-{NNN} -->` marker
-2. **product-spec/user-journey*.md** — Add/modify flows with marker
+2. **product-spec/journeys/journeys.yml** — Add/modify JRN/STEP/EDGE with marker
 3. **product-spec/wireframes*** — Add/modify screens (if UI change)
 4. **spec.md** — Add/modify US-NNN, FR-NNN, acceptance criteria with marker
 5. **plan.md** — Add/modify architecture sections with marker

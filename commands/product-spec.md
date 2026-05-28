@@ -219,7 +219,7 @@ Generate all documents **sequentially** (not in parallel, to maintain context an
 > Status: DRAFT | Version: 1.0 | Date: {date}
 > Feature: `{feature-slug}` | Size: {FEATURE_SIZE}
 >
-> **Related documents:** [User Journey](./user-journey.md) | [Wireframes](./wireframes.md) | [Metrics](./metrics.md) | [Research →](../research/README.md)
+> **Related documents:** [Journeys](./journeys/) | [Wireframes](./wireframes.md) | [Metrics](./metrics.md) | [Research →](../research/README.md)
 
 ## 1. Overview
 

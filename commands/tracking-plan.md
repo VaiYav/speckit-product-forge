@@ -25,7 +25,7 @@ $ARGUMENTS
 
 1. Read `.forge-status.yml` — `product_spec` must be `completed` (Phase 2 done)
 2. Read `product-spec/product-spec.md` → success metrics, user stories
-3. Read `product-spec/user-journey*.md` → all user flows and decision points
+3. Read `product-spec/journeys/journeys.yml` → all journeys (JRN/STEP/EDGE) and decision points; give each event a stable `EVT-*` id and map it to journey steps
 4. Read `research/metrics-roi.md` (if exists) → predicted KPIs
 
 If not ready:

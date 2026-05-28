@@ -41,7 +41,8 @@ Read every artifact in the feature directory:
 ├── product-spec/
 │   ├── README.md
 │   ├── product-spec.md
-│   ├── user-journey*.md
+│   ├── journeys/journeys.yml + JRN-*.md
+│   ├── mockups/component-map.yml
 │   ├── wireframes* / wireframes/
 │   ├── metrics.md [if exists]
 │   └── mockups/ [if exists]

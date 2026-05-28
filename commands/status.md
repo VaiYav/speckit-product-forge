@@ -92,7 +92,7 @@ For each phase, check whether the expected artifacts exist:
 
   ✅ Phase 2 · Product Spec      [COMPLETE]
      └── {N} documents in product-spec/
-         product-spec.md ({SPEC_DETAIL}) · user-journey*.md ({N} flows)
+         product-spec.md ({SPEC_DETAIL}) · journeys/journeys.yml ({N} journeys)
          wireframes* ({N} screens, {WIREFRAME_DETAIL})
          {+ metrics.md if exists} {+ mockups/ if exists}
 

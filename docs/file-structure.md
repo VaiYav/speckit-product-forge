@@ -98,7 +98,7 @@ The decomposition threshold is `max_tokens_per_doc` in config (default: 4000 tok
 
 | Document | When to Decompose | How |
 |----------|------------------|-----|
-| `user-journey.md` | > 2 distinct user flows, or large feature | One `.md` file per flow |
+| `journeys/` | always structured | `journeys.yml` (authoritative) + one `JRN-NNN-{slug}.md` per journey |
 | `wireframes.md` | > 3 screens, or HTML detail requested | One `.html` file per screen in `wireframes/` |
 | `mockups/` | Always decomposed when > 1 screen | One `.html` per screen + `index.html` |
 | `product-spec.md` | Almost never — keep as single source of truth | Use sections/headers instead |
@@ -110,7 +110,7 @@ The decomposition threshold is `max_tokens_per_doc` in config (default: 4000 tok
 All documents use **relative links**. Every generated document includes a navigation header:
 
 ```markdown
-> Related: [Product Spec](./product-spec.md) | [User Journey](./user-journey.md) | [Research →](../research/README.md)
+> Related: [Product Spec](./product-spec.md) | [Journeys](./journeys/) | [Research →](../research/README.md)
 ```
 
 HTML files include an in-page navigation bar linking sibling screens.

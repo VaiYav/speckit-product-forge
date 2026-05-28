@@ -78,7 +78,7 @@ Skip layers where either side doesn't exist yet. Report skipped layers.
 
 **Forward check — Product spec fully captured?**
 - Extract all Must Have user stories from `product-spec/product-spec.md`
-- Extract all user journeys from `product-spec/user-journey*.md`
+- Extract all journeys (JRN/STEP/EDGE) from `product-spec/journeys/journeys.yml`
 - For each: verify corresponding US-NNN exists in `spec.md` with matching acceptance criteria
 - **CRITICAL** if a Must Have story is missing from spec.md
 - **WARNING** if acceptance criteria differ between product-spec and spec.md

@@ -84,7 +84,7 @@ structured prompt — record the skip reason.)
 
 > *"Product Forge context:
 > — Wireframes and mockups are in `product-spec/mockups/` — use them for UI implementation.
-> — User journeys are in `product-spec/user-journey*.md` — match UX flows exactly.
+> — Structured journeys are in `product-spec/journeys/journeys.yml` (JRN/STEP/EDGE) — match UX flows exactly.
 > — Acceptance criteria are in `spec.md` — each task must satisfy its linked AC.
 > — If you need to clarify a product decision, check `product-spec/product-spec.md` first
 >   before asking the user.

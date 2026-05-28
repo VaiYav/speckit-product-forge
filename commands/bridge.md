@@ -171,7 +171,7 @@ Key need: {what they need from this feature}
 
 ## User Stories
 
-> Full user journey flows: [product-spec/user-journey*.md](./product-spec/)
+> Full structured journeys: [product-spec/journeys/](./product-spec/journeys/)
 
 ### Must Have (MVP)
 

@@ -26,7 +26,7 @@ $ARGUMENTS
 Read the full product-spec/ folder:
 - `{FEATURE_DIR}/product-spec/README.md` — document index
 - `{FEATURE_DIR}/product-spec/product-spec.md` — main PRD
-- `{FEATURE_DIR}/product-spec/user-journey*.md` — all journey files
+- `{FEATURE_DIR}/product-spec/journeys/journeys.yml` + `JRN-*.md` — structured journeys
 - `{FEATURE_DIR}/product-spec/wireframes*.md` or `wireframes/` — all wireframe files
 - `{FEATURE_DIR}/product-spec/metrics.md` — if exists
 - `{FEATURE_DIR}/product-spec/mockups/` — if exists
@@ -142,7 +142,7 @@ Parse the user's feedback into a structured change list:
   → Change: {what to change}
   → Details: {user's exact request}
 
-[ADD] user-journey-checkout.md
+[ADD] journeys/JRN-00N-checkout.md (+ journeys.yml entry)
   → Add: {what to add}
 
 [REMOVE] metrics.md § Leading Indicators
@@ -240,7 +240,7 @@ Before locking, run a quick consistency pass:
 1. Are all cross-links in product-spec/README.md still valid?
 2. Do all wireframe files exist that are referenced?
 3. Are there any open questions in product-spec.md that should be answered before proceeding?
-4. Do user stories in product-spec.md align with journeys in user-journey files?
+4. Do user stories in product-spec.md align with journeys in `journeys/journeys.yml` (each US maps to ≥1 JRN)?
 
 If consistency issues found:
 - Minor (broken link, typo) → fix silently and note in review.md
@@ -259,7 +259,7 @@ Update `{FEATURE_DIR}/review.md` final status:
 | Document | Lines | Last Modified |
 |----------|-------|---------------|
 | product-spec.md | {N} | {date} |
-| user-journey-*.md | {N} | {date} |
+| journeys/journeys.yml + JRN-*.md | {N} | {date} |
 | wireframes* | {N} | {date} |
 | metrics.md | {N} | {date} |
 | mockups/ | {N} files | {date} |
@@ -306,7 +306,7 @@ Action required: re-run `/speckit.product-forge.bridge` to regenerate spec.md.
 
 {N} documents finalized:
   • product-spec.md — {N} user stories, {N} requirements
-  • user-journey files — {N} flows documented
+  • journeys/journeys.yml — {N} structured journeys (JRN/STEP/EDGE)
   • wireframes — {N} screens
   • {metrics.md if exists}
   • {mockups if exist}

@@ -111,7 +111,7 @@ The agent applies changes and loops until approval.
 Before locking, the agent automatically verifies:
 - All cross-links in README files are valid
 - All referenced files exist
-- User stories in product-spec align with user-journey flows
+- User stories in product-spec align with structured journeys (`journeys/journeys.yml`)
 
 ---
 

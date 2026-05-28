@@ -33,7 +33,7 @@ Load all required artifacts:
 - `{FEATURE_DIR}/plan.md` — technical architecture and data model
 - `{FEATURE_DIR}/tasks.md` — task breakdown and file paths
 - `{FEATURE_DIR}/product-spec/product-spec.md` — product context
-- `{FEATURE_DIR}/product-spec/user-journey*.md` — user flows
+- `{FEATURE_DIR}/product-spec/journeys/journeys.yml` — structured journeys (JRN/STEP/EDGE)
 - `{FEATURE_DIR}/product-spec/wireframes*` — UI designs (if exist)
 - `{FEATURE_DIR}/product-spec/mockups/` — high-fidelity UI (if exist)
 - `{FEATURE_DIR}/research/ux-patterns.md` — UX best practices
