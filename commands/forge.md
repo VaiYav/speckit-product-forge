@@ -87,6 +87,15 @@ one phase at a time, human gate after every phase, pass full context forward,
 suppress sub-agent handoffs, record every gate decision, respect the state
 lock before writing `.forge-status.yml`.
 
+**Structured interaction (normative).** Every gate, mode/track selection, skip
+reason, clarification, and next-action prompt in this orchestrator and all
+sub-skills MUST follow the structured convention in
+[docs/interaction.md](../docs/interaction.md) (ready snippets in
+[docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
+The numbered-list prompts shown throughout this file are the fallback rendering;
+where the host supports `AskUserQuestion`, emit the equivalent structured call.
+Always allow a free-text "Other" answer; never trap the user in a closed list.
+
 ---
 
 ## Runtime
@@ -101,6 +110,43 @@ lock before writing `.forge-status.yml`.
 - **Phase digest requirement** — see [docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4).
 
 ---
+
+## Intake / Triage (new feature only)
+
+For a **new** feature (no `.forge-status.yml` yet, no `--mode=` override), run an
+intake step before fixing the mode (see [docs/policy.md §4.0](../docs/policy.md#40-intake--triage-e15)):
+
+1. Classify the change from `FEATURE_DESCRIPTION` + codebase signals (files/modules
+   likely touched, UI present?, schema/contract changes?).
+2. Present a structured **`Track`** prompt (see
+   [interaction-prompts.md](../docs/templates/interaction-prompts.md)) recommending
+   one of `express | lite | standard | v-model`, with the recommended option first.
+3. Write the chosen value to `feature_mode` (and `track: "express"` when express).
+
+Triage may recommend a **downgrade** for a brand-new feature (e.g. `standard → lite`)
+— this is distinct from escalation (§"Escalation" below), which only goes upward
+once artifacts exist.
+
+### Express track
+
+When `track: express`, run only `product-spec` (minimal: one journey + acceptance
+criteria) → `plan` (inline) → `implement` → `verify`, then offer completion. All
+other phases are `status: "not_applicable"`. Express is append-only escalatable to
+lite/standard if the change grows (gains UI, a second module, or a schema/contract
+change). See [docs/policy.md §4.1](../docs/policy.md#41-phase-maps).
+
+## Flow Mode (gated vs fluid)
+
+Read `flow_mode` from config (default `gated`):
+
+- **`gated`** — execute phases strictly in order with a gate after each (the
+  behavior described throughout this file).
+- **`fluid`** — "actions, not phases": after each phase, instead of forcing the
+  single next phase, present the **set of currently-runnable phases** (those whose
+  dependencies are satisfied) as a structured `Next step` prompt and let the user
+  pick. Dependencies are *enablers*, not hard gates. `sync-verify` still runs at
+  transitions and gate decisions are still recorded. A phase is "runnable" when its
+  required upstream artifacts exist (e.g. `plan` is runnable once `spec.md` exists).
 
 ## Mode Resolution
 
@@ -151,39 +197,39 @@ feature, reject and suggest creating a new feature in v-model mode.
 
 ### Phase execution map by mode
 
-| Phase | lite | standard | v-model |
-|-------|:----:|:--------:|:-------:|
-| 0. Problem Discovery | opt | opt | opt |
-| 1. Research | — | ✅ | ✅ |
-| 2. Product Spec | ✅ (light) | ✅ | ✅ |
-| 3. Revalidation | — | ✅ | ✅ |
-| 4. Bridge → SpecKit | — | ✅ | ✅ |
-| 4.5. i18n Harvest | — | opt (conditional on multi-locale) | opt |
-| 5. Plan | ✅ | ✅ | ✅ |
-| 5B. Tasks | — | ✅ | ✅ |
-| 5.5. Migration Plan | — | opt (conditional on schema changes) | opt |
-| 5C. Pre-Impl Review | — | opt | opt |
-| 6. Implement | ✅ | ✅ | ✅ |
-| 6B. Code Review | — | opt | opt |
-| 7. Verify Full | ✅ | ✅ | ✅ |
-| 8A. Test Plan | — | opt | opt |
-| 8B. Test Run | — | opt | opt |
-| 9. Release Readiness | — | opt | opt |
-| 9.5. Monitoring Setup | — | opt | opt |
-| 9B. Experiment Design | — | opt (conditional on experiment flag) | opt |
-| V1 Requirements (`speckit.v-model.requirements`) | — | — | ✅ (replaces Phase 2) |
-| V2 Hazard analysis (`speckit.v-model.hazard-analysis`) | — | — | opt (safety-critical domain) |
-| V3 Acceptance test plan (`speckit.v-model.acceptance`) | — | — | ✅ |
-| V4 System design (`speckit.v-model.system-design`) | — | — | ✅ |
-| V5 System test (`speckit.v-model.system-test`) | — | — | ✅ |
-| V6 Architecture design (`speckit.v-model.architecture-design`) | — | — | ✅ |
-| V7 Integration test (`speckit.v-model.integration-test`) | — | — | ✅ |
-| V8 Module design (`speckit.v-model.module-design`) | — | — | ✅ |
-| V9 Unit test (`speckit.v-model.unit-test`) | — | — | ✅ |
-| V10 Trace checkpoint (`speckit.v-model.trace`) | — | — | ✅ (automatic between level pairs) |
-| V11 Peer review (`speckit.v-model.peer-review`) | — | — | opt (any artifact) |
-| V12 Test results (`speckit.v-model.test-results`) | — | — | ✅ (after Phase 8B) |
-| V13 Audit report (`speckit.v-model.audit-report`) | — | — | ✅ (gates Phase 9) |
+| Phase | express | lite | standard | v-model |
+|-------|:-------:|:----:|:--------:|:-------:|
+| 0. Problem Discovery | — | opt | opt | opt |
+| 1. Research | — | — | ✅ | ✅ |
+| 2. Product Spec | ✅ (minimal) | ✅ (light) | ✅ | ✅ |
+| 3. Revalidation | — | — | ✅ | ✅ |
+| 4. Bridge → SpecKit | — | — | ✅ | ✅ |
+| 4.5. i18n Harvest | — | — | opt (conditional on multi-locale) | opt |
+| 5. Plan | ✅ (inline) | ✅ | ✅ | ✅ |
+| 5B. Tasks | — | — | ✅ | ✅ |
+| 5.5. Migration Plan | — | — | opt (conditional on schema changes) | opt |
+| 5C. Pre-Impl Review | — | — | opt | opt |
+| 6. Implement | ✅ | ✅ | ✅ | ✅ |
+| 6B. Code Review | — | — | opt | opt |
+| 7. Verify Full | ✅ | ✅ | ✅ | ✅ |
+| 8A. Test Plan | — | — | opt | opt |
+| 8B. Test Run | — | — | opt | opt |
+| 9. Release Readiness | — | — | opt | opt |
+| 9.5. Monitoring Setup | — | — | opt | opt |
+| 9B. Experiment Design | — | — | opt (conditional on experiment flag) | opt |
+| V1 Requirements (`speckit.v-model.requirements`) | — | — | — | ✅ (replaces Phase 2) |
+| V2 Hazard analysis (`speckit.v-model.hazard-analysis`) | — | — | — | opt (safety-critical domain) |
+| V3 Acceptance test plan (`speckit.v-model.acceptance`) | — | — | — | ✅ |
+| V4 System design (`speckit.v-model.system-design`) | — | — | — | ✅ |
+| V5 System test (`speckit.v-model.system-test`) | — | — | — | ✅ |
+| V6 Architecture design (`speckit.v-model.architecture-design`) | — | — | — | ✅ |
+| V7 Integration test (`speckit.v-model.integration-test`) | — | — | — | ✅ |
+| V8 Module design (`speckit.v-model.module-design`) | — | — | — | ✅ |
+| V9 Unit test (`speckit.v-model.unit-test`) | — | — | — | ✅ |
+| V10 Trace checkpoint (`speckit.v-model.trace`) | — | — | — | ✅ (automatic between level pairs) |
+| V11 Peer review (`speckit.v-model.peer-review`) | — | — | — | opt (any artifact) |
+| V12 Test results (`speckit.v-model.test-results`) | — | — | — | ✅ (after Phase 8B) |
+| V13 Audit report (`speckit.v-model.audit-report`) | — | — | — | ✅ (gates Phase 9) |
 
 In v-model mode, our Phase 2 (product-spec), Phase 3 (revalidation),
 Phase 4 (bridge), and Phase 5 (plan) are replaced by the V-Model

@@ -130,6 +130,52 @@ release_readiness: "optional"
 # docs/v-model-integration.md for the full v-model orchestration contract.
 default_feature_mode: "standard"
 
+# Flow mode controls how strictly phases are sequenced (v1.6.0).
+# Options:
+#   "gated"  — classic: one phase at a time, human gate after each (default)
+#   "fluid"  — "actions, not phases": any phase runnable on demand, dependencies
+#              shown as enablers (what's possible) rather than hard gates.
+#              sync-verify still guards drift. See docs/runtime.md.
+flow_mode: "gated"
+
+# Express track (v1.6.0) — a track below `lite` for trivial changes:
+# a single combined spec→plan→implement→verify pass with no separate
+# research / revalidate / bridge. The orchestrator's intake step (docs/policy.md
+# §4) recommends a track from the change description; this sets the default it
+# offers when nothing else is specified. Options: "express" | "lite" | "standard".
+default_track_hint: "standard"
+
+# ─── E2E Testing (v1.6.0) ──────────────────────────────────────────────────────
+
+# Default end-to-end test runner. Product Forge generates E2E specs directly from
+# the structured journey schema (product-spec/journeys/journeys.yml) and executes
+# them with this runner. playwright-cli is the first-class, default implementation.
+# Options: "playwright-cli" | "none"
+e2e_runner: "playwright-cli"
+
+# ─── Telemetry Providers (v1.6.0) ──────────────────────────────────────────────
+
+# Real telemetry backends used by retrospective, monitoring-setup, and
+# experiment-design (via MCP when available). Leave a provider unset to skip it.
+# product_analytics: posthog | amplitude | none
+# error_tracking:    sentry | none
+# dashboards:        posthog | sentry | newrelic | none
+telemetry:
+  product_analytics: "none"
+  error_tracking: "none"
+  dashboards: "newrelic"
+
+# ─── Design System (v1.6.0) ────────────────────────────────────────────────────
+
+# Product Forge keeps the design system in CODE (component library + tokens) as the
+# single source of truth and HARVESTS a read-only manifest from it (it never
+# duplicates the design system). Configure where to find it; leave empty to
+# auto-detect (Storybook, Tailwind config, component dir, token files).
+# design_system:
+#   components_path: "packages/ui/src"      # component library root
+#   tokens_path: "packages/ui/tokens"       # design tokens (json/css/ts)
+#   storybook: true                          # harvest from Storybook if present
+
 # ─── Skip-Reason Policy (v1.5.0) ───────────────────────────────────────────────
 
 # When true, skipping an optional phase requires a free-text reason that is

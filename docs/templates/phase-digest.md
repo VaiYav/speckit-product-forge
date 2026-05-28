@@ -18,6 +18,16 @@ section. Keep it terse — one short paragraph per section is enough.
 > **Generated at:** {ISO-8601 timestamp}
 > **Artifact owner:** {sub-skill name, e.g. speckit.product-forge.research}
 
+## Diff since last approved state
+
+> **Review-UX (Theme C):** on a re-run or revalidation, lead with what *changed*
+> since the last approved digest — reviewers read the diff, not the whole artifact.
+> On the first run, write `Initial version — no prior state.`
+
+- {Added: …}
+- {Changed: …}
+- {Removed: …}
+
 ## Key decisions
 
 - {1–5 bullets, each a single sentence stating a concrete decision and the winning option}

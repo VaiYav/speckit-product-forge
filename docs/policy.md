@@ -13,12 +13,17 @@ to it instead of repeating rules in their own files.
 ## 1. Operating Rules
 
 1. **One phase at a time.** Never skip ahead or run phases in parallel.
-2. **Human gate after every phase.** After each sub-skill completes, summarize the outcome and ask the user to:
+2. **Human gate after every phase.** After each sub-skill completes, summarize the outcome and present a **structured gate prompt** (see [interaction.md](./interaction.md) and the `Gate` template in [templates/interaction-prompts.md](./templates/interaction-prompts.md)) offering:
    - **Approve** → proceed to next phase
    - **Revise** → re-run same phase with feedback
    - **Skip** → mark skipped and move on (requires confirmation; may also require a reason, see §3)
    - **Abort** → stop everything
    - **Rollback** → jump back to an earlier phase by name
+
+   Every decision point (gates, mode/track selection, skip reasons, clarification
+   rounds, and the next-action choice at each handoff) MUST use the structured
+   interaction convention rather than free-form "ask the user" prose. This is
+   normative across all sub-skills — see [interaction.md](./interaction.md).
 3. **Show progress.** Use `TodoWrite` (or equivalent) to show all phases and mark current/completed.
 4. **Pass full context forward.** When delegating, always include: `FEATURE_DESCRIPTION`, `FEATURE_DIR`, project config, and prior phase outputs summary.
 5. **Suppress sub-agent handoffs.** When delegating, prepend: *"You are invoked by Product Forge Orchestrator. Do NOT follow handoffs or auto-forward. Return output to the orchestrator and stop."*
@@ -107,7 +112,55 @@ to skip".
 Each feature selects a **mode** that drives the phase map. The mode is stored
 in `.forge-status.yml` under `feature_mode` and defaults to `standard`.
 
+### 4.0 Intake / triage (E1.5)
+
+Before a mode is fixed, the orchestrator runs an **intake/triage** step: it
+classifies the change from the description plus codebase signals (files touched,
+modules referenced, presence of UI, schema/contract changes) and **recommends a
+track** via a structured `Track` prompt (see
+[templates/interaction-prompts.md](./templates/interaction-prompts.md)).
+
+| Classification | Recommended track | Rationale |
+|----------------|-------------------|-----------|
+| Trivial (copy/config/one-liner, no UI, no schema) | `express` | Avoid Big-Design-Up-Front overhead. |
+| Bugfix / small (≤5 tasks, single module) | `lite` | Light spec, fast path. |
+| Standard feature | `standard` | Full research → ship lifecycle. |
+| Regulated / safety-critical | `v-model` | Audit-grade traceability. |
+
+The recommendation is a default, not a mandate — the user may pick any track. The
+chosen value is written to `feature_mode` (and `track: express` when express).
+Unlike escalation (§4.2), triage may recommend a **downgrade** (e.g.
+`standard → lite`) for a new feature before any artifacts exist.
+
+### 4.0.1 Flow mode: gated vs fluid
+
+`flow_mode` (config, default `gated`) controls sequencing independently of the
+phase map:
+
+- **`gated`** — classic: one phase at a time, human gate after each (§1).
+- **`fluid`** — "actions, not phases" (OpenSpec model): any in-scope phase is
+  runnable on demand; the orchestrator presents dependencies as *enablers*
+  ("Plan is ready to run because Spec exists") rather than forcing strict order.
+  `sync-verify` still guards drift, and gate decisions are still recorded. Use
+  fluid for exploratory or iterative work; use gated for regulated/standard runs.
+
+See [runtime.md](./runtime.md) for how fluid mode resolves the next runnable set.
+
 ### 4.1 Phase maps
+
+**Express track** — for trivial changes (copy tweaks, config, one-liners with no
+UI and no schema/contract change). A single combined pass:
+
+| # | Phase | Required? |
+|---|-------|-----------|
+| 2 | `product_spec` (minimal: 1 journey + AC) | required |
+| 5 | `plan` (inline) | required |
+| 6 | `implement` | required |
+| 7 | `verify` | required |
+
+Express is append-only escalatable to `lite` or `standard` (§4.2) if the change
+turns out larger than triage estimated. All non-express phases are
+`status: "not_applicable"`.
 
 **Lite mode** — for bug fixes, refactors, and small features (≤5 tasks, single module):
 
@@ -144,8 +197,10 @@ Key properties:
 
 ### 4.2 Escalation
 
-A feature may be **escalated** from lite to standard when it grows beyond
-lite-mode expectations. The orchestrator proposes escalation when any of:
+A feature may be **escalated** up the ladder (`express → lite → standard`) when it
+grows beyond the current track's expectations. Express escalates to lite when it
+gains UI, a second module, or a schema/contract change. Lite escalates to standard
+when any of:
 
 - `task_log[].size` contains `L` or `XL` entries.
 - The tasks array exceeds 10 items.
