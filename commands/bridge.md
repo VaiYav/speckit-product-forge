@@ -39,7 +39,7 @@ If not approved:
 Read in this order (each enriches the spec.md we'll create):
 
 1. **product-spec/product-spec.md** — user stories, requirements, personas, risks
-2. **product-spec/user-journey*.md** — all flow files
+2. **product-spec/journeys/journeys.yml** — structured journeys (JRN/STEP/EDGE), the E2E source of truth
 3. **product-spec/metrics.md** — success criteria, KPIs
 4. **product-spec/wireframes*** — screen descriptions
 5. **research/README.md** — research executive summary
@@ -397,6 +397,23 @@ Update `spec.md § EDA Events` table with verified source file paths and final s
 > Skip silently if no EDA patterns detected in codebase-analysis.md.
 
 ---
+
+## Step 4.6: Contract-first artifacts + delta specs (v1.6)
+
+**Contracts (Theme F).** Define the FE↔BE contracts up front so frontend and
+backend tasks share one source:
+- Emit/update `contracts/openapi.yaml` (OpenAPI 3.1) for HTTP endpoints and
+  `contracts/asyncapi.yaml` (AsyncAPI) for events, derived from the EDA Events and
+  data-model sections above. Give each operation a stable `API-*` id.
+- Reference these `API-*` ids from journey steps (`journeys.yml`) and from the
+  `contracts:` column of `traceability.yml`. `api-docs` later validates/regenerates
+  against the implementation rather than authoring from scratch.
+
+**Delta specs (Theme B).** Express this change against the canonical `specs/`
+source of truth (see [spec-merge](./spec-merge.md)): write
+`features/{slug}/specs/<domain>/spec.md` using `## ADDED / ## MODIFIED / ##
+REMOVED Requirements` with stable `REQ-*` ids. On completion, `spec-merge` folds
+these into canonical `specs/`. For a brand-new domain, all requirements are `ADDED`.
 
 ## Step 5: Validate spec.md Quality
 

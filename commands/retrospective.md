@@ -2,8 +2,9 @@
 name: speckit.product-forge.retrospective
 description: >
   Post-launch retrospective comparing predicted metrics from research/metrics-roi.md
-  against real data from NewRelic, Analytics MCP, or manual input. Closes the loop
-  on the full product lifecycle. Run 2+ weeks after shipping.
+  against real data pulled from connected MCPs (PostHog / Amplitude product analytics,
+  Sentry error tracking, NewRelic APM) or manual input. Closes the loop on the full
+  product lifecycle. Run 2+ weeks after shipping.
   Use: "retrospective", "/speckit.product-forge.retrospective {feature-slug}"
 ---
 
@@ -44,13 +45,21 @@ Days since launch: {N}
 1. How long has the feature been live?
    (Recommended: run after ≥14 days for meaningful data)
 
-2. Data sources available:
-   - [ ] NewRelic (connected MCP — will query automatically)
-   - [ ] Analytics SDK (Mixpanel / Amplitude / PostHog — provide dashboard link or export)
+2. Data sources available (auto-detected from config `telemetry:` block):
+   - [ ] PostHog (connected MCP — query funnels, retention, experiments automatically)
+   - [ ] Amplitude (connected MCP — query events, funnels, charts automatically)
+   - [ ] Sentry (connected MCP — query error rates / regressions automatically)
+   - [ ] NewRelic (connected MCP — performance/APM)
    - [ ] App Store / Play Store reviews
    - [ ] Support tickets / CS data
    - [ ] I'll enter the metrics manually
 ```
+
+> **Use the connected MCPs (Theme D).** Read `telemetry:` from
+> `.product-forge/config.yml` (`product_analytics`, `error_tracking`, `dashboards`)
+> and pull real data via the matching MCP rather than asking for manual entry. Map
+> `EVT-*` ids from the tracking plan / `traceability.yml` to real event names before
+> querying (discover event names; never guess).
 
 ---
 
@@ -112,17 +121,25 @@ WHERE request.uri LIKE '%{feature-api-path}%'
 SINCE '{launch_date}' FACET dateOf(timestamp)
 ```
 
-### 3B: Analytics Data
+### 3B: Product Analytics (PostHog / Amplitude MCP)
 
-If `tracking/tracking-plan.md` exists, ask the user to provide:
-- `{feature}_viewed` unique users count (adoption)
-- `{feature}_completed` / `{feature}_viewed` ratio (completion rate)
-- `{feature}_abandoned` rate and last_step distribution
-- `{feature}_error_shown` count and error_code breakdown
+When `telemetry.product_analytics` is `posthog` or `amplitude`, query the connected
+MCP directly for the feature's `EVT-*` events (resolve real event names first):
+- adoption — unique users on `{feature}_viewed`;
+- completion — `{feature}_completed` / `{feature}_viewed`;
+- a funnel across the journey steps (`JRN`/`STEP` → events) with drop-off;
+- retention/stickiness if the success metric is engagement;
+- experiment results when an `experiment-design` flag is live (PostHog experiments).
 
-Alternatively, ask for a screenshot or paste of the analytics dashboard.
+Fall back to manual entry / dashboard paste only if no analytics MCP is configured.
 
-### 3C: Manual Entry
+### 3C: Error Tracking (Sentry MCP)
+
+When `telemetry.error_tracking` is `sentry`, query Sentry for issues/regressions
+tied to the feature's code paths or release since launch (error rate, top issues,
+new vs resolved), and feed them into the Error Analysis table.
+
+### 3D: Manual Entry
 
 If no integrations:
 ```

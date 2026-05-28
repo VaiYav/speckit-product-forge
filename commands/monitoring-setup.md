@@ -28,9 +28,15 @@ $ARGUMENTS
 
 Parse for:
 - Feature slug (required) — which `{features_dir}/<slug>` to operate on.
-- `--provider=<name>` — `newrelic` (default), `grafana`, `datadog`. Only
-  `newrelic` is wired to an installed skill in this extension; others
-  produce a templated stub with TODOs.
+- `--provider=<name>` — defaults to `telemetry.dashboards` from config
+  (`posthog` / `sentry` / `newrelic`), else `newrelic`. `grafana`, `datadog`
+  also accepted.
+
+> **Real backends (v1.6, Theme D):** when `telemetry.dashboards` is `posthog` or
+> `sentry` and the matching MCP is connected, create the dashboard/alerts directly
+> via that MCP (PostHog insights/dashboards, Sentry alerts) in addition to writing
+> the artifact files. Map `EVT-*` ids to real event names first. NewRelic remains a
+> supported option via the installed skill; unwired providers produce templated stubs.
 
 ---
 

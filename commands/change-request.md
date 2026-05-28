@@ -26,11 +26,17 @@ Parse the input:
 
 ---
 
+> **Delta specs (v1.6, Theme B):** express the change as a **delta** against the
+> canonical `specs/` source of truth — `features/{slug}/specs/<domain>/spec.md` with
+> `## ADDED / ## MODIFIED / ## REMOVED Requirements` referencing stable `REQ-*` ids.
+> Propagate the change through `traceability.yml` rows. On acceptance & completion,
+> [`spec-merge`](./spec-merge.md) folds the delta into canonical `specs/`.
+
 ## Step 0: Load Context
 
 1. Read `.product-forge/config.yml`
 2. Read `{FEATURE_DIR}/.forge-status.yml` — determine current lifecycle phase
-3. Load all existing artifacts that might be affected
+3. Load all existing artifacts that might be affected (including canonical `specs/` and `traceability.yml`)
 
 ---
 

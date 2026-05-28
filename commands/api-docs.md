@@ -21,11 +21,17 @@ $ARGUMENTS
 
 ---
 
+> **Contract-first (v1.6, Theme F):** when `contracts/openapi.yaml` /
+> `contracts/asyncapi.yaml` already exist (authored in `bridge`/`plan`), this command
+> **validates and regenerates against them and the implementation** rather than
+> authoring contracts from scratch. Report drift between the contract, the FE client
+> calls, and the BE handlers as findings (feeds `verify-full` Layer 9).
+
 ## Step 1: Validate Prerequisites
 
 1. Read `.forge-status.yml` — `implement` must be `completed` (Phase 6 done)
 2. Verify `plan.md` exists and contains API endpoint definitions
-3. Verify `spec.md` exists
+3. Verify `spec.md` exists; load `contracts/openapi.yaml` + `contracts/asyncapi.yaml` if present
 
 If no API endpoints found in plan.md:
 > ℹ️ No API endpoints detected in plan.md. This command generates docs for backend APIs.

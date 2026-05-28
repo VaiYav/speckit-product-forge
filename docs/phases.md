@@ -241,7 +241,9 @@ Findings use `REV-NNN` IDs with CRITICAL/HIGH/MEDIUM/LOW severity.
 **Output:** `features/{slug}/verify-report.md`
 **Gate:** No CRITICAL findings (or user acknowledges)
 
-### 6 Verification Layers
+### Verification Layers
+
+Consumes the live `traceability.yml` (does not re-derive the chain). Layers:
 
 | Layer | What it checks |
 |-------|---------------|
@@ -251,6 +253,10 @@ Findings use `REV-NNN` IDs with CRITICAL/HIGH/MEDIUM/LOW severity.
 | 4: spec.md ↔ product-spec | No spec drift from approved product spec |
 | 5: Research alignment | Key research recommendations followed |
 | 6: Document integrity | All cross-links valid, no broken references |
+| 7: Journey ↔ E2E *(v1.6)* | Every Must-Have `JRN` / P0-P1 `EDGE` has an E2E test (Theme H) |
+| 8: UI ↔ Design System *(v1.6)* | Built UI uses the mapped `CMP-*` components (Theme E) |
+| 9: FE ↔ BE contract drift *(v1.6)* | Contracts implemented + called on both sides (Theme F) |
+| 10: Doc ↔ Code *(v1.6)* | No unimplemented docs / undocumented code (Theme G) |
 
 ### Severity levels
 
@@ -366,8 +372,19 @@ Human-in-the-loop for each CRITICAL/WARNING resolution.
 **Output:** `features/{slug}/change-log.md`
 
 Formal scope change management: capture → impact analysis → effort delta → propagate.
-Traces changes with `CR-NNN` markers across all affected artifacts.
+Traces changes with `CR-NNN` markers across all affected artifacts. Emits **delta
+specs** (`## ADDED / ## MODIFIED / ## REMOVED`) against canonical `specs/` (v1.6).
 Runs sync-verify after application.
+
+### Spec Merge *(v1.6, living spec)*
+
+**Command:** `/speckit.product-forge.spec-merge`
+**Output:** updates canonical `specs/<domain>/spec.md`; archives the change folder.
+
+Merges a completed feature's delta specs into the canonical `specs/` source of truth
+and archives the change with audit history (OpenSpec model). Makes the spec
+spec-anchored — a living source of truth across the feature's lifetime. Wired in
+after Phase 9 / release-readiness. See [Theme B](./improvements/2026-05-sdd-flow-improvements.md).
 
 ---
 

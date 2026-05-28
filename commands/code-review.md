@@ -57,9 +57,28 @@ or attempt to detect via git diff if available.
 
 ---
 
+## Step 1.5: Machine gates first (two-layer review, v1.6, Theme D)
+
+Code review is a **two-layer** process: deterministic machine gates run *before* the
+agent/human judgment dimensions. Run the project's mechanical checks over
+`REVIEW_FILES` and the affected workspaces and record results:
+
+| Gate | Command (resolve from stack) | Blocks human review? |
+|------|------------------------------|----------------------|
+| Lint | project linter | Yes if errors |
+| Types | type checker (tsc / mypy / etc.) | Yes if errors |
+| Security scan | SAST / dependency audit | Yes on high/critical |
+| Coverage thresholds | test runner coverage vs [testing-strategy.md](../docs/testing-strategy.md) | Yes if below min |
+
+If a machine gate fails, surface it and stop before the judgment dimensions — there
+is no point spending review effort on code that doesn't lint, type-check, or meet
+coverage. Only once machine gates pass do the agent dimensions (Step 2) run; the
+human gate (Step 5) is the final layer. Record machine-gate results in
+`code-review.md` under a "Machine gates" section.
+
 ## Step 2: Run Review Dimensions (Parallel)
 
-Run all four review dimensions simultaneously. Each produces a findings list.
+Run all review dimensions simultaneously. Each produces a findings list.
 
 ### Dimension 1: Code Quality
 
@@ -124,6 +143,16 @@ Check:
 - Edge cases from spec.md acceptance criteria are covered
 - Test files follow project conventions (from codebase-analysis.md)
 
+### Dimension 5: Doc ↔ Code Reconciliation (v1.6, Theme G)
+
+Using `traceability.yml`, the contracts (OpenAPI/AsyncAPI), `component-map.yml`, and
+canonical `specs/` (if present):
+- Every documented requirement / endpoint / component in scope maps to code.
+- Every significant new code path maps to a documented requirement / task.
+
+Flag **unimplemented docs** (HIGH) and **undocumented code** (MEDIUM). For genuine
+behavior drift, note the suggested canonical-spec update for `spec-merge` (Theme B).
+
 ---
 
 ## Step 3: Compile Findings
@@ -181,7 +210,10 @@ Write `{FEATURE_DIR}/code-review.md`:
 | Security | {N} | {N} | {N} | {N} | {N} |
 | Patterns | {N} | {N} | {N} | {N} | {N} |
 | Tests | {N} | {N} | {N} | {N} | {N} |
+| Doc↔Code | {N} | {N} | {N} | {N} | {N} |
 | **Total** | **{N}** | **{N}** | **{N}** | **{N}** | **{N}** |
+
+> Machine gates (lint / types / security scan / coverage): {PASS/FAIL summary}
 
 **Recommendation:** {PROCEED TO VERIFY / FIX CRITICAL+HIGH FIRST / NEEDS REWORK}
 

@@ -23,6 +23,12 @@ statuses without running the underlying phases. It compensates by stamping
 `backfilled: true` on the feature and emitting a **gaps report** describing
 what the real lifecycle would have required.
 
+> **Living spec (v1.6, Theme B):** backfill also writes initial canonical
+> requirements into `specs/<domain>/spec.md` (stable `REQ-*` ids) reverse-engineered
+> from the code, so brownfield features have a living source of truth that future
+> changes can delta against via [`spec-merge`](./spec-merge.md). This directly
+> addresses the "diminishing returns on large/brownfield codebases" critique.
+
 ## User Input
 
 ```text

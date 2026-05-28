@@ -33,6 +33,12 @@ Parse for:
 - `--variants=<list>` — comma-separated variant names. Default:
   `control,treatment`.
 
+> **Real experiment (v1.6, Theme D):** when `telemetry.product_analytics` is
+> `posthog` and its MCP is connected, optionally create the actual flag + experiment
+> (with the pre-registered primary/guardrail metrics) via the PostHog MCP after the
+> user pre-registers the plan. The retrospective then reads this experiment's real
+> results. Without a connected MCP, produce the plan artifacts only.
+
 ---
 
 ## Step 0: Prerequisites
