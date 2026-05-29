@@ -54,13 +54,17 @@ speckit_mode: "classic"
 # first; all other fields are optional instrumentation.
 #
 # Valid status values:
-#   pending         — not started
-#   in_progress     — currently running
-#   completed       — finished and accepted
-#   skipped         — user explicitly chose to skip an optional phase
-#   not_applicable  — phase was never in scope for this feature (e.g. phases
-#                     outside a lite-mode map, or phases not run for a
-#                     backfilled feature reverse-engineered from code)
+#   pending                       — not started
+#   in_progress                   — currently running
+#   completed                     — finished and accepted
+#   skipped                       — user explicitly chose to skip an optional phase
+#   completed_with_known_issues   — finished but with documented open issues (used
+#                                   by test_run / verify-gated phases; see runtime.md §4)
+#   not_applicable                — phase was never in scope for this feature (e.g.
+#                                   phases outside a lite-mode map, or phases not run
+#                                   for a backfilled feature reverse-engineered from code)
+# The `revalidation` phase additionally accepts the legacy literal `approved`
+# (same meaning as `completed`) for v1/v2 backwards compatibility.
 # The skip-reason policy in docs/policy.md §3 applies ONLY to `skipped`;
 # `not_applicable` is exempt.
 phases:
@@ -74,6 +78,11 @@ phases:
     digest_path: "problem-discovery/digest.md"  # NEW — see A4 digest template
     skipped: false                 # NEW — true if status == "skipped"
     skip_reason: null              # NEW — required when skipped=true (E2 policy)
+    produced_by: null              # NEW — identity (email/handle) of the human who owned
+                                   # the artifact this phase produced. Optional; REQUIRED
+                                   # when role_approvals.solo_mode=false (powers the
+                                   # distinct-approver rule: approved_by != produced_by,
+                                   # policy.md §5.3).
   research:
     status: "completed"
   product_spec:
@@ -92,6 +101,14 @@ phases:
     status: "completed"
   implement:
     status: "in_progress"
+    # NEW v1.6 — test-first "Red" gate audit record.
+    # Populated by `implement` after consuming the `Test-first: true` markers
+    # tasks.md attaches to each test task. Records whether the marked tests were
+    # confirmed failing before implementation, or the gate was skipped.
+    red_gate:
+      status: "confirmed_failing"  # confirmed_failing | skipped
+      tests: ["TC-UNIT-021", "TC-E2E-003"]  # the TC-* ids that were run red-first
+      skip_reason: null            # required when status == "skipped"
   code_review:
     status: "pending"
   verify:
@@ -106,6 +123,26 @@ phases:
     status: "pending"              # runs after release-readiness; not_applicable when no canonical specs/
   retrospective:
     status: "pending"
+
+  # Supporting / extension phase keys — written by the standalone supporting commands
+  # (api-docs, security-check, tracking-plan) and the optional extension phases run by
+  # the orchestrator (i18n-harvest, migration-plan, monitoring-setup, experiment-design).
+  # Each is recognized in the canonical phases map; `not_applicable` when the phase was
+  # never run for this feature.
+  api_docs:                        # written by the api-docs command (instrumentation in top-level api_docs_report below)
+    status: "not_applicable"
+  security_check:                  # written by the security-check command (instrumentation block lives in commands/security-check.md, not here)
+    status: "not_applicable"
+  tracking_plan:                   # written by the tracking-plan command (instrumentation block lives in commands/tracking-plan.md, not here)
+    status: "not_applicable"
+  i18n_harvest:                    # written by i18n-harvest; not_applicable for English-only projects
+    status: "not_applicable"
+  migration_plan:                  # written by migration-plan; not_applicable when no data/schema migration
+    status: "not_applicable"
+  monitoring_setup:                # written by monitoring-setup; not_applicable when no observability scope
+    status: "not_applicable"
+  experiment_design:               # written by experiment-design; not_applicable unless flag marked experiment: true
+    status: "not_applicable"
 
 # Legacy v2 field — preserved.
 testing:
@@ -138,11 +175,15 @@ task_log:
 # Each entry records a human-in-the-loop decision at a phase boundary.
 gates:
   - phase: "plan"
-    decision: "approved"           # approved | approved_with_conditions | revised | skipped | aborted
+    decision: "approved"           # approved | approved_with_conditions | revised | skipped | rolled_back | aborted
     timestamp: "2026-04-19T10:00:00Z"
     notes: ""
     conditions: []
     sync_result: "clean"           # clean | N_critical | N_warning
+    rolled_back_to: null           # NEW — required when decision == "rolled_back" (phase name to rewind to)
+    reviewed_sha: "abc1234"        # NEW v1.6 (W5-A2) — git SHA / artifact stamp the gate was reviewed against.
+                                   # On a re-run, the gate shows only the diff since this sha (delta/incremental review).
+    risk: "low"                    # NEW v1.6 (W5-A4) — gate risk class from scripts/gate-risk.js: low | medium | high.
 
     # NEW in v3 — role-based approvals.
     # If `role_approvals.solo_mode` is true (see below), this block is omitted.
@@ -159,6 +200,15 @@ gates:
     # NEW in v3 — skip_reason attached at the gate, not at the phase.
     skip_reason: null              # required when decision == "skipped"
 
+    # NEW v1.6 — action-item tally written by `release-readiness` on its gate entry.
+    # Counts of must/should/nice-to-have items and how many MUSTs are completed.
+    # Optional; present only on the release_readiness gate.
+    action_items:
+      must: 0
+      must_completed: 0
+      should: 0
+      nice_to_have: 0
+
 # Legacy v2 field — preserved.
 sync_runs:
   last_run: "2026-04-19T10:00:00Z"
@@ -169,6 +219,34 @@ sync_runs:
 
 # Legacy v2 field — preserved.
 change_requests: []
+
+# NEW v1.6. Top-level instrumentation block written by the `api-docs` command.
+# Renamed from `api_docs:` to `api_docs_report:` to remove the sibling collision
+# with the `phases.api_docs` status entry (mirrors the tasks→task_log fix).
+# Phase completion is tracked under `phases.api_docs.status`; this block carries
+# the per-run output summary. Omitted until api-docs has run.
+api_docs_report:
+  endpoints: 12                    # number of documented endpoints/operations
+  source: "contracts"             # "contracts" (reconciled) | "scratch" (no contracts/*)
+  openapi_file: "api-docs/openapi.yml"
+  asyncapi_file: "api-docs/asyncapi.yml"   # omitted when no contracts/asyncapi.yaml
+  postman_file: "api-docs/postman-collection.json"
+  drift_issues: 0                  # count of contract↔implementation drift findings
+
+# NEW v1.6. Top-level instrumentation block written by the `release-readiness`
+# command. Phase completion is tracked under the release_readiness gate in gates[];
+# this block carries supply-chain artifact paths. Omitted until release-readiness runs.
+# NOTE: this top-level key shares its NAME with the `phases.release_readiness` status
+# entry above — the same sibling-name collision D-APIDOCS-RENAME renamed away for
+# api_docs (→ api_docs_report). The name `release_readiness.supply_chain_paths` is
+# fixed by the writer (commands/release-readiness.md) and is kept verbatim here so its
+# writes conform; the two keys live at different nesting levels and do not break the
+# YAML parse. Flagged for maintainer reconciliation.
+release_readiness:
+  supply_chain_paths:
+    sbom: "release/sbom.json"
+    sca: "release/sca-report.json"
+    licenses: "release/licenses.txt"
 
 # NEW in v3. Cross-feature dependency graph used by `portfolio` (B1).
 # Both lists contain feature slugs from sibling `features/<slug>/` directories.

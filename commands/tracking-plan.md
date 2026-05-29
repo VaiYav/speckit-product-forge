@@ -111,7 +111,7 @@ Journey: {Journey 2 Name}
 
 Create `{FEATURE_DIR}/tracking/tracking-plan.md`:
 
-```markdown
+````markdown
 # Analytics Tracking Plan: {Feature Name}
 
 > Created: {date} | SDK: {ANALYTICS_SDK}
@@ -245,7 +245,7 @@ Target conversion rate: {N}% (from metrics-roi.md)
 | {metric from product-spec} | {target} | `{event_name}` count/rate |
 | Adoption rate | {N}% of users in 30 days | `{feature}_viewed` unique users |
 | Completion rate | {N}% | `{feature}_completed` / `{feature}_viewed` |
-```
+````
 
 ---
 
@@ -337,6 +337,24 @@ export const {FeatureName}Tracking = {
 ---
 
 ## Step 6: Update Status & Present Results
+
+### Write the `events:` column of the traceability matrix (Theme C)
+
+`tracking-plan` is the registered writer of the `events` column in
+`{FEATURE_DIR}/traceability.yml` (see
+[docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md)).
+**If the matrix already exists** (seeded by `tasks` in Phase 5), update it:
+
+- For each requirement row, set `events: [EVT-*]` to the telemetry events that
+  cover it, matched via the row's `story` (`US-*`) / `journeys` (`JRN-*`) keys and
+  each event's mapped story / journey step.
+- Do not touch `status` or any other column.
+
+If the matrix does not yet exist (tracking-plan can run as early as after
+product-spec, before `tasks`), skip this write — the `events` column fills in on a
+later run once the rows have been seeded.
+
+### Update status
 
 Update `.forge-status.yml`:
 

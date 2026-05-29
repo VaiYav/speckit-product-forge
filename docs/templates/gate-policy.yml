@@ -1,0 +1,63 @@
+# gate-policy.yml — Product Forge headless / CI gate policy (W5-B1)
+#
+# Copy to `.product-forge/gate-policy.yml`. Consumed ONLY by `forge --ci`
+# (headless mode). In interactive mode this file is ignored — every gate is
+# human as always (policy §1.2).
+#
+# Contract: for each {phase × risk-class} the policy picks an ACTION. Risk class
+# is computed by `node scripts/gate-risk.js --feature-dir <dir> --json`
+# (low | medium | high). Actions:
+#   auto-recommend  — record an `approved` gate WITHOUT a human present, but ONLY
+#                     when the deterministic pre-gate passes (see require_clean).
+#                     This is the one place CI proceeds unattended — reserved for
+#                     genuinely low-risk changes.
+#   require-human   — STOP and emit a reviewable request (PR comment / issue);
+#                     do not proceed until a human approves out-of-band.
+#   block           — STOP and fail the run; never auto-proceed.
+#
+# IMPORTANT (policy §9.3): `auto-recommend` is NOT "auto-approve a human gate" —
+# it is a CI affordance for low-risk changes with a clean deterministic gate, and
+# it still writes a recorded `gates[]` decision with the policy + inputs stamp.
+# `release_readiness` is hard-pinned to require-human at every risk (ship is human).
+
+version: 1
+
+# Deterministic pre-gate that MUST pass before any `auto-recommend` proceeds.
+require_clean:
+  validate_traceability: true   # `node scripts/validate-traceability.js --strict` exits 0
+  no_open_critical: true        # gate-review.md has zero open CRITICAL F-NNN
+
+# Default action per risk when a phase is not listed below.
+defaults:
+  low: auto-recommend
+  medium: require-human
+  high: block
+
+# Per-phase overrides. Phases not listed inherit `defaults`.
+phases:
+  release_readiness:
+    low: require-human          # ship is always human
+    medium: require-human
+    high: block
+  spec_merge:
+    low: require-human          # canonical-spec mutation is always human
+    medium: require-human
+    high: block
+  implement:
+    low: auto-recommend
+    medium: require-human
+    high: block
+
+# Safe-outputs discipline (gh-aw model) — applies to every headless action.
+safe_outputs:
+  never_auto_merge: true        # CI may open a PR, never merge it
+  writes_as: pull_request       # pull_request | comment | issue — reviewable artifacts only
+  token_scope: read-only-default # request write scope only for the explicit reviewable output
+  human_required_phases: ["release_readiness", "spec_merge"]
+
+# What to attach to an auto-recommended gate for tamper-evidence / audit.
+record_on_auto_recommend:
+  policy_version: true
+  risk_class: true
+  gate_risk_signals: true       # the signals[] from gate-risk.js
+  validate_traceability_result: true

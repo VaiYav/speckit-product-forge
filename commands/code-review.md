@@ -39,7 +39,20 @@ Load artifacts:
 
 ---
 
+> **Interaction (normative):** the review gate (Step 5) and any in-review question use
+> the structured convention in [docs/interaction.md](../docs/interaction.md) (ready
+> snippets in [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
+> Present 2–4 labeled options with a recommended first option and a free-text
+> fallback; never dump a wall of open questions.
+
 ## Step 1: Build Review Scope
+
+**Lead with the diff since the last reviewed state.** If this feature has a prior
+code-review (a recorded `code_review` gate, or a `phase-digest.md` with a Diff
+section), review only what changed since then: reuse that digest's Diff section, or
+run `git diff <last-reviewed-ref>..HEAD` over `REVIEW_FILES`. Re-read whole files only
+on the first review, or for a file whose changed lines can't be understood in
+isolation. This keeps re-runs proportional to the delta, not the codebase.
 
 From `tasks.md`, extract all `[x]` completed tasks and their associated file paths.
 Build the `REVIEW_FILES` set — all files created or modified during implementation.
@@ -67,7 +80,7 @@ agent/human judgment dimensions. Run the project's mechanical checks over
 |------|------------------------------|----------------------|
 | Lint | project linter | Yes if errors |
 | Types | type checker (tsc / mypy / etc.) | Yes if errors |
-| Security scan | SAST / dependency audit | Yes on high/critical |
+| Security scan (SCA) | `osv-scanner --recursive .` — same SCA tool as [release-readiness](release-readiness.md) §5C; + project SAST | Yes on high/critical |
 | Coverage thresholds | test runner coverage vs [testing-strategy.md](../docs/testing-strategy.md) | Yes if below min |
 
 If a machine gate fails, surface it and stop before the judgment dimensions — there
@@ -114,6 +127,12 @@ Based on `plan.md` threat model (what attack surfaces this feature introduces):
 
 Only check surfaces present in this feature (from plan.md). Don't flag irrelevant categories.
 
+> **Dependency CVEs (v1.6, W5-B3):** vulnerable third-party dependencies are *not* re-judged
+> here — that surface is enforced mechanically by `osv-scanner --recursive .` in the Step 1.5
+> machine gate (the same SCA tool [release-readiness](release-readiness.md) §5C runs), so the
+> two-layer review and the release gate share one tool. This dimension covers application-code
+> security only.
+
 ### Dimension 3: Pattern Consistency
 
 From `research/codebase-analysis.md`, extract existing project conventions:
@@ -151,15 +170,29 @@ canonical `specs/` (if present):
 - Every significant new code path maps to a documented requirement / task.
 
 Flag **unimplemented docs** (HIGH) and **undocumented code** (MEDIUM). For genuine
-behavior drift, note the suggested canonical-spec update for `spec-merge` (Theme B).
+behavior drift, write the suggested canonical-spec update into the **Suggested
+canonical-spec updates** section of `code-review.md` (Step 4, below) — the same
+carrier `verify-full` uses — so `spec-merge` (Theme B) can consume it.
+
+> **Severity note (CF-35):** `verify-full` Layer 10 escalates the same doc↔code
+> drift conditions to CRITICAL/WARNING as the final gate. The HIGH/MEDIUM applied
+> here is intentionally phase-appropriate, not a weaker duplicate of that gate.
 
 ---
 
 ## Step 3: Compile Findings
 
+> **Emit into the unified gate surface (W5-A3).** Also append each finding to
+> `{FEATURE_DIR}/gate-review.md` under the single `F-NNN` namespace with
+> `source: code-review` + `dimension: quality|security|patterns|tests|doc-code`
+> and `raised@{git-sha}` — read the current max `F-NNN` first; don't renumber.
+> The `REV-NNN` ids below remain the in-document local labels; the gate reads
+> `gate-review.md`. See [docs/templates/gate-review.md](../docs/templates/gate-review.md)
+> and [docs/policy.md §9](../docs/policy.md#9-gate-review-surface--risk-routing-w5-a).
+
 Each finding:
 
-```markdown
+````markdown
 ### REV-{NNN}: {short title}
 
 | Field | Value |
@@ -181,7 +214,7 @@ Each finding:
 // After
 {suggested code}
 ```
-```
+````
 
 Severity assignment:
 - **CRITICAL**: Security vulnerability, data loss risk, broken functionality
@@ -239,6 +272,17 @@ Write `{FEATURE_DIR}/code-review.md`:
 |------------|:----------:|-----|
 | {requirements with missing or inadequate tests} |
 
+## Suggested canonical-spec updates (Theme G)
+
+> Doc↔code drift found in Dimension 5 that `spec-merge` should reconcile. One row per
+> proposed delta, keyed on `FR-*`; `spec-merge` consumes this section by name (same
+> carrier as `verify-full`'s "Suggested canonical-spec updates"). Omit if no drift.
+
+| FR / domain | Current canonical text | Observed-from-code behavior | Proposed delta |
+|-------------|------------------------|-----------------------------|----------------|
+| FR-NNN | {what the spec says} | {what the code actually does} | MODIFY FR-NNN: {proposed change} |
+| {domain} | {none — undocumented} | {observed behavior} | ADD FR-NNN: {proposed addition} |
+
 ## Review Checklist
 
 - [ ] All CRITICAL findings addressed
@@ -291,11 +335,26 @@ REV-001 [CRITICAL] Security: Missing ownership check in updateNotificationPrefer
   → [Fix now] [Acknowledge — fix later] [Not applicable — explain why]
 ```
 
-Gate options:
-- **Approve** — all CRITICAL/HIGH addressed, proceed to Phase 7
-- **Fix now** — user fixes specific findings, then re-run review on affected files
-- **Acknowledge** — user accepts findings, they become warnings in verify-report.md
-- **Skip** — user proceeds without addressing (not recommended, recorded in audit trail)
+Gate (structured — see [interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)):
+
+```
+[Gate] Code review complete — {one-line outcome}. How do you want to proceed?
+
+  1. Approve (recommended) — all CRITICAL/HIGH addressed; proceed to Phase 7
+  2. Revise — re-run the review (or re-review affected files after fixes)
+  3. Skip — proceed without addressing (not recommended; reason may be required)
+  4. Rollback — return to an earlier phase by name (e.g. Phase 6 Implement)
+  5. Abort — stop the lifecycle for this feature
+  (or type your own answer)
+```
+
+- **Approve** maps to `approved`. If the user accepts open findings as warnings
+  (the per-finding *Acknowledge* path above), record `approved_with_conditions`.
+- **Revise** → `revised`; **Skip** → `skipped`; **Rollback** → `rolled_back` (with
+  `rolled_back_to`); **Abort** → `aborted`.
+- Per-finding handling (**Fix now** / **Acknowledge** / **Not applicable**) is offered
+  inside option 1/2 above; it tunes the finding set, the gate decision stays one of the
+  canonical literals.
 
 ---
 
@@ -313,7 +372,8 @@ Record gate decision:
 ```yaml
 gates:
   - phase: code_review
-    decision: "{approved / approved_with_conditions / skipped}"
+    decision: "{approved / approved_with_conditions / revised / skipped / rolled_back / aborted}"
+    rolled_back_to: "{phase}"   # only when decision is rolled_back
     timestamp: "{ISO timestamp}"
     notes: "{summary}"
     findings:

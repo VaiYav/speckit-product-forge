@@ -99,20 +99,22 @@ Readers (including older sub-skills still on the v2 shape) MUST:
 | `feature` | yes | feature slug. |
 | `created_at` | yes | ISO-8601 date. |
 | `last_updated` | yes | ISO-8601 timestamp; updated on every write. |
-| `feature_mode` | no | `"express" | "lite" | "standard" | "v-model"`. Defaults to `"standard"`. `"express"` (v1.6) is the lightest track: product_spec → plan → implement → verify. Phase keys `design_system_harvest` (v1.6, UI features) and `spec_merge` (v1.6, living-spec merge) are also valid `phases.<name>` entries. |
+| `feature_mode` | no | `"express" | "lite" | "standard" | "v-model"`. Defaults to `"standard"`. `"express"` (v1.6) is the lightest track: product_spec → plan → implement → verify. Phase keys `design_system_harvest` (v1.6, UI features) and `spec_merge` (v1.6, living-spec merge) are also valid `phases.<name>` entries. Supporting/extension commands write their own phase keys too: `api_docs`, `security_check`, `tracking_plan`, `i18n_harvest`, `migration_plan`, `monitoring_setup`, `experiment_design` (all `not_applicable` when not run). |
 | `backfilled` | no | `true` if feature was reverse-engineered by `/backfill`. Defaults to `false`. |
 | `v2_native` | no | `true` for features created by v1.5.0+ (field name is historical — retained for compat). Drives digest enforcement (runtime.md §8.3). Defaults to `false` (i.e. grandfathered). |
 | `speckit_mode` | no | preserved from v2. |
-| `phases.<name>.status` | yes | one of `pending | in_progress | completed | skipped | not_applicable`. The `revalidation` phase additionally accepts `approved` for v1/v2 backwards compatibility (same meaning as `completed`). See schema-yml preamble for semantics. |
+| `phases.<name>.status` | yes | one of `pending | in_progress | completed | skipped | completed_with_known_issues | not_applicable`. The `revalidation` phase additionally accepts `approved` for v1/v2 backwards compatibility (same meaning as `completed`). See schema-yml preamble for semantics. |
 | `phases.<name>.started_at` / `completed_at` | no | ISO-8601 timestamps. |
 | `phases.<name>.tokens_in` / `tokens_out` / `tool_calls` | no | cost tracking. |
 | `phases.<name>.digest_path` | no | path to per-phase digest. |
 | `phases.<name>.skipped` / `skip_reason` | no | E2 skip policy. |
+| `phases.<name>.produced_by` | conditional | Identity (email/handle) of the human who owned the artifact this phase produced. Optional; required when `role_approvals.solo_mode: false` (distinct-approver rule: `approved_by != produced_by`, policy.md §5.3). |
 | `testing.*` | preserved from v2 | yes (same meaning). |
 | `task_log[]` | no | per-task runtime log. Populated during Phase 6 implement. Renamed from initial-v3 `tasks[]` to avoid collision with `phases.tasks`. |
 | `gates[]` | yes | append-only. |
 | `gates[].approvals` | conditional | required when `solo_mode: false`. |
 | `gates[].skip_reason` | conditional | required when `decision == "skipped"` and `require_skip_reason: true`. |
+| `gates[].rolled_back_to` | conditional | required when `decision == "rolled_back"`. Phase name to rewind to. |
 | `sync_runs` | preserved from v2 | yes. |
 | `change_requests` | preserved from v2 | yes. |
 | `dependencies.depends_on` / `depended_on_by` | no | default `[]`. |
@@ -141,3 +143,33 @@ independently of the narrative schema doc.
   feature folders manually.
 - No server-side state. The schema is pure file content; the state lock
   (runtime.md §2) is the only concurrency primitive.
+
+---
+
+## 8. Cross-artifact ID system
+
+This section is the documented home of the cross-artifact ID prefixes. The
+traceability matrix template
+([`templates/traceability-matrix.md`](./templates/traceability-matrix.md))
+mirrors / links back to this table.
+
+| Prefix | Artifact | Source phase |
+|--------|----------|--------------|
+| `REQ-` | Canonical requirement | V-Model pack / `backfill` / canonical `specs/` |
+| `US-`  | User story | product-spec |
+| `JRN-` | User journey (`STEP-`, `EDGE-` nested) | product-spec (journeys) |
+| `FR-`  | Functional requirement | bridge / plan |
+| `CMP-` | Design-system component | design-system-harvest / component-map |
+| `API-` | Endpoint / event contract | bridge / plan (OpenAPI + AsyncAPI) |
+| `TASK-`| Implementation task | tasks |
+| `REV-` | Code-review finding *(legacy — folded into `F-` on the gate surface, W5-A3)* | code-review |
+| `TC-`  | Test case (`TC-SMK/E2E/API/UNIT/INT/REG`) | test-plan |
+| `EVT-` | Telemetry event | tracking-plan |
+| `F-`   | Unified gate-review finding (W5-A3 — consolidates `REV-` / `CRITICAL-`/`WARNING-` / `D-`/`A-`/`R-` into one gate surface; carries `source` + `dimension`/`layer`) | pre-impl-review / code-review / verify-full → `gate-review.md` |
+
+IDs are stable across artifacts. Every downstream artifact references upstream
+IDs rather than restating content (de-duplication, Theme C).
+
+In the standard forward flow, delta specs / `spec-merge` key on `FR-*` (minted
+by `bridge`); `REQ-*` is the canonical id only for the V-Model pack / `backfill`
+reverse-engineering path. On a forward-flow row, `req` may therefore be `null`.

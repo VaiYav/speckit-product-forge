@@ -117,15 +117,22 @@ emits `design-system/manifest.yml` (components with `CMP-` ids, props, variants,
 stable selectors, and in-code token references). The design system stays in code as
 the single source of truth — we harvest a manifest, never duplicate it.
 
-**Step 2 — Choose fidelity** (structured prompt):
-- **No mockups** — wireframes are sufficient.
-- **Clickable prototype (recommended)** — a multi-screen HTML prototype that uses
-  the harvested tokens/components, navigable between screens, mapping 1:1 to real
-  components (e.g. `<button data-cmp="button" class="...">` reflecting
-  `CMP-Button` variant `primary`).
+**Step 2 — Choose fidelity** (structured prompt). Read `default_mockup_style` from
+config (`"none" | "generic" | "project-styled"`) and present that value as the
+**pre-selected / recommended** option:
+- **`none`** (`MOCKUP_STYLE = "none"`) — wireframes are sufficient; skip mockups.
+- **`generic`** (`MOCKUP_STYLE = "generic"`) — clickable multi-screen HTML
+  prototype with a clean generic design system (used when no in-code design system
+  was harvested).
+- **`project-styled`** (`MOCKUP_STYLE = "project-styled"`, default) — clickable
+  multi-screen HTML prototype that uses the harvested tokens/components, navigable
+  between screens, mapping 1:1 to real components (e.g.
+  `<button data-cmp="button" class="...">` reflecting `CMP-Button` variant
+  `primary`).
 
 Ask (structured): *"How many mockup screens?"* → store `MOCKUP_SCREEN_COUNT`.
-Store fidelity as `MOCKUP_STYLE`.
+Store fidelity as the canonical config value `MOCKUP_STYLE` (`none` skips mockups;
+`generic` / `project-styled` build a clickable prototype).
 
 **Step 3 — Component map.** Produce `mockups/component-map.yml` linking each mockup
 region → design-system component (`CMP-*`) → target code path. This is consumed by
@@ -331,10 +338,39 @@ Playwright specs and by `verify-full` for coverage.
 
 ---
 
+### 4B.1. Seed the traceability `journeys:` block
+
+product-spec is the **write owner** of the `journeys` column / block in
+`{FEATURE_DIR}/traceability.yml` (per
+[traceability-matrix template](../docs/templates/traceability-matrix.md)). After
+authoring the structured journeys, write the `journeys:` block so the matrix has a
+real producer for journey data (US → JRN → STEP/EDGE) instead of a null column.
+
+Create `traceability.yml` if it does not exist (seeding `schema_version: 1`,
+`feature`, `last_updated`); otherwise upsert the `journeys:` block by `id` without
+disturbing rows owned by other phases. Mirror `journeys/journeys.yml`:
+
+```yaml
+journeys:
+  - id: "JRN-001"
+    title: "{journey title}"
+    stories: ["US-001"]              # mapped user stories (US → JRN)
+    steps: ["STEP-001", "STEP-002"]
+    edges:                           # per-edge; tests stay [] until test-plan
+      - {id: EDGE-001, priority: P1, tests: []}
+    tests: []                        # journey-level E2E; filled by test-plan/test-run
+```
+
+Leave the `tests` fields empty here — `test-plan`/`test-run` own that column. Do not
+write row-level `status` (owned by tasks/implement onward). Record this in the digest
+handoff notes (seeds the `US → JRN → CMP → API` matrix for downstream phases).
+
+---
+
 ### 4C. Wireframes
 
 **If `WIREFRAME_DETAIL = text/ascii`** → Single `wireframes.md` with text+ASCII diagrams:
-```markdown
+````markdown
 # Wireframes: {Feature Name}
 
 > Navigation: [Screen 1](#screen-1) | [Screen 2](#screen-2)
@@ -360,7 +396,7 @@ Playwright specs and by `verify-full` for coverage.
 
 **Components:** {list of UI components}
 **States:** Default | Loading | Empty | Error
-```
+````
 
 **If `WIREFRAME_DETAIL = basic-html` or `detailed-html`**:
 Create separate `wireframe-{screen-name}.html` per screen.
@@ -435,9 +471,10 @@ For **detailed HTML**: agent scans `{codebase_path}` for CSS variables and desig
 
 ### 4E. Mockups — clickable prototype + component map (if UI)
 
-**Skip this step entirely** when `MOCKUP_STYLE = "No mockups"` (user chose wireframes
+**Skip this step entirely** when `MOCKUP_STYLE == "none"` (user chose wireframes
 only) or the feature has no UI — do not create `mockups/` or `component-map.yml`, and
-note "mockups skipped" in the digest. Otherwise:
+note "mockups skipped" in the digest. Otherwise (`MOCKUP_STYLE` is `generic` or
+`project-styled`):
 
 Mockups are grounded in `design-system/manifest.yml` (from §2E,
 `design-system-harvest`), so they map 1:1 to real components.

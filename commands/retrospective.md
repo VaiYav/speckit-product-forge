@@ -158,7 +158,7 @@ Please provide the following metrics for the period since launch ({launch_date} 
 
 Create `{FEATURE_DIR}/retrospective.md`:
 
-```markdown
+````markdown
 # Post-Launch Retrospective: {Feature Name}
 
 > Shipped: {launch_date} | Retrospective: {today}
@@ -193,7 +193,7 @@ Total time: research → ship = {N} days
 | {Business metric} | {target} | {actual} | {delta} | |
 | ROI payback | {N} months | {estimate} | | |
 
-## Performance Data (NewRelic)
+## Performance Data ({apm_provider})
 
 ### Request Volume
 {chart or table of daily requests since launch}
@@ -278,7 +278,7 @@ Based on the data:
 2. **Research:** {what to research more/less thoroughly}
 3. **Implementation:** {technical patterns to adopt or avoid}
 4. **Testing:** {what the test phase caught / missed}
-```
+````
 
 ---
 
@@ -287,11 +287,28 @@ Based on the data:
 Before updating status, turn the retrospective findings into lesson blocks
 for the cross-feature learning log.
 
-1. Extract candidate lessons. Sources:
-   - Large deltas between predicted and actual metrics.
-   - Post-launch incidents or bugs tracked to root cause.
-   - Manual edits the team had to make to generated artifacts during implement.
-   - Rules of thumb stated in §4 "Lessons learned" of `retrospective.md`.
+1. **Harvest candidate lessons from real artifacts first (v1.6, W5-D2).**
+   Before drafting anything, read the signals the lifecycle already produced —
+   do not invent lessons. Read each source **if present** (test-run, release
+   readiness, and sync-verify may have been skipped, so `gate-review.md`,
+   `code-review.md`, and `sync-report.md` may legitimately not exist). For each
+   real signal you find, draft a candidate lesson of the mapped type and **carry
+   the source artifact path as its evidence** (Step 3's rejection filter requires
+   project evidence — this satisfies it by construction):
+
+   | Source artifact (read if present) | Read for | Lesson type it feeds |
+   |---|---|---|
+   | `{FEATURE_DIR}/implement/digest.md` (deviations / manual-edits section) | Where generated artifacts had to be hand-corrected during build | **Implementation** |
+   | `{FEATURE_DIR}/gate-review.md` (single `F-NNN` namespace) + `{FEATURE_DIR}/code-review.md` | Recurring finding themes across the consolidated review surface | **Process / Implementation** |
+   | `{FEATURE_DIR}/verify-report.md` + `{FEATURE_DIR}/sync-report.md` (drift items) | Where downstream artifacts diverged from upstream intent | **Research / spec-accuracy** |
+   | the **"Suggested canonical-spec updates"** carrier inside `verify-report.md` / `code-review.md` (Theme G, CF-5) | Spec language that reality proved wrong/imprecise | **Research / spec-accuracy** |
+   | Large deltas in the **Predicted vs Actual** table above (Step 4) + post-launch incidents/bugs tracked to root cause | Where Phase-1 prediction missed | **Research** |
+   | Rules of thumb stated in §4 "Lessons Learned for Future Features" of the report above | Team-stated process/testing takeaways | **Process / Testing** |
+
+   This extends the same prompt-side learning loop that `research.md` already uses
+   to read `.product-forge/lessons.md` — it sources lessons from produced signals
+   rather than a free-form "think about what went wrong" prompt.
+
 2. For each candidate, draft a block in the format described in
    [`docs/lessons-format.md`](../docs/lessons-format.md) §2.
 3. Show the drafted blocks to the user and ask for confirmation or edits.

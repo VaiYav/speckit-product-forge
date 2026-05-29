@@ -6,6 +6,180 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+> Additive groundwork for configurable documentation storage + a global config
+> layer, plus a repo-wide consistency pass. No breaking changes; with no new
+> config keys set, behavior is byte-for-byte identical to 1.6.0.
+
+### Added
+- **`storage_strategy` config key** — selectable feature-root placement, all
+  four values **active**: `flat` (default, today's `features/<slug>/`),
+  `domain-nested` (`features/<domain>/<slug>/`), `ddd`
+  (`features/<context>/<slug>/`, backed by a `features/domains.yml` registry),
+  and `workspace` (`features/<workspace>/<slug>/`, monorepo `scope.primary`). The
+  **internal artifact tree is invariant** across every strategy. See
+  [`docs/file-structure.md`](docs/file-structure.md) §"Storage strategies",
+  [`config-template.yml`](config-template.yml), and the registry template
+  [`docs/templates/domains.yml`](docs/templates/domains.yml).
+- **Path-Resolution Contract** — a single normative rule
+  ([`docs/runtime.md`](docs/runtime.md) §12) for resolving a feature root from a
+  slug (`resolve`) and enumerating all features (`enumerate`), parameterized by
+  `storage_strategy`, so every command/script shares one path rule instead of
+  scattered globs.
+- **`scripts/lib-paths.js`** — the executable form of the contract
+  (`resolveFeatureDir()` + `enumerateFeatures()`, depth-tolerant and
+  strategy-agnostic), with its own `--selftest`. `gate-risk.js`,
+  `validate-traceability.js`, and `migrate-status-v2-to-v3.js` now resolve/
+  enumerate through it, and the cross-feature commands (portfolio, status,
+  sync-verify, feature-flag-cleanup, bridge) + single-feature resolvers
+  (research, monitoring-setup, backfill) point at the contract. lib-paths reads
+  the `ddd` `domains.yml` registry (O(1), read-only; orchestrator heals it).
+  **All four strategies work end-to-end** (scripts find nested features across
+  `domain-nested`/`ddd`/`workspace`; `_archived`/`_portfolio`/`domains.yml`
+  excluded from enumeration; ambiguous bare slugs error with a qualified-ref hint).
+- **Global (cross-project) config layer** — `~/.product-forge/config.yml`
+  (canonical) with `$XDG_CONFIG_HOME/product-forge/config.yml` fallback, layered
+  `shipped defaults < global < project < per-feature < env` with deep-merge of
+  nested keys, plus a config-key → layer classification table. See
+  [`docs/config.md`](docs/config.md) §"Global Configuration".
+- Documented previously-undocumented config keys: `supply_chain.license_allowlist`,
+  `supported_locales`, `constitution_path`.
+
+### Fixed
+- Repo-wide consistency pass (56 verified findings; see
+  [`docs/improvements/2026-05-system-audit.md`](docs/improvements/2026-05-system-audit.md)):
+  command count `29 → 31`; version coherence at `1.6.0` across README / CHANGELOG /
+  `extension.yml` / QA plan; `sync-verify` consistently described as **9-layer**;
+  status-enum (`completed_with_known_issues`), gate-enum (`rolled_back`), and
+  supporting-command phase keys reconciled into the canonical schema; the
+  `api_docs` sibling collision renamed to `api_docs_report`.
+- Six command/template files whose inner triple-backtick code fences prematurely
+  closed the outer block (bridge, code-review, product-spec, retrospective,
+  tracking-plan, portfolio-report) now use 4-backtick wrappers; fixed a malformed
+  GFM table in experiment-design.
+- Three real helper bugs: `validate-traceability.js` (substring task-ID matching →
+  exact normalized equality; journey-coverage check no longer skipped when edges
+  exist); `gate-risk.js` (`countFindings` now counts only **open** findings, so the
+  CI `no_open_critical` gate clears once findings are resolved); `acquire-lock.sh`
+  (rejects unsafe `session_id` to prevent JSON/grep injection).
+- `release-readiness` license-allowlist env override renamed to the documented
+  `PRODUCT_FORGE_SUPPLY_CHAIN_LICENSE_ALLOWLIST` prefix.
+
+---
+
+## [1.6.0] — 2026-05-29
+
+> Minor release (additive). The SDD-flow wave: a spec-anchored living spec with
+> a full traceability matrix, design-system-grounded mockups, structured
+> journeys that drive E2E, FE↔BE contract-first APIs, telemetry MCP wiring, a
+> two-layer risk-scored gate review, and an express mode. Schema v3 for
+> `.forge-status.yml` stays **additive** — no breaking change to existing
+> features; nothing on disk moves for current installs. The flat layout remains
+> the zero-config default.
+
+### Added — 2 new commands (catalog now 31)
+
+- **`speckit.product-forge.design-system-harvest`** (Phase 2H, opt; UI features)
+  — Harvests a read-only manifest of the project's in-code design system
+  (components with `CMP-` ids, props, variants, stable selectors, in-code token
+  refs, Storybook) so mockups, component decomposition, and UI verification are
+  grounded in real components rather than abstractions. The in-code design
+  system stays the single source of truth.
+- **`speckit.product-forge.spec-merge`** (Phase 10 + cross-cutting; living spec)
+  — Merges a feature's delta specs (`ADDED` / `MODIFIED` / `REMOVED`) into the
+  canonical `specs/<domain>/` and archives the change with audit history
+  (spec-anchored source of truth, OpenSpec model).
+
+### Added — Express mode (first-class)
+
+- **`feature_mode: express`** is now a first-class lifecycle mode alongside
+  `lite`, `standard`, and `v-model`. Express runs a minimal combined pass
+  (product-spec minimal → plan inline → implement → verify) for trivial
+  copy/config/one-liner changes, with everything else marked `not_applicable`.
+  Escalation to `lite`/`standard` is append-only. Validated in `forge.md` Mode
+  Resolution and the canonical schema.
+
+### Added — Living spec, delta specs, and traceability
+
+- **Canonical `specs/<domain>/`** living spec with stable `REQ-NNN` requirement
+  ids; `bridge` emits **delta specs** (`ADDED`/`MODIFIED`/`REMOVED`) against it,
+  `change-request` propagates deltas, `backfill` seeds canonical specs for
+  brown-field entry, and `spec-merge` folds approved deltas back in.
+- **Live `traceability.yml` matrix** (`REQ→US→JRN→FR→CMP→API→TASK→code→TEST→EVT`)
+  — seeded by `tasks`, filled by `implement` as tasks complete, and consumed by
+  `verify-full` instead of re-deriving the chain. New helper
+  `scripts/validate-traceability.js` with a `--selftest` entry point.
+
+### Added — Structured journeys → Playwright E2E
+
+- **Structured journeys** are now first-class artifacts in
+  `product-spec/journeys/journeys.yml` (`JRN`/`STEP`/`EDGE`, GIVEN/WHEN/THEN),
+  the authoritative E2E source of truth (`docs/journeys.md` + journey-spec
+  template). `test-plan` generates Playwright specs directly from `journeys.yml`
+  (selectors via `component-map.yml`); `test-run` maps failures back to
+  `JRN`/`STEP`/`EDGE`. `playwright-cli` is the committed default runner
+  (`e2e_runner` config).
+
+### Added — FE↔BE contracts (contract-first)
+
+- **`bridge` defines contract-first OpenAPI 3.1 + AsyncAPI** (`API-*` ids)
+  shared by front-end and back-end; `api-docs` becomes validation/regeneration
+  against the contracts and the implementation. `verify-full` and `sync-verify`
+  gain a contract-drift leg.
+
+### Added — Telemetry MCP wiring and quality gates
+
+- **Real telemetry via connected MCPs** — `retrospective` pulls funnels/errors
+  from PostHog/Amplitude and Sentry (NewRelic optional); `monitoring-setup`
+  creates real dashboards/alerts; `experiment-design` can create the real
+  PostHog experiment.
+- **Two-layer code review** — `code-review` adds a machine-gate layer
+  (lint/types/security/coverage) before the agent/human judgment dimensions,
+  plus a doc↔code reconciliation dimension.
+- **Risk-scored gate review** — `gate-review.md` / `gate-policy.yml` templates
+  and `scripts/gate-risk.js` (with `--selftest`) drive a unified `F-NNN`
+  gate-finding model and the `--ci` auto-recommend pre-gate.
+- **WCAG-AA accessibility gate** — `test-plan` emits one `@axe-core/playwright`
+  check per journey (`JRN`) and `test-run` executes it.
+
+### Changed
+
+- **`sync-verify` expanded from 7 to 9 layers** — adds **Layer 8 (FE↔BE contract
+  drift)** and **Layer 9 (doc↔code reconciliation)** on top of the original
+  seven artifact-pair layers.
+- **`verify-full` adds Layers 7–10** — journey↔E2E coverage, UI↔design-system,
+  FE↔BE contract drift, and doc↔code reconciliation.
+- **Test-first Red gate** — `tasks` orders test tasks before implementation and
+  `implement` enforces a Red gate (unit/contract tests written and confirmed
+  failing) before implementing Must-Have stories.
+- **All consumers point at structured `journeys/`** — every command and doc that
+  read the old free-form `product-spec/user-journey*.md` now reads
+  `product-spec/journeys/journeys.yml`.
+- **`extension.yml`** — version `1.6.0`; registers `design-system-harvest` and
+  `spec-merge` (31 commands total); description and tags updated for the v1.6
+  wave.
+- **`config-template.yml` / `docs/config.md`** — documented v1.6 keys:
+  `flow_mode`, `e2e_runner`, `a11y_gate`, `telemetry`, `design_system`,
+  `default_track_hint`; v1.6 file-layout appendix (canonical `specs/`,
+  `contracts/`, `design-system/`, `journeys/`, `traceability.yml`).
+
+### Phase accounting
+
+- Standard mode is **8 always-on core phases + 12 optional/conditional = 20 phase
+  slots** (Phase Map = 20 rows; 19 have a `## Phase` section — 2H is a Phase-2
+  helper — plus a post-launch Retrospective); `forge.md`'s Phase Map is the source
+  of truth.
+
+### Migration notes
+
+- **No action required.** Existing features continue to work; nothing on disk
+  moves. The flat feature layout remains the zero-config default. The first time
+  a v1.6-aware skill writes to a feature's `.forge-status.yml` it keeps
+  `schema_version: 3` and may populate new optional fields as it runs.
+
+---
+
 ## [1.5.1] — 2026-04-24
 
 > Docs-only patch. No behavioural change — closes a documentation gap
@@ -139,7 +313,7 @@ release just makes the dependency visible to users before they try.
 - **State-lock protocol** — `.forge-status.yml.lock` file-based lock with
   TTL-based takeover. Prevents concurrent-writer corruption between the
   orchestrator and sub-skills. Documented in
-  [`docs/runtime.md §2`](docs/runtime.md#2-state-lock-protocol).
+  [`docs/runtime.md §2`](docs/runtime.md#2-state-lock-protocol-a2).
 - **Per-phase digests** — Every major phase (`research`, `product_spec`,
   `plan`, `tasks`, `implement`, `verify`) now writes `<phase>/digest.md`.
   Runtime refuses to mark a phase completed without a digest. Downstream
@@ -284,9 +458,9 @@ Surfaced by the plugin test plan dry-run and closed before release:
 
 ### Added — 5 new commands expanding the product lifecycle
 
-- **`speckit.product-forge.sync-verify`** — Cross-cutting 7-layer artifact consistency checker:
+- **`speckit.product-forge.sync-verify`** — Cross-cutting 9-layer artifact consistency checker:
   - Detects forward drift (earlier artifacts not reflected in later) and backward drift (later decisions that should update earlier)
-  - Checks 7 layers: research↔product-spec, product-spec↔spec.md, spec↔plan, plan↔tasks, tasks↔code, spec↔code, cross-links
+  - Checks 9 layers: research↔product-spec, product-spec↔spec.md, spec↔plan, plan↔tasks, tasks↔code, spec↔code, cross-links, FE↔BE contract drift, doc↔code
   - Each drift item: severity (CRITICAL/WARNING/INFO), direction, proposed resolution, human approval
   - `--quick` mode runs automatically between forge phase transitions (configurable via `auto_sync_between_phases`)
   - `--fix` mode applies approved resolutions after user confirmation
@@ -529,6 +703,8 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[Unreleased]: https://github.com/VaiYav/speckit-product-forge/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.3.0...v1.4.0

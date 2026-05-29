@@ -1,4 +1,4 @@
-# Product Forge — Phase Reference (v1.3.0)
+# Product Forge — Phase Reference (v1.6.0)
 
 Full documentation for all Product Forge lifecycle phases: 1 optional pre-phase (Phase 0),
 7 required phases (1–7), 5 optional phases (5C, 6B, 8A, 8B, 9), plus cross-cutting commands.
@@ -350,7 +350,7 @@ Verdict: READY TO SHIP / CONDITIONALLY READY / NOT READY.
 ### What happens
 
 Compares predicted KPIs (from research/metrics-roi.md) against real data.
-Queries NewRelic via MCP, collects analytics data, audits research accuracy.
+Queries the connected MCPs (PostHog/Amplitude, Sentry; NewRelic optional), collects analytics data, audits research accuracy.
 Produces lessons learned and next-step recommendations.
 
 ---
@@ -362,7 +362,7 @@ Produces lessons learned and next-step recommendations.
 **Command:** `/speckit.product-forge.sync-verify`
 **Output:** `features/{slug}/sync-report.md` + `sync-report.json`
 
-Runnable between ANY phases. Checks 7 artifact layers for forward and backward drift.
+Runnable between ANY phases. Checks 9 artifact layers (incl. contract-drift + doc↔code) for forward and backward drift.
 `--quick` mode runs automatically between forge phase transitions.
 Human-in-the-loop for each CRITICAL/WARNING resolution.
 
@@ -452,6 +452,7 @@ after Phase 9 / release-readiness. See [Theme B](./improvements/2026-05-sdd-flow
 
 | Mode | Active phases | Excluded phases |
 |------|---------------|-----------------|
+| `express` *(v1.6)* | product-spec (minimal), plan (inline), implement, verify | everything else → `status: "not_applicable"` |
 | `lite` | problem-discovery (opt), product-spec, plan, implement, verify | everything else → `status: "not_applicable"` |
 | `standard` | all phases per the matrix above | — |
 | `v-model` | standard + V-Model artifact phases via `speckit:v-model-*` | — |

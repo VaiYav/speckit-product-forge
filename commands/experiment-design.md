@@ -150,8 +150,8 @@ the choice in the experiment plan.
 
 | Parameter | Value | Source |
 |-----------|-------|--------|
-| Metric type | {proportion | continuous} | hypothesis |
-| Formula | {two-proportion z-test | Welch t-test} | §3.{a,b} |
+| Metric type | `{proportion \| continuous}` | hypothesis |
+| Formula | `{two-proportion z-test \| Welch t-test}` | §3.{a,b} |
 | Baseline | 12% | analytics 30-day |
 | MDE | +3pp (absolute) | hypothesis |
 | Power | 0.8 | default |

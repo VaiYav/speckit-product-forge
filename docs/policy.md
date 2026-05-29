@@ -177,7 +177,7 @@ turns out larger than triage estimated. All non-express phases are
 | 6 | `implement` | required |
 | 7 | `verify` | required |
 
-**Standard mode** — the full 14-phase lifecycle documented in `commands/forge.md`.
+**Standard mode** — the full standard lifecycle (20 phase slots: 8 always-on core + 12 optional/conditional) documented in `commands/forge.md`.
 
 **V-Model mode** — replaces the middle of the standard lifecycle with the
 formal V-Model artifact progression for regulated / safety-critical work.
@@ -239,13 +239,22 @@ role_approvals:
 Any single "approve" from the orchestrator user counts as approval. The
 `gates[].approvals` object is omitted. This is the legacy v2 behavior.
 
+The §5.3 distinct-approver rule is **advisory** in solo mode: a single developer
+necessarily both produces and approves the artifact, so the rule cannot be
+satisfied. The orchestrator MAY surface a one-line reminder
+(`"solo mode: this artifact was authored and approved by the same identity"`)
+but MUST NOT block. *(v1.6, W5-C3)*
+
 ### 5.2 Multi-role mode
 
 When `solo_mode: false`:
 
 - Every gate entry has `approvals: { pm: ..., eng: ..., qa: ... }`.
 - A gate is counted as `approved` only when every role listed in
-  `required_roles_per_phase[<phase>]` has a non-null entry.
+  `required_roles_per_phase[<phase>]` has a non-null entry **whose
+  `approved_by` identity differs from the phase artifact's author
+  (`phases.<phase>.produced_by`)** — the §5.3 distinct-approver rule, which is
+  **enforced** in multi-role mode.
 - Roles not listed are ignored for that phase.
 
 Example:
@@ -257,6 +266,46 @@ required_roles_per_phase:
 ```
 
 Multi-role mode is **opt-in** and is not forced on solo users.
+
+### 5.3 Distinct-approver rule (v1.6, W5-C3)
+
+The same identity may not both author/produce a phase artifact and approve its
+gate. This is a real structured rule on the role model above, not a floating
+note: it compares two carrier fields that already exist on `.forge-status.yml`
+(or are defined here for that purpose).
+
+**Carrier fields (the comparison anchors):**
+
+| Side | Field | Value | Producer |
+|------|-------|-------|----------|
+| Author | `phases.<phase>.produced_by` | identity (email/handle) of the human who owned the artifact this phase produced | written by the orchestrator at phase completion when `role_approvals.solo_mode: false` |
+| Approver | `gates[].approvals.<role>.approved_by` | identity that approved for that role | already written at the gate (§5.2, runtime §6) |
+
+> `produced_by` is the producing **human** identity, not the orchestrator AI
+> (every artifact is AI-drafted, so comparing against the AI would make the rule
+> vacuously always-true). When unset/null the rule cannot be evaluated and the
+> orchestrator MUST prompt for the producing identity before recording a
+> multi-role `approved` gate.
+
+**Rule by mode:**
+
+- **`solo_mode: true` — advisory.** See §5.1: warn-only, never blocks.
+- **`solo_mode: false` — enforced.** For a gate to count as `approved`, every
+  required role's `approved_by` MUST be non-null **and** MUST NOT equal
+  `phases.<phase>.produced_by`. If any required role's approver equals the
+  author, the orchestrator MUST NOT write an `approved` gate; it re-prompts for
+  a distinct approver for that role (a Revise/Approve loop, never an
+  auto-approve — Operating Rule §1.2).
+
+**Single-role edge case (no deadlock).** When
+`required_roles_per_phase[<phase>]` lists exactly one role and the author holds
+that role, the author's own approval does **not** satisfy the gate: a
+**different identity** holding the same role must record the `approved_by`.
+This makes the rule total — there is no multi-role configuration in which the
+author can self-approve their way past the gate.
+
+This rule is additive: it never relaxes the §5.2 "every required role non-null"
+condition, it only adds the `approved_by != produced_by` constraint on top.
 
 ---
 
@@ -304,3 +353,57 @@ and results in a `change_requests[]` entry on `.forge-status.yml`. Policy:
   phase. Artifacts from rewound phases are archived, not deleted.
 - A change request is blocked during Phase 6 (implement) until the current
   task is committed or explicitly discarded.
+
+---
+
+## 9. Gate review surface & risk routing (W5-A)
+
+The review phases share **one** surface and a single finding id, and each gate
+is **risk-routed** so the amount of review presented matches the change's risk.
+
+### 9.1 Unified gate-review artifact (A3)
+
+`pre-impl-review`, `code-review`, and `verify-full` write their findings into a
+single `<FEATURE_DIR>/gate-review.md` under one `F-NNN` namespace (collapse-by-
+default, grouped by journey/contract/component/general). This is a **consolidated
+view, not a replacement** — each phase still runs its own analysis. The legacy
+`D-/A-/R-`, `REV-`, and `CRITICAL-/WARNING-` ids fold into `F-NNN` (carrying
+`source` + `dimension`/`layer`). See
+[templates/gate-review.md](./templates/gate-review.md) and the `F-` row in
+[schema.md §8](./schema.md#8-cross-artifact-id-system).
+
+### 9.2 Delta / incremental review (A2)
+
+Each gate decision stamps `gates[].reviewed_sha` (the git SHA / artifact stamp
+reviewed). On a **re-run**, the gate presents only findings whose artifact
+changed since `reviewed_sha`, plus previously-approved findings whose file
+changed (flagged "review may be stale"). Reuse the `phase-digest.md`
+"Diff since last approved state" section + `task_log[].commit_sha`; do not add a
+parallel hash store.
+
+### 9.3 Risk routing (A4) — auto-recommend, never auto-approve
+
+`node scripts/gate-risk.js --feature-dir <dir>` computes a deterministic risk
+class (`low | medium | high`) from existing `.forge-status.yml` signals (XL/L
+task sizes, task count, cross-workspace scope, schema/migration changes,
+change-request rollbacks, open CRITICAL/HIGH findings, `v-model`/`express` mode)
+and records it on `gates[].risk`. Default routing:
+
+| Risk | Routing | Human gate |
+|------|---------|------------|
+| low | auto-recommend (present a compact summary) | still required — the human records the decision |
+| medium | require-human (present the full surface) | required |
+| high | block (require explicit human approval) | required; `--ci` blocks here |
+
+**Risk routing changes how much surface is shown and (in `--ci`) what blocks —
+it NEVER auto-approves a human gate.** This preserves Operating Rule §1.2
+("human gate after every phase") and the `revalidate` "Never auto-approve" rule.
+
+### 9.4 Derived artifacts — review the source, not the output (A5)
+
+Generated artifacts (DS-grounded mockups, Playwright `.spec.ts`, OpenAPI stubs)
+are marked "derived" in `gate-review.md` and **excluded from the human review
+surface**; a machine gate (the two-layer review:
+`scripts/validate-traceability.js` + lint) confirms they match their source. The
+human reviews the source spec diff, not the generated file. This is LITE — the
+machine gate stays (Product Forge's generators are not yet trusted blindly).

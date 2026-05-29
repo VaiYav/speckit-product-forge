@@ -42,6 +42,14 @@ Load artifacts:
 
 ---
 
+> **Interaction (normative):** the readiness gate in this phase uses the structured
+> convention in [docs/interaction.md](../docs/interaction.md) (ready snippets in
+> [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
+> Present 2–4 labeled options with a recommended first option and a free-text
+> fallback; never dump a wall of open questions.
+
+---
+
 ## Step 1: Feature Flags, Rollout, and Rollback
 
 This step consolidates scanning, strategy, and artifact production into
@@ -192,20 +200,22 @@ From the SLI list above, propose alert rules:
 
 ### 3C: Build monitoring artifacts (active)
 
-Actively produce:
+Actively produce, targeting the **configured backend** (`telemetry.dashboards`:
+PostHog / Sentry; NewRelic optional):
 
-- `{FEATURE_DIR}/monitoring/dashboard.json` — NerdGraph-compatible dashboard,
-  generated via the installed `newrelic-dashboard-builder` skill when
-  available.
+- `{FEATURE_DIR}/monitoring/dashboard.json` — dashboard for the configured
+  provider (PostHog insights / Sentry dashboard via the connected MCP, or a
+  NerdGraph-compatible JSON via `newrelic-dashboard-builder` when
+  `telemetry.dashboards: newrelic`).
 - `{FEATURE_DIR}/monitoring/alerts.yml` — alert policies from Step 3B.
 - `{FEATURE_DIR}/monitoring/slo.md` — SLI/SLO doc with error budget.
 
-Read-only output — do not call the NewRelic API directly to push the
-dashboard. The user applies the JSON manually after review, or invokes
+Read-only output — do not push the dashboard to the provider automatically. The
+user applies it after review, or invokes
 `/speckit.product-forge.monitoring-setup` (Phase 9.5) to extend it.
 
-If no provider skill is installed, write `alerts.yml` and `slo.md` and
-mark "dashboard.json: provider skill missing" as an action item.
+If the configured provider's MCP/skill is unavailable, write `alerts.yml` and
+`slo.md` and mark "dashboard.json: provider unavailable" as an action item.
 
 Record paths on `.forge-status.yml` under
 `release_readiness.monitoring_paths`.
@@ -256,6 +266,105 @@ is the only output.
 | Critical security issues? | {✅ None / ❌ {N} unresolved} | |
 | Secrets management OK? | {✅/❌} | |
 | Permissions/RBAC configured? | {✅/❌/N-A} | |
+
+### 5C-bis: Supply chain (active) (v1.6, W5-B3)
+
+Supply-chain readiness is **artifact-producing**, not a checkbox. Run the four
+carriers below against `codebase_path`, write the outputs under
+`{FEATURE_DIR}/supply-chain/`, and feed findings into the Step 6 Action Items
+table. This is the same SCA tool named in [code-review.md](./code-review.md)'s
+Step 1.5 machine-gate row (OSV-Scanner) — release-readiness runs it in
+**PR-diff mode** so the gate blocks only on *newly introduced* high/critical
+findings (delta philosophy: a feature isn't penalised for pre-existing debt).
+
+Each carrier follows the **graceful-degradation** guard of Operating Principle
+7 — a missing tool becomes a MUST action item, never an aborted gate:
+
+**(a) SBOM — Syft (CycloneDX):**
+
+```bash
+command -v syft >/dev/null 2>&1 \
+  && { mkdir -p "{FEATURE_DIR}/supply-chain"; \
+       syft "{codebase_path}" -o cyclonedx-json="{FEATURE_DIR}/supply-chain/sbom.cdx.json"; } \
+  || echo "ACTION ITEM (MUST): syft not installed — generate SBOM before ship (https://github.com/anchore/syft)"
+```
+
+Record the SBOM path on `.forge-status.yml` under
+`release_readiness.sbom_path`.
+
+**(b) SCA — OSV-Scanner in PR-diff mode (block only on NEW high/critical):**
+
+Scan the merge base and HEAD, then take the *new* findings as the set
+difference. Only NEW high/critical findings gate the verdict.
+
+```bash
+if command -v osv-scanner >/dev/null 2>&1; then
+  BASE_REF="$(git merge-base origin/main HEAD 2>/dev/null || git rev-parse HEAD~1)"
+  mkdir -p "{FEATURE_DIR}/supply-chain"
+  # Baseline scan at the merge base, then HEAD scan.
+  git stash -q 2>/dev/null; git checkout -q "$BASE_REF" 2>/dev/null
+  osv-scanner scan --format json --recursive . > "{FEATURE_DIR}/supply-chain/osv-base.json" 2>/dev/null || true
+  git checkout -q - 2>/dev/null; git stash pop -q 2>/dev/null || true
+  osv-scanner scan --format json --recursive . > "{FEATURE_DIR}/supply-chain/osv-head.json"
+  # NEW findings = vuln IDs in HEAD not present in base. Gate on severity HIGH|CRITICAL.
+  comm -13 \
+    <(jq -r '.results[].packages[].vulnerabilities[].id' "{FEATURE_DIR}/supply-chain/osv-base.json" 2>/dev/null | sort -u) \
+    <(jq -r '.results[].packages[].vulnerabilities[].id' "{FEATURE_DIR}/supply-chain/osv-head.json" 2>/dev/null | sort -u) \
+    > "{FEATURE_DIR}/supply-chain/osv-new-ids.txt"
+else
+  echo "ACTION ITEM (MUST): osv-scanner not installed — run SCA before ship (https://github.com/google/osv-scanner)"
+fi
+```
+
+CI variant: where this runs in a PR pipeline, use the reusable
+`google/osv-scanner-action` PR workflow, which natively reports only
+PR-introduced vulnerabilities — no baseline scan needed. (`--ci` routing of
+this gate is W5-B1's bundle; this phase stays a human gate at every risk per
+[policy §9.3](../docs/policy.md).)
+
+**(c) License allowlist — OSV-Scanner against an SPDX allowlist:**
+
+Read the allowlist from `.product-forge/config.yml` key
+`supply_chain.license_allowlist` (literal default below if unset). Any package
+with a license outside the set is a violation.
+
+```bash
+ALLOW="${PRODUCT_FORGE_SUPPLY_CHAIN_LICENSE_ALLOWLIST:-MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,0BSD,Unlicense}"
+command -v osv-scanner >/dev/null 2>&1 \
+  && osv-scanner --experimental-licenses="$ALLOW" --format json --recursive . \
+       > "{FEATURE_DIR}/supply-chain/osv-licenses.json" \
+  || echo "ACTION ITEM (MUST): osv-scanner not installed — run license check before ship"
+```
+
+**(d) Build provenance — GitHub `actions/attest-build-provenance`:**
+
+Provenance is produced by a CI workflow, not a local CLI. Confirm (or add) a
+job step that attests the built artifact:
+
+```yaml
+# .github/workflows/release.yml (job needs: id-token: write, attestations: write, contents: read)
+- name: Attest build provenance
+  uses: actions/attest-build-provenance@v2
+  with:
+    subject-path: "dist/**"   # the shipped build artifact(s)
+```
+
+If no attestation step exists, log a SHOULD action item ("add
+attest-build-provenance to the release workflow").
+
+**Wire into the gate.** Translate the carriers into Step 6 Action Items and the
+Security category verdict:
+
+| Carrier finding | Action item priority | Verdict effect |
+|-----------------|:--------------------:|----------------|
+| NEW critical CVE (from `osv-new-ids.txt`) | MUST | NOT READY until resolved or accepted as a documented condition |
+| NEW high CVE | MUST | CONDITIONALLY READY (record as accepted risk) or fix |
+| Disallowed license | MUST | NOT READY / documented exception |
+| Missing SBOM / SCA tool | MUST | action item; do not block the gate on tool absence |
+| Missing provenance step | SHOULD | recorded, non-blocking |
+
+Record paths on `.forge-status.yml` under
+`release_readiness.supply_chain_paths` (sbom / sca / licenses).
 
 ---
 
@@ -343,11 +452,25 @@ Write `{FEATURE_DIR}/release-readiness.md`:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Gate options:
-- **Ship it** — all MUST items done, proceed
-- **Fix and re-check** — address action items, re-run readiness check
-- **Ship with known issues** — document accepted risks and proceed
-- **Hold** — not ready, stop here
+Gate (structured — see [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md), recommended option first, free-text fallback):
+
+```
+[Gate] Release Readiness complete — verdict: {READY TO SHIP / CONDITIONALLY READY / NOT READY}. How do you want to proceed?
+
+  1. Approve (recommended) — ship it: all MUST items done, proceed (or ship with documented known issues — accepted risks recorded as conditions)
+  2. Revise — fix and re-check: address action items, then re-run the readiness check
+  3. Skip — mark this phase skipped and move on (a reason may be required)
+  4. Rollback — return to an earlier phase by name (e.g. implement, verify)
+  5. Abort — hold: not ready, stop the lifecycle for this feature here
+  (or type your own answer)
+```
+
+Maps to `gates[].decision` (Step 8). The readiness verdict drives the recommended
+option: READY TO SHIP / CONDITIONALLY READY recommend **Approve**; NOT READY
+recommends **Revise** or **Abort**.
+
+**Next step:** on Approve, run `/speckit.product-forge.spec-merge` (Phase 10) to
+fold the shipped delta back into the canonical spec.
 
 ---
 
@@ -360,20 +483,38 @@ phases:
   release_readiness: completed  # or "skipped"
 ```
 
-Record gate decision:
+Record the gate decision using the canonical enum
+(`approved | approved_with_conditions | revised | skipped | rolled_back | aborted`).
+Map the Step 7 choice onto exactly one literal:
+
+| Step 7 choice | Verdict that recommends it | `decision` literal |
+|---------------|----------------------------|--------------------|
+| Approve (ship it) | READY TO SHIP | `approved` |
+| Approve (ship with known issues) | CONDITIONALLY READY | `approved_with_conditions` — populate `conditions[]` |
+| Revise (fix and re-check) | NOT READY | `revised` |
+| Abort (hold) | NOT READY | `aborted` |
+| Rollback | any | `rolled_back` — set `rolled_back_to: "<phase>"` |
+| Skip (phase skipped) | n/a | `skipped` |
 
 ```yaml
 gates:
   - phase: release_readiness
-    decision: "{ready / conditionally_ready / not_ready / skipped}"
+    decision: "approved"  # one of: approved | approved_with_conditions | revised | skipped | rolled_back | aborted
     timestamp: "{ISO timestamp}"
-    notes: "{verdict and conditions}"
+    notes: "{verdict summary}"
+    conditions:           # required when decision == approved_with_conditions; the accepted risks
+      - "{accepted risk / known issue documented at ship time}"
+    rolled_back_to: "{phase}"  # required when decision == rolled_back; omit otherwise
     action_items:
       must: {N}
       must_completed: {N}
       should: {N}
       nice_to_have: {N}
 ```
+
+On **Approve** / **Approve with conditions**, release-readiness MAY promote
+traceability rows whose acceptance is confirmed to `status: verified` (the
+canonical producers of `verified` are release-readiness and spec-merge).
 
 ---
 

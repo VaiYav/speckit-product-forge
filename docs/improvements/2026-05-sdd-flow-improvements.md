@@ -18,7 +18,7 @@ Product Forge is a SpecKit extension that orchestrates a 14+ phase lifecycle
 → implement → code-review → verify → test → release → monitoring/experiment →
 retrospective), with `lite` / `standard` / `v-model` modes, human gates between
 every phase, `.forge-status.yml` (schema v3) state, an append-only gate audit
-trail, a 7-layer `sync-verify` drift checker, per-phase digests, monorepo
+trail, a 9-layer `sync-verify` drift checker, per-phase digests, monorepo
 awareness, and brown-field backfill.
 
 **Strengths:** governance, state integrity, concurrency safety, audit trail,
@@ -112,7 +112,10 @@ brownfield specs are re-derived each time → "diminishing returns on large code
 1. **Canonical `specs/` directory** (per domain/capability) describing how the
    system behaves *now*, separate from per-change `features/{slug}/` working folders.
 2. **Delta-spec format** (`## ADDED / ## MODIFIED / ## REMOVED Requirements`)
-   referencing canonical requirement IDs — emitted by `bridge` and `change-request`.
+   keyed on `FR-*` requirement IDs in the standard/classic forward flow (the
+   `bridge` Functional Requirements table already mints `FR-*`) — emitted by
+   `bridge` and `change-request`. (`REQ-*` is the V-Model-pack / backfill canonical
+   id only; the forward flow is not required to mint `REQ-*`.)
 3. New cross-cutting command **`spec-merge`**: on feature completion, merge approved
    deltas into `specs/` and archive the change folder with audit history.
 4. **Backfill into `specs/`** so brownfield specs stay alive.
@@ -132,7 +135,7 @@ each run; artifacts duplicate each other (research vs codebase-analysis vs spec)
    incrementally by `tasks`/`implement` and *consumed* by `verify-full`.
 3. **De-duplicate**: phases *reference* prior artifacts by ID instead of restating.
 4. **First-class ID system** (REQ/US/JRN/FR/TASK/REV/TC/EVT) documented in
-   `docs/schema.md`.
+   `docs/schema.md` §8 (mirrored in the traceability-matrix template).
 **Files:** `docs/templates/phase-digest.md`, new
 `docs/templates/traceability-matrix.md`, `commands/tasks.md`,
 `commands/implement.md`, `commands/verify-full.md`, `commands/revalidate.md`,
@@ -186,7 +189,7 @@ no shared FE/BE contract or verification that both honor it.
 1. **Contract-first**: define **OpenAPI 3.1 + AsyncAPI** in `bridge`/`plan`, shared
    by FE & BE tasks; `api-docs` becomes validation/regeneration, not first authorship.
 2. **FE↔BE contract map**: frontend data needs (journeys/mockups) → endpoints/events
-   → backend handlers → DB, as a section of `traceability.yml`.
+   → backend handlers, as a section of `traceability.yml` (FE → contract → BE).
 3. **Contract-drift layer** in `sync-verify` and `verify-full`: contracts vs actual
    FE client calls and BE route handlers.
 **Files:** `commands/bridge.md`, `commands/plan.md`, `commands/api-docs.md`,
@@ -198,10 +201,12 @@ no shared FE/BE contract or verification that both honor it.
 1. **Doc↔code reconciliation layer** in `verify-full` and `code-review`: every
    documented requirement/endpoint/component checked against code; flag
    **undocumented code** and **unimplemented docs**.
-2. **Spec-anchored loop**: on `implement` completion, update canonical `specs/` from
-   code where they drift, present the diff for approval (ties to Theme B/`spec-merge`).
+2. **Spec-anchored loop**: drift between code and canonical `specs/` is detected in
+   `verify-full`/`code-review`; the canonical-spec update is consolidated into
+   `spec-merge` (which presents the diff for approval), not into `implement` (ties
+   to Theme B/`spec-merge`).
 **Files:** `commands/verify-full.md`, `commands/code-review.md`,
-`commands/implement.md`, `commands/spec-merge.md`.
+`commands/spec-merge.md`.
 
 ### Theme H — Structured journeys/stories → Playwright-cli E2E (committed bet)
 **Problem:** user journeys are free-form prose; they don't deterministically drive
@@ -268,12 +273,12 @@ sections of phase commands (`research`, `product-spec`, `revalidate`, `bridge`,
 | 4 Bridge | Emit delta specs vs canonical `specs/` (B); define OpenAPI+AsyncAPI contracts (F). |
 | 5 Plan | Contract-first artifacts (F); cross-validate against journeys + component map (E/H). |
 | 5B Tasks | Maintain `traceability.yml` incrementally (C); FE tasks reference component map (E); seed Red-gate test tasks (D). |
-| 6 Implement | Test-first Red gate (D); update traceability + canonical spec drift (C/G); progressive verify checks component map (E). |
+| 6 Implement | Test-first Red gate (D); update traceability (C); progressive verify checks component map (E). |
 | 6B Code Review | Machine gates before human review (D); doc↔code reconciliation (G). |
 | 7 Verify Full | Consume the live matrix instead of re-deriving (C); add component-map, contract-drift, doc↔code, journey-coverage layers (E/F/G/H). |
 | 8A Test Plan | Generate Playwright specs from `journeys.yml` (H). |
 | 8B Test Run | `playwright-cli` default; map failures to JRN/STEP/EDGE (H). |
-| 9 Release Readiness | Trigger `spec-merge` into canonical specs (B); confirm telemetry wiring (D). |
+| 9 Release Readiness | After release-readiness, run `spec-merge` into canonical specs (B); confirm telemetry wiring (D). |
 | 9.5 Monitoring | Real PostHog/Sentry dashboards/alerts (D). |
 | 9B Experiment | Create the real flag/experiment via PostHog (D). |
 | Retrospective | Pull real metrics/errors/experiment results from MCPs (D). |

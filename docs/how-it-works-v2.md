@@ -1,10 +1,10 @@
-# How Product Forge Works (v1.5)
+# How Product Forge Works (v1.6)
 
 > **Note:** filename retains the `-v2` suffix for existing deep-links;
 > it will be consolidated in a later release.
 
 > **Scope:** end-to-end walkthrough of the plugin as it stands after the
-> v1.5.0 update. Written for maintainers and contributors, not end users.
+> v1.6.0 update. Written for maintainers and contributors, not end users.
 > For end-user docs see [README.md](../README.md) and [docs/phases.md](./phases.md).
 
 ---
@@ -27,7 +27,7 @@ learning loop.
 
 ```
 speckit-product-forge/
-├── commands/                    # 29 slash-command definitions
+├── commands/                    # 31 slash-command definitions
 │   ├── forge.md                 # the orchestrator (invokes all phase sub-skills)
 │   ├── {phase}.md               # one file per phase (research, plan, implement…)
 │   ├── portfolio.md             # cross-feature view
@@ -54,20 +54,25 @@ speckit-product-forge/
 │   └── phases.md / file-structure.md / config.md  # user-facing docs
 │
 ├── scripts/                     # zero-dependency helpers
-│   ├── migrate-status-v2-to-v3.js   # stamps schema_version:3 lazily
+│   ├── migrate-status-v2-to-v3.js   # stamps schema_version:3 lazily (depth-tolerant)
 │   ├── migrate-status-v2-to-v3.ts   # redirect stub (exits 64)
 │   ├── acquire-lock.sh          # atomic state-lock acquire
-│   └── release-lock.sh          # state-lock release with session-id guard
+│   ├── release-lock.sh          # state-lock release with session-id guard
+│   ├── gate-risk.js            # {phase × risk} classifier for headless gates (--selftest)
+│   ├── validate-traceability.js  # deterministic traceability validator (--selftest)
+│   ├── lib-paths.js            # Path-Resolution Contract resolve()/enumerate() (--selftest)
+│   └── lib-yaml.js             # shared zero-dep YAML subset parser
 │
-├── extension.yml                # registers all 29 commands + config keys + tags
+├── extension.yml                # registers all 31 commands + config keys + tags
 ├── config-template.yml          # user copies to .product-forge/config.yml
 ├── README.md                    # user-facing entry doc
 └── CHANGELOG.md                 # history
 ```
 
-Most commands delegate work to docs. `commands/forge.md` shrank from ~560 to
-~640 LOC (more phases, less inline policy) by moving policy, runtime logic,
-and schema definitions into the three `docs/*.md` companions.
+Most commands delegate work to docs. `commands/forge.md` is ~898 LOC after
+extracting policy, runtime logic, and schema definitions into the three
+`docs/*.md` companions — leaner per-phase despite the added phases, since the
+inline policy now lives in those companions rather than in the orchestrator.
 
 ---
 
@@ -99,8 +104,9 @@ banner so nobody mistakes inference for original intent.
 
 | Mode | Phase count | Use case |
 |------|:----------:|----------|
+| `express` | 4 | Trivial copy/config/one-liner changes |
 | `lite` | 5 | Bug fixes, small refactors, trivial features |
-| `standard` | 14 (+ 4 opt) | Default — full lifecycle |
+| `standard` | 8 always-on core + 12 optional/conditional = 20 phase slots | Default — full lifecycle |
 | `v-model` | standard + IEEE artifacts | Safety-critical / regulated |
 
 The lite map is:
@@ -130,13 +136,19 @@ standard-mode artifacts are generated on the next loop.
 
 ## 5. The phase map (standard mode)
 
-Full 18-phase flow. Opt = optional; Cond = conditional (auto-triggered
-or auto-skipped).
+forge.md's Phase Map enumerates **20 phase slots** for standard mode:
+**8 always-on core** (research, product-spec, revalidation, bridge, plan,
+tasks, implement, verify-full) + **12 optional/conditional**. Opt =
+optional; Cond = conditional (auto-triggered or auto-skipped). 19 slots have
+a dedicated `## Phase` section — 2H (Design System Harvest) is a helper
+within Phase 2, not its own section — and a post-launch Retrospective is
+tracked separately on `.forge-status.yml`.
 
 ```
 0  problem-discovery (opt)
 1  research
 2  product-spec
+2H design-system-harvest (helper within Phase 2; UI features, else not_applicable)
 3  revalidation
 4  bridge → SpecKit spec.md
 4.5 i18n-harvest    (opt, cond: multi-locale project)
@@ -152,11 +164,12 @@ or auto-skipped).
 9  release-readiness (opt)
 9.5 monitoring-setup (opt)
 9B experiment-design (opt, cond: flag marked experiment: true)
+10 spec-merge       (living spec; after release-readiness)
 ```
 
 Plus cross-cutting commands runnable at any time:
 
-- `/sync-verify` — 7-layer drift check
+- `/sync-verify` — 9-layer drift check (incl. contract-drift + doc↔code)
 - `/change-request` — formal scope change
 - `/portfolio` — multi-feature view
 - `/feature-flag-cleanup` — stale-flag audit
@@ -228,8 +241,11 @@ scripts/acquire-lock.sh "$FEATURE_DIR" 1800 "$SESSION_ID"
 # … write status atomically: temp-file + rename …
 ```
 
-- `acquire-lock.sh` uses `mv -n` with an `ln` fallback (both atomic on
-  POSIX). Exit 75 if a fresh lock is held.
+- `acquire-lock.sh` acquires atomically via an `ln` hardlink (`ln` exits
+  non-zero on an existing target on both GNU and BSD; `mv -n` is rejected
+  because BSD `mv -n` silently skips with exit 0, defeating the race guard),
+  then verifies ownership by reading back the lock's `session_id`. Exit 75
+  if a fresh lock is held.
 - Stale locks (age > TTL) are auto-taken-over with a warning.
 - `release-lock.sh` refuses to delete a lock held by a different
   `session_id` — prevents takeover-race foot-guns. Exits 1 on mismatch.
@@ -298,9 +314,10 @@ detection precise.
 
 ## 10. Portfolio view (B1)
 
-`/speckit.product-forge.portfolio` is read-only. It scans every
-`features/*/.forge-status.yml` and produces
-`features/_portfolio/portfolio.md`:
+`/speckit.product-forge.portfolio` is read-only. It enumerates every feature
+root via the Path-Resolution Contract (`enumerate()`, §12 — depth-tolerant over
+`flat` and `domain-nested`, skipping `_`-prefixed dirs), reads each
+`.forge-status.yml`, and produces `features/_portfolio/portfolio.md`:
 
 1. **Feature table** — slug, mode, current phase, status, days-in-phase,
    backfilled, blocked_by.
@@ -344,10 +361,13 @@ module-not-found noise.
 
 ## 12. Sync-verify with drift budget (D11)
 
-Seven-layer consistency check between artifact pairs:
+Nine-layer consistency check. Layers 1–7 compare the artifact-pair chain;
+Layer 8 checks FE↔BE contract drift and Layer 9 checks doc↔code drift:
 
 ```
-research ↔ product-spec ↔ spec.md ↔ plan.md ↔ tasks.md ↔ code
+Layers 1–7  research ↔ product-spec ↔ spec.md ↔ plan.md ↔ tasks.md ↔ code
+Layer 8     FE↔BE contract drift   (frontend contracts ↔ backend contracts)
+Layer 9     doc↔code               (docs ↔ implementation)
 ```
 
 Each drift item is categorized:
@@ -408,8 +428,9 @@ rollback plan → **writes `flags/registry.yml`** via the installed
 `feature-flag-manager` skill (or a stub if the skill is absent).
 
 Step 3 (monitoring): derives SLIs → derives alerts → **writes
-`monitoring/dashboard.json`, `alerts.yml`, `slo.md`** via the installed
-`newrelic-dashboard-builder` skill (or stub with TODOs).
+`monitoring/dashboard.json`, `alerts.yml`, `slo.md`** for the configured
+backend (PostHog / Sentry via MCP, or `newrelic-dashboard-builder` when
+`telemetry.dashboards: newrelic`; stub with TODOs if unwired).
 
 Graceful degradation: missing provider skills do not block the gate;
 they become action items in `release-readiness.md`.
@@ -421,7 +442,7 @@ they become action items in `release-readiness.md`.
 `config-template.yml` → `.product-forge/config.yml`. New v1.5 keys:
 
 ```yaml
-default_feature_mode: standard       # lite | standard | v-model
+default_feature_mode: standard       # express | lite | standard | v-model
 require_skip_reason: true            # forces free-text reason for gate Skip
 sync_verify:
   drift_budget:
@@ -494,7 +515,7 @@ sits relative to others, or `/sync-verify` to check drift.
   issue #1 remains open. Schema reserves room (`dependencies`,
   per-feature path annotations) but the command layer is single-repo.
 - **No API-level push to providers.** `monitoring-setup` produces
-  `dashboard.json` but does not call NewRelic to create the
+  `dashboard.json` but does not push it to the provider to create the
   dashboard. Applying generated artifacts is a manual step.
 - **No auto-translate in i18n-harvest.** Only stubs go to non-primary
   locales. Real translation is handled by the project's `i18n-workflow`

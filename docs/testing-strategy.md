@@ -1,6 +1,6 @@
 # Testing Strategy
 
-> **Status:** normative for v1.5+
+> **Status:** normative for v1.6+
 > **Consumers:** `test-plan` (Phase 8A), `test-run` (Phase 8B), `verify-full` (Phase 7), and the V-Model extension when installed.
 > **Companions:** [phases.md](./phases.md), [runtime.md](./runtime.md#9-monorepo-aware-operations-b15).
 
@@ -140,6 +140,29 @@ are out of scope for this document. Product Forge handles them via
 Phase 9 release-readiness (monitoring, alerts), Phase 9B experiment
 design, and dedicated skills (`lighthouse-audit`, `k6-load-testing`,
 `security-check`).
+
+**Exception — the automated accessibility AA floor (v1.6, W5-B2).** One
+piece of accessibility testing *is* in the pipeline: a deterministic
+**WCAG-AA floor** that runs per E2E journey, not on a separate cadence.
+The Phase 8A generator emits one `@axe-core/playwright` check per `JRN`
+and Phase 8B executes it inside the normal browser run (see §11 and
+[`commands/test-run.md §4.7`](../commands/test-run.md)). It is gated by
+the `a11y_gate: axe | none` config key (default `axe`; see
+[`docs/config.md`](./config.md)). This floor is a *minimum bar only* —
+comprehensive and manual accessibility review (keyboard traversal,
+screen-reader semantics, contrast judgment, cognitive load) remains the
+separate track described above. Passing the AA floor does not mean a
+feature is fully accessible; it means the automatable subset of WCAG 2.0/2.1
+A + AA has no violations at the journey's end state.
+
+**Companion — runtime component + design-token conformance (v1.6, W5-B5).**
+Co-located with the AA floor in the same Phase 8A generated specs: per `JRN`,
+DOM assertions that the rendered component matches the design-system
+manifest — component present at its `[data-cmp=…]` selector, correct
+`data-variant`, and computed CSS values equal to the manifest design
+token. This is *runtime conformance against the design system*, not a
+pixel-diff against a static mockup (Product Forge deliberately avoids
+pixel-diffing). See §11.
 
 ---
 
@@ -383,8 +406,8 @@ complementary, not duplicative.
 |-------|-----------------|
 | 5B Tasks | Tasks declare `Paths:` and implicitly define test targets per workspace. |
 | 6 Implement | Per-task progressive verify runs unit tests for touched paths. |
-| 8A Test Plan | Extracts `TC-UNIT-NNN` (§5E), `TC-INT-NNN` (§5F), `TC-SMK/E2E/API/REG` from spec artifacts. |
-| 8B Test Run | Executes all test kinds through the same auto-fix loop — see [test-run.md §4E/4F](../commands/test-run.md). |
+| 8A Test Plan | Extracts `TC-UNIT-NNN` (§5E), `TC-INT-NNN` (§5F), `TC-SMK/E2E/API/REG` from spec artifacts. **Also generates, per `JRN`, the WCAG-AA `@axe-core/playwright` floor (v1.6, W5-B2, gated by `a11y_gate`) and the component/variant/design-token conformance check (v1.6, W5-B5)** into the per-journey `.spec.ts` — see [test-plan.md §4](../commands/test-plan.md). |
+| 8B Test Run | Executes all test kinds through the same auto-fix loop — see [test-run.md §4E/4F](../commands/test-run.md). The a11y AA floor + component/token conformance run **inside the normal browser run** (not a separate gate) — see [test-run.md §4.7](../commands/test-run.md); an axe violation or conformance failure is a test failure like any other. |
 | 7 Verify Full | Cross-checks: every Must Have story has at least one test, every test maps to a story. |
 | 9 Release Readiness | Confirms per-layer coverage thresholds met. |
 | V13 Audit Report (v-model only) | Ingests JUnit results into the traceability matrix. |

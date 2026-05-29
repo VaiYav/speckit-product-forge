@@ -33,7 +33,7 @@ When the orchestrator reads `.forge-status.yml`:
 
 | Field | Purpose | Default |
 |-------|---------|---------|
-| `feature_mode` | Selects phase map (lite/standard/v-model). See E1. | `"standard"` |
+| `feature_mode` | Selects phase map (express/lite/standard/v-model). See E1. | `"standard"` |
 | `backfilled` | Marks reverse-engineered features. Set by B2. | `false` |
 | `phases.<name>.started_at` / `completed_at` | Wall-clock timestamps. | absent |
 | `phases.<name>.tokens_in` / `tokens_out` / `tool_calls` | AI cost tracking. | absent |
@@ -80,9 +80,12 @@ populate them. No user intervention is required.
 ## Helper script
 
 `scripts/migrate-status-v2-to-v3.js` is a zero-dependency Node.js helper.
-It reads each `features/*/.forge-status.yml`, stamps `schema_version: 3`,
-and writes back. Running it is optional — the orchestrator performs the
-same stamping lazily on first write.
+It enumerates every feature root via the Path-Resolution Contract
+(`enumerate()`, depth-tolerant over `flat` and `domain-nested`, skipping
+`_`-prefixed dirs — see [runtime.md §12](../runtime.md#12-path-resolution-contract)),
+stamps `schema_version: 3` on each `.forge-status.yml`, and writes back.
+Running it is optional — the orchestrator performs the same stamping lazily on
+first write.
 
 ```bash
 # Dry-run (prints what would change; writes nothing):

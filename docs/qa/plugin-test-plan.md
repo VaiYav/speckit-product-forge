@@ -1,4 +1,4 @@
-# Product Forge — Plugin Test Plan (v1.5.0)
+# Product Forge — Plugin Test Plan (v1.6.0)
 
 > **Audience:** reviewer / QA engineer / AI agent asked to validate this plugin.
 > **Scope:** testing the plugin itself, not features built with it.
@@ -9,20 +9,22 @@
 
 ## 1. What this plugin is
 
-A SpecKit extension (`speckit-product-forge`, v1.5.0) that orchestrates
+A SpecKit extension (`speckit-product-forge`, v1.6.0) that orchestrates
 a full product lifecycle — from problem discovery through shipped and
 measured code — as a sequence of human-gated phases. Users drive it
 through `/speckit.product-forge.*` slash commands. State between phases
 is a YAML file inside each feature directory.
 
 **The plugin is not runnable software in the traditional sense.** It
-ships ~50 files total. 29 of them are slash-command definitions in
+ships ~50 files total. 31 of them are slash-command definitions in
 `commands/*.md` — markdown instructions to an LLM, not code. The rest
-are reference docs under `docs/`, manifests at the root, and 4
-executable helpers. Only those 4 files are directly executable:
+are reference docs under `docs/`, manifests at the root, and 8 helper
+files under `scripts/` (all Node zero-dep or bash):
 
 - `scripts/migrate-status-v2-to-v3.js` (Node, zero-dep)
 - `scripts/acquire-lock.sh`, `scripts/release-lock.sh` (bash)
+- `scripts/gate-risk.js`, `scripts/validate-traceability.js` (Node, zero-dep; each exposes a `--selftest`)
+- `scripts/lib-paths.js` (shared Path-Resolution Contract lib; has a `--selftest`), `scripts/lib-yaml.js` (shared YAML lib; tested via consumers' `--selftest`)
 - `scripts/migrate-status-v2-to-v3.ts` (deprecation stub)
 
 Everything else describes intent. Its correctness is tested in two
@@ -42,7 +44,7 @@ default, skip-reason policy, drift budget.
 **Feature lifecycle.** User invokes `/speckit.product-forge.forge
 "feature description"`. The orchestrator:
 
-1. Resolves `feature_mode` (lite / standard / v-model) from config +
+1. Resolves `feature_mode` (express / lite / standard / v-model) from config +
    CLI flag. In v-model mode, detects the optional
    `leocamello/spec-kit-v-model` extension; aborts if missing.
 2. Creates `features/<slug>/` with a v3-shape `.forge-status.yml`.
@@ -53,15 +55,15 @@ default, skip-reason policy, drift budget.
    - Presents a gate to the user: Approve / Revise / Skip / Rollback /
      Abort.
    - Appends a gate entry to `.forge-status.yml` `gates[]`.
-4. Moves through the full 14/18 phases (standard) or the 5-phase
-   lite map, or delegates V1–V13 to the V-Model plugin.
+4. Moves through the full standard lifecycle (20 phase slots) or the 5-phase
+   lite map (or the 4-phase express map), or delegates V1–V13 to the V-Model plugin.
 5. Implementation populates `task_log[]` with sizes, paths (workspace-
    prefixed in monorepo), commit SHAs, timestamps.
 6. After release, a retrospective appends lessons to
    `.product-forge/lessons.md` that research consumes on next feature.
 
 **Cross-cutting.** `/portfolio` reads every `.forge-status.yml` and
-produces a multi-feature view. `/sync-verify` checks 7 artifact layers
+produces a multi-feature view. `/sync-verify` checks 9 artifact layers
 for drift. `/change-request` handles formal scope changes with
 impact propagation. `/feature-flag-cleanup` audits stale flags.
 `/backfill` reverse-engineers a feature folder from existing code.
@@ -74,13 +76,13 @@ the two shell helpers.
 
 ## 3. What's in it (inventory)
 
-- **29 slash commands** in `commands/*.md` covering problem-discovery,
-  research, product-spec, revalidation, bridge, plan, tasks,
-  pre-impl-review, implement, code-review, verify-full, test-plan,
-  test-run, release-readiness, retrospective, api-docs, security-check,
-  tracking-plan, sync-verify, change-request, portfolio, backfill,
-  monitoring-setup, migration-plan, i18n-harvest, experiment-design,
-  feature-flag-cleanup, status, forge (orchestrator).
+- **31 slash commands** in `commands/*.md` covering problem-discovery,
+  research, product-spec, design-system-harvest, revalidate, bridge, plan,
+  tasks, pre-impl-review, implement, code-review, verify-full, test-plan,
+  test-run, release-readiness, spec-merge, retrospective, api-docs,
+  security-check, tracking-plan, sync-verify, change-request, portfolio,
+  backfill, monitoring-setup, migration-plan, i18n-harvest,
+  experiment-design, feature-flag-cleanup, status, forge (orchestrator).
 - **Reference docs in `docs/`:** policy (gates, modes, skip, roles),
   runtime (state lock, resume, sync, digests, monorepo), schema
   (narrative), schema/forge-status-v3.schema.yml (canonical YAML),
@@ -89,7 +91,8 @@ the two shell helpers.
   testing-strategy, phases, file-structure, config, how-it-works-v2,
   qa/plugin-test-plan.md (this file).
 - **Helpers in `scripts/`:** migrate-status-v2-to-v3.js + .ts stub,
-  acquire-lock.sh, release-lock.sh.
+  acquire-lock.sh, release-lock.sh, gate-risk.js, validate-traceability.js,
+  lib-yaml.js, lib-paths.js (shared Path-Resolution Contract resolver/enumerator).
 - **`extension.yml`** registers all commands, declares
   `leocamello/spec-kit-v-model` as an optional extension, lists tags.
 - **`config-template.yml`** documents every config key.
@@ -241,7 +244,7 @@ through phases with known expected outputs.
 | Test | How to run | Expected |
 |------|-----------|----------|
 | commands/*.md files ↔ extension.yml entries | `diff <(ls commands/*.md \| xargs -n1 basename \| sed 's/\.md$//' \| sort) <(grep -oE 'speckit\.product-forge\.[a-z0-9-]+' extension.yml \| sort -u \| sed 's/speckit\.product-forge\.//')` | empty diff (exact set-equality) |
-| phase names consistent across forge.md Phase Map / Mode Resolution / `## Phase N:` sections | grep `^## Phase ` in commands/forge.md + count rows in Phase Map table + count non-V rows in Mode Resolution | all three show 18 phases |
+| phase names consistent across forge.md Phase Map / Mode Resolution / `## Phase N:` sections | grep `^## Phase ` in commands/forge.md + count rows in Phase Map table + count non-V rows in Mode Resolution | Phase Map = 20 rows, Mode Resolution = 20 non-V rows; `## Phase N:` sections = 19 (2H is a Phase-2 helper with no own section) |
 | schema field catalog in schema.md ↔ fields in schema YAML | parse both and compare key sets | no field missing from either side |
 | no `v2.0`, `v2.0.0`, `v2 Evolution` in shipped files | `grep -rn 'v2\.0\|2\.0\.0' . --include='*.md' --include='*.yml' \| grep -v 'docs/qa/plugin-test-plan.md'` | 0 matches. The test plan itself mentions these literals when describing what to check for — excluded via `grep -v` above. |
 | no leaked authoring-context names | grep for identifiers from the environment the plugin was originally authored in (product names, internal codenames, specific tech-stack strings). Reviewers should adapt the pattern to their own context; the shipped check is: `grep -rniE 'authoring-project-name-1\|authoring-project-name-2' . --include='*.md' --include='*.yml'` | 0 matches in any shipped file |
@@ -251,7 +254,7 @@ through phases with known expected outputs.
 | `task_log[]` not called `tasks[]` in normative files | `grep -rn '\btasks\[\]' . --include='*.md' --include='*.yml' \| grep -v schema.md \| grep -v 'docs/adr\|docs/brainstorms\|docs/reviews'` | matches only in comments explaining the historical rename |
 | all internal markdown links resolve | walk every `[text](relative/path.md#anchor)`, confirm target file exists and anchor matches a heading | 0 broken links |
 | no references to removed historical directories | `grep -rn 'docs/adr\|docs/brainstorms\|docs/reviews' . --include='*.md' \| grep -v 'docs/qa/plugin-test-plan.md'` | 0 matches. The test plan itself names these directories in the "resolved" log and the grep examples — excluded above. |
-| markdown frontmatter well-formed on every command | parse `commands/*.md`, assert `name` and `description` keys exist | all 29 parse cleanly |
+| markdown frontmatter well-formed on every command | parse `commands/*.md`, assert `name` and `description` keys exist | all 31 parse cleanly |
 | YAML validity | parse every `.yml`, assert no errors | all parse |
 
 ### 6.3 Layer C — Behavioral scenarios

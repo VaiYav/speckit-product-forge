@@ -9,6 +9,16 @@ patterns, and your codebase — craft an approved product spec — review design
 let SpecKit implement it with progressive verification — run multi-agent code review — then
 automatically generate and run Playwright tests with a bug-fix loop until the feature is ready to ship.
 
+**New in v1.6.0:**
+- **Express mode** — first-class `feature_mode: express`: a 4-phase combined pass (product-spec minimal → plan inline → implement → verify) for the smallest changes, escalatable to lite/standard.
+- **Design System Harvest** (Phase 2H) — discover the project's existing design system (component library, tokens, Storybook, Tailwind/CSS config) and emit a read-only manifest so mockups, component decomposition, and verification stay grounded in real code (`/speckit.product-forge.design-system-harvest`).
+- **Spec Merge** (Phase 10, living spec) — merge a shipped feature's delta specs into the canonical `specs/` source of truth and archive the change with audit history (`/speckit.product-forge.spec-merge`).
+- **Sync-verify now 9 layers** — adds Layer 8 (FE↔BE contract drift) and Layer 9 (doc↔code) on top of the seven artifact-pair layers.
+- **Structured journeys** — `journeys/` (journeys.yml + JRN-*.md) as the machine-readable E2E source of truth for spec, tests, and tracking.
+- **Automated WCAG-AA accessibility floor** — Phase 8A generates one `@axe-core/playwright` check per journey and Phase 8B runs it.
+
+Full change list in [CHANGELOG.md](./CHANGELOG.md).
+
 **New in v1.5.0:**
 - **Portfolio view** across all features — conflict matrix, dependency graph, suggested merge order (`/speckit.product-forge.portfolio`).
 - **Brown-field `backfill`** — reverse-engineer a feature folder from existing code with a gaps report.
@@ -42,7 +52,7 @@ Standard SpecKit starts from a feature description. Product Forge starts from a 
 6. **Plans, implements, and verifies** using SpecKit with full traceability back to the original research
 7. **Auto-generates Playwright tests** from user stories, runs them via `playwright-cli`, fixes P0/P1 bugs, and produces a test report
 8. **Generates API docs** (OpenAPI 3.1 + Postman), runs an **OWASP security audit**, and creates an **analytics tracking plan** with SDK snippets
-9. **Runs a post-launch retrospective** comparing predicted KPIs against real data from NewRelic/Analytics
+9. **Runs a post-launch retrospective** comparing predicted KPIs against real data from the configured MCPs (PostHog/Amplitude, Sentry; NewRelic optional)
 
 The result: a **complete traceability chain** — problem → research → product spec → spec.md → plan → tasks → code → tests → metrics.
 
@@ -67,7 +77,7 @@ The result: a **complete traceability chain** — problem → research → produ
 | `/speckit.product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
 | `/speckit.product-forge.test-run` | 8B | Execute tests with playwright-cli, auto-fix bugs, loop until done |
 | `/speckit.product-forge.release-readiness` | 9 | **[NEW]** Pre-ship checklist: feature flags, rollout, docs, monitoring |
-| `/speckit.product-forge.sync-verify` | cross-cutting | **[NEW]** 7-layer artifact consistency check, runnable between any phases |
+| `/speckit.product-forge.sync-verify` | cross-cutting | **[NEW]** 9-layer artifact consistency check (incl. contract-drift + doc↔code), runnable between any phases |
 | `/speckit.product-forge.change-request` | cross-cutting | **[NEW]** Formal scope change with impact analysis and artifact propagation |
 | `/speckit.product-forge.api-docs` | post-impl | Generate OpenAPI 3.1 spec + Postman collection from plan.md |
 | `/speckit.product-forge.security-check` | post-impl | OWASP audit scoped to detected surfaces (auth, input, payments) |
@@ -76,11 +86,13 @@ The result: a **complete traceability chain** — problem → research → produ
 | `/speckit.product-forge.status` | — | Show lifecycle status, gate audit trail, sync history |
 | `/speckit.product-forge.portfolio` | cross-cutting | **[NEW v1.5]** Multi-feature view: table, file-conflict matrix, dependency graph, merge order |
 | `/speckit.product-forge.backfill` | alt entry | **[NEW v1.5]** Reverse-engineer an existing module into a feature folder with gaps report |
-| `/speckit.product-forge.monitoring-setup` | 9.5 | **[NEW v1.5]** Build real dashboard JSON, alerts, SLO doc. Wraps `newrelic-dashboard-builder` |
+| `/speckit.product-forge.monitoring-setup` | 9.5 | **[NEW v1.5]** Build real dashboard JSON, alerts, SLO doc against the configured backend (PostHog/Amplitude, Sentry; NewRelic optional) |
 | `/speckit.product-forge.migration-plan` | 5.5 | **[NEW v1.5]** Zero-downtime migration plan with forward/rollback/validation/backfill when plan.md has schema changes |
 | `/speckit.product-forge.i18n-harvest` | post-bridge | **[NEW v1.5]** Extract strings from wireframes/spec, stub every locale |
 | `/speckit.product-forge.experiment-design` | 9B | **[NEW v1.5]** Pre-registered A/B plan — hypothesis, MDE, sample size, decision rule |
 | `/speckit.product-forge.feature-flag-cleanup` | cross-cutting | **[NEW v1.5]** Scan `flags/registry.yml` for stale flags, produce removal recipes |
+| `/speckit.product-forge.design-system-harvest` | 2H | **[NEW v1.6]** Harvest the project's existing design system into a read-only `design-system/manifest.yml` that grounds mockups, components, and verification |
+| `/speckit.product-forge.spec-merge` | 10 | **[NEW v1.6]** Merge a shipped feature's delta specs into canonical `specs/` (living spec) and archive the change with history |
 
 ---
 
@@ -127,7 +139,8 @@ The result: a **complete traceability chain** — problem → research → produ
 │  Asks: detail level · decomposition · mockup style                          │
 │                                                                              │
 │  Creates:                                                                    │
-│  product-spec.md · user-journey*.md · wireframes* · metrics.md · mockups/   │
+│  product-spec.md · journeys/ (journeys.yml + JRN-*.md) · wireframes*        │
+│  · metrics.md · mockups/                                                    │
 │  All linked via product-spec/README.md                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
@@ -257,7 +270,7 @@ The result: a **complete traceability chain** — problem → research → produ
 │  CROSS-CUTTING COMMANDS  [Runnable at any time]                  [NEW v1.3]  │
 │                                                                              │
 │  /speckit.product-forge.sync-verify                                          │
-│  7-layer consistency check across all artifacts (forward + backward drift)   │
+│  9-layer consistency check across all artifacts (forward + backward drift)   │
 │  Auto-runs in quick mode between every phase transition                      │
 │  Full run on demand or before Phase 7                                        │
 │                                                                              │
@@ -290,7 +303,8 @@ The result: a **complete traceability chain** — problem → research → produ
 │  /speckit.product-forge.retrospective                                        │
 │                                                                              │
 │  Predicted vs actual metrics (from research/metrics-roi.md)                 │
-│  NewRelic + Analytics MCP query · Research accuracy audit                   │
+│  Connected MCPs query (PostHog/Amplitude, Sentry; NewRelic optional)        │
+│  · Research accuracy audit                                                  │
 │  Lessons learned · Closes the full lifecycle loop                           │
 └─────────────────────────────────────────────────────────────────────────────┘
    │
@@ -325,7 +339,9 @@ features/
     ├── product-spec/
     │   ├── README.md                      ← Spec index + document map
     │   ├── product-spec.md                ← Main PRD (concise/standard/exhaustive)
-    │   ├── user-journey.md                ← or user-journey-{name}.md × N
+    │   ├── journeys/                      ← structured journeys (E2E source of truth)
+    │   │   ├── journeys.yml               ← authoritative machine-readable index
+    │   │   └── JRN-NNN-{slug}.md × N      ← one file per journey (JRN/STEP/EDGE)
     │   ├── wireframes.md                  ← or wireframes/ folder × N screens
     │   ├── metrics.md                     ← optional
     │   └── mockups/                       ← optional
@@ -389,7 +405,7 @@ specify extension add product-forge --from https://github.com/VaiYav/speckit-pro
 ### Install (specific version)
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.5.1.zip
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.6.0.zip
 ```
 
 ### Update to latest
@@ -401,14 +417,14 @@ specify extension update product-forge --from https://github.com/VaiYav/speckit-
 ### Update to specific version
 
 ```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.5.1.zip
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.6.0.zip
 ```
 
 ### Verify installation
 
 ```bash
 specify extension list
-# Should show: product-forge  v1.5.1  enabled
+# Should show: product-forge  v1.6.0  enabled
 ```
 
 ---

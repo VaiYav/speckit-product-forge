@@ -6,7 +6,7 @@
 
 ---
 
-```markdown
+````markdown
 # {Project Name} — Portfolio
 
 > Generated: {ISO-8601 timestamp}
@@ -16,7 +16,7 @@
 
 | Feature | Mode | Current phase | Status | Days in phase | Backfilled | Blocked by |
 |---------|------|---------------|--------|---------------|:----------:|------------|
-| {slug}  | {lite|standard|v-model} | {phase} | {pending|in_progress|completed|skipped} | {N} | {✓/✗} | {slug, slug, ...} |
+| {slug}  | {express|lite|standard|v-model} | {phase} | {pending|in_progress|completed|skipped|completed_with_known_issues|not_applicable} | {N} | {✓/✗} | {slug, slug, ...} |
 
 ## 2. Conflicts
 
@@ -76,6 +76,7 @@ If no ready features: **"No features ready to merge."**
 
 | Mode | Count |
 |------|------:|
+| express | {N} |
 | lite | {N} |
 | standard | {N} |
 | v-model | {N} |
@@ -100,4 +101,4 @@ If no action items: **"Portfolio is healthy."**
   up to the `Generated` timestamp.
 - Archived features are excluded by default. Re-run with
   `--include-archived` to see them.
-```
+````

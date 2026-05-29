@@ -3,8 +3,8 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.5.1"
-  description: "Full product lifecycle orchestrator with research, spec, plan, implement, verify, test, and release-readiness phases. v1.5 adds portfolio view, lite mode, brown-field backfill, monorepo support, V-Model optional integration, unit + integration test phases, monitoring/migration/i18n/experiment extensions, per-phase digests, and a learning loop. See README for the complete feature list."
+  version: "1.6.0"
+  description: "Full product lifecycle orchestrator with research, spec, plan, implement, verify, test, and release-readiness phases. v1.6 adds express mode, a design-system-harvest phase that grounds mockups in the project's in-code components, structured journeys → Playwright E2E, a living/delta spec with spec-merge and a REQ→…→TEST→EVT traceability matrix, FE↔BE contract-first OpenAPI/AsyncAPI, telemetry MCP wiring (PostHog/Sentry/Amplitude), a two-layer risk-scored gate review, a WCAG-AA accessibility gate, and a 9-layer sync-verify — on top of the v1.5 portfolio view, lite mode, brown-field backfill, monorepo support, V-Model optional integration, unit + integration test phases, monitoring/migration/i18n/experiment extensions, per-phase digests, and learning loop. See README for the complete feature list."
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"
   license: "MIT"
@@ -128,7 +128,7 @@ provides:
 
     - name: "speckit.product-forge.sync-verify"
       file: "commands/sync-verify.md"
-      description: "Cross-cutting: 7-layer artifact consistency checker. Detects forward and backward drift across all lifecycle artifacts"
+      description: "Cross-cutting: 9-layer artifact consistency checker (incl. FE↔BE contract drift + doc↔code). Detects forward and backward drift across all lifecycle artifacts"
 
     - name: "speckit.product-forge.change-request"
       file: "commands/change-request.md"
@@ -148,7 +148,7 @@ provides:
 
     - name: "speckit.product-forge.monitoring-setup"
       file: "commands/monitoring-setup.md"
-      description: "Phase 9.5 (opt): builds real monitoring artifacts — NewRelic dashboard JSON, alerts.yml, SLO doc — from plan NFRs and tracking-plan. Wraps newrelic-dashboard-builder."
+      description: "Phase 9.5 (opt): builds real monitoring artifacts for the configured backend (PostHog/Sentry MCP; NewRelic optional) — dashboards, alerts.yml, SLO doc — from plan NFRs and tracking-plan."
 
     - name: "speckit.product-forge.migration-plan"
       file: "commands/migration-plan.md"
@@ -168,7 +168,7 @@ provides:
 
     - name: "speckit.product-forge.retrospective"
       file: "commands/retrospective.md"
-      description: "Post-launch retrospective: predicted vs actual metrics, NewRelic/analytics data, research accuracy audit, lessons learned appended to .product-forge/lessons.md"
+      description: "Post-launch retrospective: predicted vs actual metrics, data from connected analytics/error MCPs (PostHog/Amplitude, Sentry; NewRelic optional), research accuracy audit, lessons learned appended to .product-forge/lessons.md"
 
 tags:
   - "process"
@@ -211,36 +211,16 @@ tags:
   - "workspace-aware"
   - "optional-extensions"
 
-# Project configuration — copy to .product-forge/config.yml in your project root
-# See config-template.yml and docs/config.md for full documentation
+# Project configuration
+#
+# The authoritative config reference lives in config-template.yml and
+# docs/config.md — they document every key (project context, features_dir,
+# flow_mode, e2e_runner, default_feature_mode, default_speckit_mode,
+# require_skip_reason / require_code_review / require_testing /
+# require_pre_impl_review, progressive_verify_interval, telemetry, …).
+#
+# To configure a project: copy config-template.yml to
+# .product-forge/config.yml in your project root and edit it there.
 config:
-  codebase_path:
-    description: "Relative path to the project codebase for static analysis"
-    required: false
-    default: "."
-    example: "./src"
-
-  project_name:
-    description: "Project name used as context in all research agents"
-    required: false
-    example: "Acme Workflow"
-
-  project_tech_stack:
-    description: "Brief tech stack description passed to research agents"
-    required: false
-    example: "Node.js + Express + Postgres"
-
-  project_domain:
-    description: "Domain/industry for competitor and UX research context"
-    required: false
-    example: "B2B SaaS productivity tool"
-
-  features_dir:
-    description: "Directory where feature artifacts are stored"
-    required: false
-    default: "features"
-
-  default_speckit_mode:
-    description: "Default SpecKit transition mode: 'classic' or 'v-model' or 'ask'"
-    required: false
-    default: "ask"
+  reference: "config-template.yml"
+  docs: "docs/config.md"
