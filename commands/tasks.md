@@ -79,8 +79,17 @@ After SpecKit tasks returns, read `tasks.md` and check:
 | No orphan tasks (tasks without traceable requirement)? | ✅/⚠️/❌ | |
 | Task granularity appropriate? (not too large, not trivial) | ✅/⚠️/❌ | |
 | Dependency order is sensible? (data model before service before controller) | ✅/⚠️/❌ | |
+| No contradictory tasks / impossible ordering assumed? (v1.6, W5-E1) | ✅/⚠️/❌ | List conflicts |
 
-If ❌ found: surface specific gaps (e.g., "US-003 has no task"), ask user how to resolve.
+For the last row, read the task list adversarially and ask the literal question:
+**"Do any tasks conflict or assume an impossible order?"** Flag a pair when: two tasks
+make mutually exclusive assumptions or edit the same artifact in incompatible ways; a
+task depends (explicitly or via shared `Paths:`) on output a later task produces; or a
+task assumes a prerequisite no listed task ever creates. Name the offending `T-NNN`
+pair and the conflict.
+
+If ❌ found: surface specific gaps (e.g., "US-003 has no task"; "T0xx reads the schema
+T0yy only adds later"), ask user how to resolve.
 If only ✅/⚠️: proceed to Step 4.1.
 
 ### Step 4.1: Structural validation (hard checks — never ship past these)
@@ -125,8 +134,20 @@ path, so the component map and tasks stay linked. For backend work, reference th
 
 Per the spec-kit "Red" gate: for each Must-Have story/journey, order the test task
 (`TC-*`) **before** its implementation task so tests can be written and confirmed
-failing before code (enforced at the Phase 5B→6 boundary by `implement`). Mark
-these test tasks explicitly in `tasks.md`.
+failing before code (enforced at the Phase 5B→6 boundary by `implement`).
+
+Mark each such test task with a literal `Test-first: true` sub-line (same shape as the
+`Paths:` / `Size:` sub-lines), so `implement` Step 2.5 can select them by name:
+
+```markdown
+- [ ] TC012 — Unit test: token validation rejects malformed tokens
+      Paths: src/modules/users/users.service.test.ts
+      Test-first: true
+      Size: S
+```
+
+Scope: this marker is for the unit/contract test tasks the Red gate covers — not the
+Phase 8 browser E2E suite.
 
 ---
 

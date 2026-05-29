@@ -54,8 +54,14 @@ Detect the following surfaces from the artifacts and code:
 | Public endpoints (no auth) | {yes/no} | A05, A04 |
 | External webhooks received | {yes/no} | A03, A07 |
 | Cryptographic operations | {yes/no} | A02 |
+| New dependencies added this feature | {yes/no} | A06, A08 |
 
 Only perform checks for surfaces marked **yes**.
+
+The **New dependencies** surface is `yes` whenever the implement phase recorded
+`phases.implement.dependencies.added > 0` on `.forge-status.yml`, or whenever
+`traceability.yml` carries a `dependencies:` block (the W5-C2 dep list produced
+by `/speckit.product-forge.implement`).
 
 ---
 
@@ -165,6 +171,37 @@ const user = Object.assign(existingUser, { name, email });
 - [ ] Are default credentials changed?
 - [ ] Is verbose logging disabled for sensitive operations in production?
 
+### A06: Vulnerable and Outdated Components — Dependency / supply-chain surface (v1.6, W5-C2)
+
+**Check if detected:** new dependencies added this feature
+
+Consume the SAME dep list `/speckit.product-forge.implement` produced — do not
+re-derive it: read the `dependencies:` block in `{FEATURE_DIR}/traceability.yml`
+(and `dependency-log.md`). For each `pkg@version` in that list, confirm the
+install-time vetting still holds and add the SCA layer the SBOM stage (W5-B3,
+release-readiness §5C) will later re-run:
+
+- [ ] Every added dep has `registry_exists: true` and a `verdict` of `pass`/`warn` (no `block` slipped into the lockfile).
+- [ ] No added dep is on the project `denylist` (re-check `security.dependency_vetting.denylist`).
+- [ ] Any `warn` dep (brand-new / low-popularity) carries `confirmed_by_user: true`.
+- [ ] Lockfile is pinned for every added dep (no `*` / `latest`).
+- [ ] Re-confirm existence + run a known-vulnerability scan on the added deps only:
+
+```bash
+# Re-confirm each added package still resolves (catches a dep that was
+# block-flagged at implement time but committed anyway):
+npm view "<pkg>@<version>" version        # npm:  E404 / non-zero => MISSING → CRITICAL
+pip index versions "<pkg>"                 # pip:  "No matching distribution" => MISSING → CRITICAL
+
+# Known-vulnerability scan, scoped to the change (PR-diff mode), via osv-scanner:
+osv-scanner --lockfile=package-lock.json   # node; or poetry.lock / requirements.txt for pip
+# (osv-scanner reports CVE/GHSA ids; map each to a SEC-* finding by severity)
+```
+
+Any **MISSING** (does-not-exist) or **denylisted** dep that reached the lockfile is a
+**CRITICAL** SEC finding (slopsquatting / hallucinated package). Known CVEs map to
+HIGH/MEDIUM per the advisory severity.
+
 ### A07: Identification and Authentication Failures
 
 **Check if detected:** login, auth, payments, session management
@@ -250,6 +287,7 @@ Skipped (not applicable): {list of skipped OWASP categories}
 | No hardcoded secrets found | A02 | ✅ Pass |
 | ORM queries only (no string concat) | A03 | ✅ Pass |
 | Rate limiting on login endpoint | A04 | ✅ Pass |
+| All added deps registry-verified, none denylisted/missing | A06 | ✅ Pass |
 | ... | ... | ... |
 
 ## Summary

@@ -65,7 +65,7 @@ journeys:
     steps:
       - id: "STEP-001"
         action: "Open the Notifications settings screen"
-        ui: "CMP-SettingsNav"        # design-system component (component-map.yml)
+        ui: "CMP-SettingsNav"        # CMP-* id; component-map.yml resolves it to design-system/manifest.yml (which owns the selector)
         expect: "Notification toggles render with current values"
         contracts: ["API-getPrefs"]  # FE↔BE contract (Theme F)
       - id: "STEP-002"
@@ -97,7 +97,8 @@ happy path, alternate flows, and error cases are all explicit — nothing implic
 1. **Author** (Phase 2, `product-spec`): write `journeys.yml` + per-journey md.
 2. **Generate** (Phase 8A, `test-plan`): emit one Playwright `.spec.ts` per
    journey — `STEP.action` → Playwright actions, `STEP.expect` / `EDGE.then` →
-   assertions, selectors resolved from `mockups/component-map.yml` (Theme E).
+   assertions, selectors resolved via `mockups/component-map.yml` `CMP-*` ids
+   against `design-system/manifest.yml` (the manifest owns the selector) (Theme E).
    Smoke journeys (`smoke: true`) also seed the `TC-SMK-*` suite.
 3. **Run** (Phase 8B, `test-run`): execute via `playwright-cli` in
    Smoke → E2E order; map any failure back to its `JRN/STEP/EDGE` ID in
@@ -118,3 +119,5 @@ happy path, alternate flows, and error cases are all explicit — nothing implic
    (Theme F) so FE↔BE traceability is maintained.
 5. **Keep `journeys.yml` authoritative.** The markdown narrative must not introduce
    steps that aren't in the YAML.
+6. **Actor and preconditions are journey-scoped.** They are declared once on the
+   journey; every `STEP`/`EDGE` inherits them and must not re-declare its own actor.

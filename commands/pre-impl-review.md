@@ -38,8 +38,19 @@ Load all required artifacts:
 - `{FEATURE_DIR}/product-spec/mockups/` — high-fidelity UI (if exist)
 - `{FEATURE_DIR}/research/ux-patterns.md` — UX best practices
 - `{FEATURE_DIR}/research/codebase-analysis.md` — integration points
+- `{FEATURE_DIR}/research/README.md` — the **"Prior lessons that apply"** section
+  (already selected by `research` Step 2.5 from `.product-forge/lessons.md`); feeds
+  the risk register in Step 4 (v1.6, W5-D1). If the file or the section is absent,
+  proceed with no lesson-derived risks — do not re-score or re-read `lessons.md` here.
 
 ---
+
+> **Interaction (normative):** the skip offer (Step 1), the approval gate (Step 6),
+> and any condition decision use the structured convention in
+> [docs/interaction.md](../docs/interaction.md) (ready snippets in
+> [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
+> Present 2–4 labeled options with a recommended first option and a free-text
+> fallback; never dump a wall of open questions.
 
 ## Step 1: Determine Review Scope
 
@@ -178,6 +189,29 @@ Analyze all loaded artifacts to build a risk register.
 - Feature flag needed but not planned
 - Data format changes in persistent storage
 
+### Prior Lessons as Candidate Risks (v1.6, W5-D1)
+
+The `research` phase already selected the relevant prior lessons (tag-overlap scored
+in `research` Step 2.5) and wrote them to the **"Prior lessons that apply"** section of
+`{FEATURE_DIR}/research/README.md`. Consume that section here — do **not** re-read or
+re-score `.product-forge/lessons.md`.
+
+For **each** lesson block listed under "Prior lessons that apply":
+
+1. Treat the lesson as a candidate risk for *this* feature (a thing that bit a prior
+   feature and could recur here).
+2. Emit a row into the Risk Register below, deriving fields from the lesson:
+   - **Category** — the closest of Technical / Scope / Integration / Rollback.
+   - **Risk** — restate the lesson as a forward-looking risk, and cite the source
+     inline as `(lesson: "{title}", {date})`.
+   - **Likelihood / Impact / Severity** — assess for *this* feature using the matrix
+     below (a recurring lesson is not automatically High).
+   - **Mitigation** — the corrective action the lesson implies, made concrete for this plan.
+3. If the lesson clearly does not apply to this feature's surface, **drop it** and note
+   the omission in one line under the register (no false positives — Operating Principle 1).
+
+If the "Prior lessons that apply" section is absent or empty, skip this subsection.
+
 ### Risk Register Format
 
 | ID | Category | Risk | Likelihood | Impact | Severity | Mitigation |
@@ -201,6 +235,26 @@ Based on risk profile:
 | ≥3 High risks | Feature flag + staged rollout (10% → 50% → 100%) |
 | Mostly Medium/Low | Feature flag recommended but not required |
 | All Low | Direct release acceptable |
+
+### Adversarial Pass: Contradictions & Determinism (v1.6, W5-E1)
+
+A short self-critique before closing the register — fold the findings back into it as
+rows; do **not** add a separate critic phase.
+
+1. **Contradictions check.** Scan `spec.md` requirements and acceptance criteria
+   pairwise for conflict: do any two requirements/criteria contradict each other, or
+   contradict a `plan.md` decision or a `journeys.yml` step? For each genuine conflict,
+   emit a **Scope**-category `R-NNN` row citing both clashing items by id (e.g.
+   `FR-012 vs AC-3`), severity per the matrix, mitigation = "resolve before coding".
+2. **Determinism counterfactual.** For each acceptance criterion ask:
+   *"Would two competent implementers build different things from this criterion?"*
+   If yes, the criterion is under-specified — emit a **Scope**-category `R-NNN` row
+   (this is the existing "Ambiguous acceptance criteria" Scope risk made concrete),
+   quoting the criterion id and the divergence, mitigation = "tighten the criterion to
+   one observable outcome".
+
+If no contradictions and no divergent criteria are found, state *"No contradictions;
+all criteria deterministic"* and add no rows.
 
 ---
 
@@ -240,6 +294,13 @@ Write `{FEATURE_DIR}/pre-impl-review.md`:
 
 ### Component Reuse
 {table from Step 2D}
+
+> **Emit into the unified gate surface (W5-A3).** Append each design /
+> architecture / risk finding below to `{FEATURE_DIR}/gate-review.md` under the
+> single `F-NNN` namespace with `source: pre-impl-review` +
+> `dimension: design|architecture|risk` and `raised@{git-sha}` (read the current
+> max `F-NNN` first). The `D-/A-/R-NNN` ids stay as in-document local labels.
+> See [docs/templates/gate-review.md](../docs/templates/gate-review.md).
 
 ### Design Findings
 
@@ -324,11 +385,23 @@ Condition 1: Add loading state to settings screen wireframe
   [Accept condition] [Reject — proceed anyway] [Discuss]
 ```
 
-Gate options:
-- **Approve** — all conditions accepted, proceed to Phase 6
-- **Approve with conditions** — proceed but conditions tracked as tasks
-- **Revise** — go back to Phase 5 (Plan) or Phase 5B (Tasks) to address issues
-- **Skip** — user acknowledges risks and proceeds without review
+Gate (structured — see [interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)):
+
+```
+[Gate] Pre-implementation review complete — {one-line outcome}. How do you want to proceed?
+
+  1. Approve (recommended) — all conditions accepted; proceed to Phase 6
+  2. Revise — return to Phase 5 (Plan) / Phase 5B (Tasks) to address issues
+  3. Skip — acknowledge risks and proceed without resolving (reason may be required)
+  4. Rollback — return to an earlier phase by name
+  5. Abort — stop the lifecycle for this feature
+  (or type your own answer)
+```
+
+- **Approve** maps to `approved`. If conditions are accepted and tracked as tasks
+  rather than resolved now, record `approved_with_conditions`.
+- **Revise** → `revised`; **Skip** → `skipped`; **Rollback** → `rolled_back` (with
+  `rolled_back_to`); **Abort** → `aborted`.
 
 ---
 
@@ -346,7 +419,8 @@ Record gate decision:
 ```yaml
 gates:
   - phase: pre_impl_review
-    decision: "{approved / approved_with_conditions / skipped}"
+    decision: "{approved / approved_with_conditions / revised / skipped / rolled_back / aborted}"
+    rolled_back_to: "{phase}"   # only when decision is rolled_back
     timestamp: "{ISO timestamp}"
     notes: "{user's decision context}"
     conditions:

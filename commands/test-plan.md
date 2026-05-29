@@ -21,6 +21,12 @@ $ARGUMENTS
 
 ---
 
+> **Interaction (normative):** every question and gate in this phase uses the
+> structured convention in [docs/interaction.md](../docs/interaction.md) (ready
+> snippets in [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
+> Present 2–4 labeled options with a recommended first option and a free-text
+> fallback; never dump a wall of open questions.
+
 ## Execution Models
 
 Product Forge supports **two complementary test execution models**. This phase generates artifacts for both:
@@ -97,7 +103,10 @@ Report findings:
 
 ## Step 3: Environment Configuration Interview
 
-Ask the user in ONE message, pre-filling any auto-detected values:
+Ask these as discrete structured prompts (one decision each, related toggles
+grouped — e.g. URLs together, the multi-select test-type/scope/browser toggles via
+the host's `AskUserQuestion`), pre-filling any auto-detected values. Do not dump
+all seven as one open wall:
 
 ```
 Test environment setup — please confirm or correct auto-detected values:
@@ -381,6 +390,28 @@ Resolve selectors from `mockups/component-map.yml` / `design-system/manifest.yml
 `data-testid` only when no component selector exists. Tag each test with its
 `JRN`/`STEP`/`EDGE` ids in a comment so Phase 8B can map failures back.
 
+Into **each** per-journey spec also emit (executable, not prose — substitute the
+literals at generation time):
+
+- **(v1.6, W5-B2) one WCAG-AA accessibility test per `JRN`** using
+  `@axe-core/playwright` — `new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa',
+  'wcag21a','wcag21aa']).analyze()` then `expect(a11y.violations, 'JRN-NNN …').toEqual([])`,
+  scanned at the journey's end state. This is an **automated AA floor** — manual
+  review is still required and this is *not* a hard zero-violations claim beyond AA.
+  Fulfils the bridge AC "Accessibility requirements pass automated + manual testing".
+  Add `@axe-core/playwright` to the project's dev deps (entry in the test-plan
+  "Entry Criteria") if absent.
+- **(v1.6, W5-B5) one component + variant + design-token conformance test per `JRN`**.
+  For every `mockups/component-map.yml` region whose `journeys:` includes this `JRN`,
+  read its `component` (`CMP-*`), `variant`, look up the component's `selector` in
+  `design-system/manifest.yml`, and emit three executable assertions: (1) the
+  component is visible at its manifest `selector`; (2) `toHaveAttribute('data-variant',
+  '<region.variant>')` for the mapped variant; (3) a design-token check — resolve the
+  relevant `manifest.tokens.*` CSS-var on `:root` via `getComputedStyle` and assert the
+  component's computed style equals it (catches token drift / hardcoded hex). These
+  ride **this Phase 8A generator only** — never `verify-full` (Phase 7 is read-only,
+  no running app).
+
 Create `{TESTING_DIR}/playwright-tests/` folder.
 
 For each journey:
@@ -388,6 +419,7 @@ For each journey:
 ```typescript
 // {TESTING_DIR}/playwright-tests/{feature-slug}-{journey-name}.spec.ts
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright'; // (v1.6, W5-B2) WCAG-AA automated floor
 
 // Feature: {Feature Name}
 // Journey: {Journey Name}
@@ -408,6 +440,7 @@ test.describe('{Feature Name} — {Journey Name}', () => {
   });
 
   // TC-E2E-001: Happy Path — {description}
+  // Journey: JRN-001 STEP-001..002 (happy path — no EDGE)
   // Covers: US-001 acceptance criteria: {AC text}
   test('should {primary user outcome}', async ({ page }) => {
     // Arrange
@@ -427,7 +460,63 @@ test.describe('{Feature Name} — {Journey Name}', () => {
     await expect(page.locator('{result selector}')).toContainText('{expected text}');
   });
 
+  // (v1.6, W5-B2) WCAG-AA accessibility floor for this journey.
+  // Emit ONE such test per JRN (manual review still required — AA-automated only,
+  // not a hard zero-violations claim beyond AA). Fulfils bridge.md AC "Accessibility
+  // requirements pass automated + manual testing" (the automated half).
+  // Journey: JRN-001 (whole-page scan at the journey's end state)
+  test('JRN-001 meets WCAG 2.1 A/AA automated floor', async ({ page }) => {
+    await page.goto('{feature URL}');
+    // …drive to the journey end state (reuse the happy-path STEP actions above)…
+    const a11y = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    expect(a11y.violations, 'JRN-001 WCAG-AA violations').toEqual([]);
+  });
+
+  // (v1.6, W5-B5) Runtime component + variant + design-token conformance.
+  // Emit ONE assertion block per region in mockups/component-map.yml whose
+  // `journeys:` includes this JRN. CMP / VARIANT / token values are read at
+  // generation time from component-map.yml + design-system/manifest.yml — the
+  // agent substitutes literals; these are executable Playwright assertions.
+  // Journey: JRN-001 — region "save bar" → CMP-Button variant "primary"
+  test('JRN-001 uses mapped components, variants, and design tokens', async ({ page }) => {
+    await page.goto('{feature URL}');
+
+    // 1. Component present (manifest selector for {CMP-Button} = [data-cmp='button'])
+    const cmp = page.locator("[data-cmp='button']");
+    await expect(cmp).toBeVisible();
+
+    // 2. Variant matches component-map (region.variant = "primary").
+    //    ASSUMPTION: bind the variant assertion to the project's design-system
+    //    convention. The repo documents `data-cmp` but NOT how variants surface;
+    //    this example uses `data-variant` — switch to a class check
+    //    (e.g. toHaveClass(/btn--primary/)) if the design system surfaces variants as classes.
+    await expect(cmp).toHaveAttribute('data-variant', 'primary');
+
+    // 3. Design-token conformance: the computed value equals the manifest token.
+    //    ASSUMPTION: which CSS property a token binds to is project-specific. This
+    //    example maps manifest.tokens.color.primary (var(--color-primary)) → background-color;
+    //    rebind to color/border-color per the component if that is where the token lands.
+    //    Resolve the var on :root and assert the component's computed value equals it
+    //    (catches token drift / hardcoded hex).
+    const tokenValue = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim()
+    );
+    const actual = await cmp.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const expected = await page.evaluate((raw) => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = raw;           // normalise token → rgb()
+      document.body.appendChild(probe);
+      const v = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return v;
+    }, tokenValue);
+    expect(actual, "JRN-001 CMP-Button background uses --color-primary token").toBe(expected);
+  });
+
   // TC-E2E-002: Empty State
+  // Journey: JRN-001 STEP-001 / EDGE-002
   test('should show empty state when no data exists', async ({ page }) => {
     // Navigate to feature with no data
     await page.goto('{feature URL}?empty=true');
@@ -435,6 +524,7 @@ test.describe('{Feature Name} — {Journey Name}', () => {
   });
 
   // TC-E2E-003: Error State
+  // Journey: JRN-001 STEP-002 / EDGE-001
   test('should handle error gracefully', async ({ page }) => {
     // Simulate error condition
     await page.route('**/api/**', route => route.fulfill({ status: 500 }));
@@ -447,9 +537,15 @@ test.describe('{Feature Name} — {Journey Name}', () => {
 
 **Important notes in generated tests:**
 - Use `data-testid` selectors by default (most stable)
+- Tag **each** `test(...)` with a per-case `// Journey: JRN-NNN STEP-NNN..NNN / EDGE-NNN`
+  comment (same `JRN`/`STEP`/`EDGE` shape as the 5B matrix columns) so a failing
+  test maps straight back to the journey step it broke — not just the file header
 - Add comments mapping each test to US-NNN and AC text
 - Use `process.env` for credentials (never hardcode)
 - Include setup/teardown for test isolation
+- **(v1.6, W5-B2)** include the per-`JRN` `@axe-core/playwright` WCAG-AA test
+- **(v1.6, W5-B5)** include the per-`JRN` component/variant/token conformance test,
+  one assertion block per mapped `component-map.yml` region
 
 Create `{TESTING_DIR}/playwright-tests/playwright.config.ts` if not exists:
 
@@ -532,6 +628,7 @@ Create `{TESTING_DIR}/test-plan.md`:
 - [ ] Feature deployed to test environment
 - [ ] Test data seeded / reset
 - [ ] Playwright installed: `npx playwright install`
+- [ ] a11y floor dep installed (v1.6, W5-B2): `npm i -D @axe-core/playwright`
 - [ ] Credentials configured in `testing/env.md`
 
 ## Exit Criteria (testing complete when)
@@ -589,6 +686,9 @@ Include all TC-SMK, TC-E2E, TC-API, TC-REG cases in full detail with:
 - Preconditions
 - Step-by-step instructions **written as discrete UI actions** (navigate, click, fill, wait, assert) so Phase 8B can translate each step directly to a `playwright-cli` command
 - Expected result (what to verify via snapshot / screenshot / DOM assertion)
+- A per-case `**Journey:** JRN-NNN | **Steps:** STEP-NNN to NNN | **Edge:** EDGE-NNN`
+  header line (same shape as the 5B matrix columns) so Phase 8B can map a failure
+  back to the journey step
 - Linked story (US-NNN)
 - Linked AC
 
@@ -598,6 +698,7 @@ Write each test case step at the **`playwright-cli` action granularity**:
 ## TC-E2E-001: Happy path — {title}
 
 **Preconditions:** User is logged in. No data exists for {feature}.
+**Journey:** JRN-001 | **Steps:** STEP-001 to 002 | **Edge:** — (none — happy path)
 **Story:** US-001 | **AC:** 1.1, 1.2
 
 | # | Action | playwright-cli equivalent |
@@ -613,6 +714,22 @@ Write each test case step at the **`playwright-cli` action granularity**:
 ```
 
 This format lets Phase 8B translate steps mechanically — no ambiguity, no interpretation needed.
+
+### Step 8.1: Write the `tests:` column of the traceability matrix (Theme C)
+
+`test-plan` is the registered writer of the `tests` column in
+`{FEATURE_DIR}/traceability.yml` (see
+[docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md)).
+After generating the cases, update the matrix:
+
+- For each requirement row, set `tests: [TC-*]` to the case IDs that cover it
+  (matched via the row's `story` / `journeys` keys and each case's
+  `**Story:**` / `**Journey:**` header).
+- In the `journeys` block, fill each journey's `tests:` (journey-level E2E/smoke
+  cases) and each edge's `tests:` (the per-edge `TC-E2E` cases).
+- Do **not** advance `status` here — planning a test does not make a row `tested`;
+  `status: tested` is set later by `test-run`. If the matrix does not yet exist
+  (tasks Phase 5 not run), skip this step and leave the column null for a later run.
 
 ---
 
@@ -694,4 +811,20 @@ Before running (either mode):
   4. Ensure app is running at {FRONTEND_URL}
 ```
 
-Ask: *"Test plan ready. Proceed to Phase 8B: Test Execution?"*
+Then present the structured gate (template:
+[docs/templates/interaction-prompts.md → Gate](../docs/templates/interaction-prompts.md#gate-after-every-phase)):
+
+```
+[Gate] Test plan complete — {N} cases across {types}, {N}/{N} Must-Have stories covered. How do you want to proceed?
+
+  1. Approve (recommended) — accept the test plan and continue to Phase 8B: Test Execution
+  2. Revise — re-run test planning with feedback
+  3. Skip Phase 8B — move on without running tests (a reason may be required)
+  4. Rollback — return to an earlier phase by name
+  5. Abort — stop the lifecycle for this feature
+  (or type your own answer)
+```
+
+Record the choice as a `gates[]` decision ∈ `approved | approved_with_conditions |
+revised | skipped | rolled_back | aborted` (with `rolled_back_to` when rolling back)
+per [policy §2](../docs/policy.md#2-gate-decisions).

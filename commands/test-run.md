@@ -26,6 +26,17 @@ The `.spec.ts` files generated in Phase 8A are for CI/CD pipelines — they are 
 row in `traceability.yml`, so a failure points straight back to the journey step it
 broke. Run order stays Smoke → E2E (per `e2e_runner: playwright-cli`).
 
+**a11y + component/token conformance (v1.6, W5-B2/B5):** the WCAG-AA accessibility
+floor (axe-core) and the design-system component/token conformance check run **as
+part of the normal browser run** — see [§4.7](#47-a11y--componenttoken-conformance-v16-w5-b2b5).
+They are not a separate phase or gate: an axe violation or a conformance failure
+is filed as an ordinary `BUG-NNN.md`, mapped back to the same `JRN`/`STEP`/`EDGE`
+id as functional failures (the `Journey: / Step/Edge:` carrier added in Track-1),
+triaged in [Step 5](#step-5-collect-and-triage-all-results), and resolved through
+the same auto-fix loop and exit criteria. The automated floor does **not** replace
+manual a11y review — it is a deterministic minimum bar that flows into the existing
+bug pipeline.
+
 ## User Input
 
 ```text
@@ -75,7 +86,30 @@ Verify the app is reachable before opening any browser:
   App reachable?             → playwright-cli open {FRONTEND_URL} → snapshot → close
   API reachable?             → playwright-cli open {API_URL}/health → snapshot → close
   Test credentials?          → Verify testing/env.md is populated
+  axe-core reachable?        → for the §4.7 a11y floor (v1.6, W5-B2)
+  manifest present?          → design-system/manifest.yml for §4.7 conformance (v1.6, W5-B5)
 ```
+
+**a11y + conformance pre-flight (v1.6, W5-B2/B5).** Step 4.7 injects `axe-core`
+into the live page and checks rendered components against the harvested design
+system. Verify both inputs **before** the run so a missing dependency records
+`BLOCKED` rather than passing-by-default (a silent skip would re-introduce the
+"callout-deep" defect this floor exists to close):
+
+```bash
+# axe-core resolvable? (local node_modules or CDN fallback used by §4.7)
+test -f node_modules/axe-core/axe.min.js && echo "axe-core: local" \
+  || echo "axe-core: will load from CDN in §4.7 (network required)"
+
+# design-system manifest present? (owns CMP-* selectors + tokens for §4.7)
+test -f {FEATURE_DIR}/design-system/manifest.yml && echo "manifest: ok" \
+  || echo "manifest: MISSING → §4.7 conformance leg records BLOCKED"
+```
+
+- If `axe-core` cannot be resolved (no `node_modules`, no network) → the §4.7
+  a11y leg is recorded **BLOCKED** for every browser journey (not PASS).
+- If `design-system/manifest.yml` is absent → the §4.7 conformance leg is
+  recorded **BLOCKED** (no token/selector source to assert against).
 
 **App reachability check:**
 ```bash
@@ -200,6 +234,125 @@ Compare final snapshot with **Expected Result** from test case:
 - **PASS** — final state matches expected result
 - **FAIL** — state does not match, error shown, or unexpected behavior
 - **BLOCKED** — prerequisite step failed (e.g. auth not available)
+
+#### 4.7 a11y + component/token conformance (v1.6, W5-B2/B5)
+
+For **browser** journeys only — Smoke ([4A](#4a-smoke-tests)) and E2E
+([4B](#4b-e2e-tests)). **N/A** for API ([4C](#4c-api-tests)), Unit
+([4E](#4e-unit-tests-tc-unit-nnn)), and Integration ([4F](#4f-integration-tests-tc-int-nnn)):
+those are non-browser, so axe and DOM/computed-style conformance do not apply —
+do not run this substep for them.
+
+Run **once per journey at its final state** (B2 is JRN-scoped), against the same
+`pf-test` session that just executed the case, before [§4.5](#45-stop-tracing-and-close)
+closes it. Failures here become bugs exactly like functional failures (mapped to
+the case's `JRN`/`STEP`/`EDGE`).
+
+**(a) WCAG-AA accessibility floor — axe-core (W5-B2).** Inject axe-core into the
+live page and run it scoped to WCAG 2.0/2.1 A + AA rules. This is a deterministic
+minimum bar; manual a11y review is still required.
+
+```bash
+playwright-cli -s=pf-test run-code "async page => {
+  // Inject axe-core: prefer local node_modules, else CDN (network required).
+  try {
+    await page.addScriptTag({ path: 'node_modules/axe-core/axe.min.js' });
+  } catch (e) {
+    await page.addScriptTag({ url: 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js' });
+  }
+  const result = await page.evaluate(async () => {
+    if (typeof axe === 'undefined') return { blocked: true };
+    const r = await axe.run(document, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }
+    });
+    return {
+      blocked: false,
+      violations: r.violations.map(v => ({
+        id: v.id, impact: v.impact, help: v.help, helpUrl: v.helpUrl,
+        nodes: v.nodes.map(n => ({ target: n.target, html: n.html }))
+      }))
+    };
+  });
+  return JSON.stringify(result);
+}"
+```
+
+- `{ blocked: true }` (axe undefined) → record the a11y leg **BLOCKED** for this
+  journey (per the [Step 2](#step-2-pre-flight-checks) pre-flight) — never PASS.
+- `violations: []` → a11y floor PASS for this journey.
+- Each violation → one `BUG-NNN.md` (or one per `{id × target}`), severity mapped
+  in [Step 5](#step-5-collect-and-triage-all-results), `Journey:`/`Step|Edge:` set
+  to the running case's ids. Record the `helpUrl` in the bug's Evidence.
+
+**(b) Component + design-token conformance — DOM/computed-style (W5-B5).** Assert
+the rendered DOM uses the harvested design system: every region declared in
+`mockups/component-map.yml` resolves to a `CMP-*` whose `selector` (owned by
+`design-system/manifest.yml`) is present, and the rendered computed colors use the
+design system's **token** values rather than off-system hardcoded hex. No pixel
+diffing — DOM presence + computed-style only.
+
+First, **produce the selector list** from the manifest (do not assume it exists —
+extract it). The manifest stores `components[].selector`; the repo's zero-dep YAML
+parser ([`scripts/lib-yaml.js`](../scripts/lib-yaml.js)) reads it without a
+dependency:
+
+```bash
+# Resolve {SELECTORS} for the journey — the CMP-* selectors the manifest owns.
+node -e "const {parseYaml}=require('./scripts/lib-yaml.js');const fs=require('fs');
+  const m=parseYaml(fs.readFileSync('{FEATURE_DIR}/design-system/manifest.yml','utf8'));
+  console.log(JSON.stringify((m.components||[]).map(c=>c.selector).filter(Boolean)));"
+```
+
+Substitute that array as `{SELECTORS}` below. **Allowed token colors are NOT
+hardcoded** — the manifest keeps token *names* / CSS-var references, not resolved
+hex. Resolve them at runtime from the live page (the design system is loaded), so
+the comparison is real: read every `--*` custom property off `:root`, take the
+color-valued ones as the allow-set, then flag any computed color not in it.
+
+```bash
+playwright-cli -s=pf-test run-code "async page => {
+  const expected = {SELECTORS};   // CMP-* selectors resolved from manifest.yml (step above)
+  const report = await page.evaluate((expected) => {
+    const missing = expected.filter(sel => !document.querySelector(sel));
+    // Build the allow-set from the design system's own CSS custom properties
+    // resolved on the live page (token VALUES, not names) — plus transparents.
+    const rootCS = getComputedStyle(document.documentElement);
+    const allowed = new Set(['rgba(0, 0, 0, 0)', 'transparent']);
+    for (const name of Array.from(rootCS)) {
+      if (!name.startsWith('--')) continue;
+      const val = rootCS.getPropertyValue(name).trim();
+      if (/^(#|rgb|hsl)/i.test(val)) allowed.add(val);
+    }
+    const offToken = [];
+    for (const sel of expected) {
+      for (const el of document.querySelectorAll(sel)) {
+        const cs = getComputedStyle(el);
+        for (const prop of ['color', 'background-color', 'border-color']) {
+          const v = cs.getPropertyValue(prop).trim();
+          if (v && v !== 'rgba(0, 0, 0, 0)' && !allowed.has(v)) {
+            offToken.push({ selector: sel, prop, value: v });
+          }
+        }
+      }
+    }
+    return { missingComponents: missing, offTokenStyles: offToken };
+  }, expected);
+  return JSON.stringify(report);
+}"
+```
+
+- `missingComponents` non-empty → a declared `CMP-*` did not render → one
+  `BUG-NNN.md` per missing component (the component-map region tells you which
+  `JRN`/`STEP` it backs).
+- `offTokenStyles` non-empty → a rendered on-system component uses a color that is
+  not one of the design system's resolved token values (design-token drift) → one
+  `BUG-NNN.md`.
+- If `design-system/manifest.yml` is absent (Step 2 pre-flight) → record this leg
+  **BLOCKED**, not PASS — there is no token/selector source to assert against.
+- Note: if the design system ships colors as Tailwind classes rather than `:root`
+  custom properties, the allow-set is empty and this leg degrades to the
+  component-presence check only — record the token-lint as BLOCKED for that case
+  rather than flagging every color.
 
 ---
 
@@ -401,6 +554,20 @@ For each FAILED test → auto-assign severity:
 - **P3** — Edge case, cosmetic, or minor flow failure
 - **P4** — Regression on low-risk path
 
+For each **§4.7 a11y / conformance** finding → auto-assign severity (v1.6, W5-B2/B5):
+
+| Finding | Source field | Severity |
+|---------|--------------|----------|
+| axe violation, `impact: critical` | `violations[].impact` | **P1** |
+| axe violation, `impact: serious` | `violations[].impact` | **P2** |
+| axe violation, `impact: moderate` | `violations[].impact` | **P3** |
+| axe violation, `impact: minor` | `violations[].impact` | **P4** |
+| Missing `CMP-*` component | `missingComponents[]` | **P2** |
+| Off-token computed style | `offTokenStyles[]` | **P3** |
+
+These flow through the same triage, bug creation, auto-fix loop, and exit criteria
+as functional failures — they are not a separate gate.
+
 ---
 
 ## Step 6: Create Bug Reports
@@ -413,6 +580,7 @@ For EACH failed test, create `{BUGS_DIR}/BUG-{NNN}.md`:
 > Severity: P{0-4} | Status: 🔴 Open
 > Test Run: #{RUN_N} | Date: {date}
 > Test Case: {TC-ID} | Story: {US-NNN}
+> Journey: {JRN-NNN} | Step/Edge: {STEP-NNN|EDGE-NNN}
 
 ## Description
 {Clear one-sentence description of what's wrong}
@@ -452,6 +620,16 @@ For EACH failed test, create `{BUGS_DIR}/BUG-{NNN}.md`:
 ```
 
 Update `{BUGS_DIR}/README.md` dashboard with all new bugs.
+
+**a11y / conformance findings use this same pipeline (v1.6, W5-B2/B5).** A §4.7
+axe violation or component/token conformance failure is filed as an ordinary
+`BUG-NNN.md` — no separate format. Populate the existing fields:
+- `Journey:` / `Step/Edge:` → the running case's `JRN`/`STEP`/`EDGE` (line above),
+  and update the matching `traceability.yml` row, exactly as for functional bugs.
+- `## Evidence` → record the axe `id` + `impact` + `helpUrl`, or the missing
+  `CMP-*` selector / off-token `{selector, prop, value}` from §4.7's JSON output.
+- `## Gap Analysis` → typically "Implementation bug" (a11y/token drift is fixed in
+  code); escalate to a spec gap only if the AC itself is missing the requirement.
 
 ---
 
@@ -718,6 +896,16 @@ testing:
   test_runs_total: {N}
 last_updated: "{ISO timestamp}"
 ```
+
+Update the live traceability matrix (`{FEATURE_DIR}/traceability.yml`, see
+[docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md)):
+- Confirm/complete the `tests: [TC-*]` column for the rows whose cases ran
+  (`test-plan` seeded it; reconcile against what actually executed).
+- For each row whose covering cases all **passed**, advance `status: tested`
+  (`test-run` is the canonical producer of the `tested` status; `verified` is set
+  later by release-readiness / spec-merge). Rows with open P0/P1 bugs stay at their
+  prior status.
+- In the `journeys` block, the per-edge `tests:` reflect the edge cases that ran.
 
 Clean up browser sessions:
 ```bash
