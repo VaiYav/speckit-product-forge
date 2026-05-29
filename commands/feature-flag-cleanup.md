@@ -42,8 +42,11 @@ Read `.product-forge/config.yml` → `features_dir`, `codebase_path`.
 
 ## Step 1: Gather Flag Registry
 
-Collect every `flags/registry.yml` under `{features_dir}/*/flags/`. Build
-a unified view:
+Enumerate feature roots via the Path-Resolution Contract `enumerate()`
+([docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) and
+collect each root's `flags/registry.yml` (depth-tolerant over `flat` and
+`domain-nested`; the old `{features_dir}/*/flags/` glob only saw flat features).
+Build a unified view:
 
 | Flag key | Feature | Default | Owner | cleanup_after | Source file |
 |----------|---------|:-------:|-------|:-------------:|-------------|

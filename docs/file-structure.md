@@ -65,13 +65,13 @@ features/
     │
     ├── testing/                             ← Phase 8A artifacts [OPTIONAL]
     │   ├── test-plan.md                     ← Master test plan (entry/exit criteria, run commands)
-    │   ├── test-cases.md                    ← All test cases (TC-SMK/E2E/API/REG-NNN)
+    │   ├── test-cases.md                    ← All test cases (TC-SMK/E2E/API/REG/UNIT/INT-NNN)
     │   ├── env.md                           ← Test credentials (added to .gitignore)
     │   ├── playwright-results/              ← Screenshot + trace files (gitignored)
     │   └── playwright-tests/
     │       ├── playwright.config.ts
     │       ├── {slug}-smoke.spec.ts         ← TC-SMK-NNN cases
-    │       ├── {slug}-e2e.spec.ts           ← TC-E2E-NNN cases
+    │       ├── {slug}-{journey}.spec.ts × N ← one per JRN (TC-E2E-NNN cases)
     │       ├── {slug}-api.spec.ts           ← TC-API-NNN cases (if API tested)
     │       └── {slug}-regression.spec.ts    ← TC-REG-NNN cases
     │
@@ -88,6 +88,96 @@ features/
     ├── change-log.md                        ← Cross-cutting: Change request history [NEW v1.3]
     └── backlog.md                           ← Deferred changes for v2 [NEW v1.3, if any CRs deferred]
 ```
+
+---
+
+## Storage strategies (feature-root placement)
+
+The tree above shows the **internal artifact tree** of a feature. That tree is
+**invariant** — `research/`, `product-spec/journeys/`, `contracts/`,
+`.forge-status.yml`, `testing/`, and every other path inside a feature are
+byte-for-byte identical no matter where the feature root sits. The only thing a
+storage strategy changes is **how a single `FEATURE_DIR` is placed under
+`features_dir`**; everything below `FEATURE_DIR` is untouched.
+
+The strategy is selected by the `storage_strategy` config key. It is additive:
+the absent key resolves to `flat`, which is today's behavior exactly, and no
+existing feature ever has to move.
+
+| Strategy | Status | Feature root | Notes |
+|----------|--------|--------------|-------|
+| `flat` | **default** | `features/<slug>/` | Status quo. Every feature is an immediate child of `features_dir`; the filesystem enforces global slug uniqueness. Resolve is a direct join with no scan. |
+| `domain-nested` | first-class (opt-in) | `features/<domain>/<slug>/` | One extra grouping level by area/team/surface. A single depth-tolerant discovery rule subsumes flat (depth 1) and the existing `_archived/<date-slug>` (depth 2); mixed flat + nested layouts coexist. Same slug in two domains is referenced as `<domain>/<slug>`. |
+| `ddd` | active (opt-in) | `features/<context>/<slug>/` | Groups by bounded context mirroring `specs/<domain>/`, backed by a `features/domains.yml` registry (`slug: context`) for O(1) resolution. |
+| `workspace` | active (opt-in, monorepo) | `features/<workspace>/<slug>/` | Each feature lives under its primary monorepo workspace (`scope.primary`); requires a `codebase.paths` block. Same on-disk depth as `domain-nested`. |
+
+**`flat` layout** (default — the tree shown above):
+
+```
+features/
+├── _portfolio/                 ← reserved namespace (cross-feature output)
+├── _archived/                  ← reserved namespace (spec-merge archives, depth 2)
+├── push-notification-prefs/    ← FEATURE_DIR (immediate child)
+│   ├── .forge-status.yml       ← marks the feature root
+│   └── …                       ← invariant internal tree
+└── dark-mode-toggle/
+    ├── .forge-status.yml
+    └── …
+```
+
+**`domain-nested` layout** (first-class, opt-in via `storage_strategy: domain-nested`):
+
+```
+features/
+├── _portfolio/                 ← reserved namespace (stays top-level)
+├── _archived/                  ← reserved namespace (stays top-level)
+├── notifications/              ← <domain> grouping folder
+│   ├── push-notification-prefs/   ← FEATURE_DIR (depth 2)
+│   │   ├── .forge-status.yml      ← marks the feature root
+│   │   └── …                      ← invariant internal tree (unchanged)
+│   └── digest-emails/
+│       ├── .forge-status.yml
+│       └── …
+├── appearance/
+│   └── dark-mode-toggle/
+│       ├── .forge-status.yml
+│       └── …
+└── legacy-feature/             ← a pre-existing flat feature still resolves
+    ├── .forge-status.yml          (legacy depth-1 fallback)
+    └── …
+```
+
+**`ddd` layout** (opt-in via `storage_strategy: ddd`) — like `domain-nested`, but
+the grouping folder is a DDD **bounded context** (mirroring `specs/<domain>/`)
+and a `features/domains.yml` registry maps each slug → context for O(1)
+resolution:
+
+```
+features/
+├── _portfolio/                 ← reserved namespace
+├── _archived/                  ← reserved (may be context-keyed: _archived/<context>/<date>-<slug>/)
+├── domains.yml                 ← registry: `slug: context` (a FILE, skipped by enumerate)
+├── ordering/                   ← <context>
+│   ├── checkout-redesign/         ← FEATURE_DIR (depth 2)
+│   │   ├── .forge-status.yml
+│   │   └── …                      ← invariant internal tree
+│   └── apply-coupon/
+│       └── .forge-status.yml
+└── billing/
+    └── invoice-pdf/
+        └── .forge-status.yml
+```
+
+**`workspace` layout** (opt-in via `storage_strategy: workspace`, monorepo only)
+is identical in shape, with the grouping folder being a monorepo workspace
+(`scope.primary`, from `codebase.paths`): `features/<workspace>/<slug>/`.
+
+The reserved `_`-prefixed namespaces (`_portfolio/`, `_archived/`) stay
+top-level under every strategy and are excluded from feature enumeration; the
+`domains.yml` registry file (ddd) is likewise skipped. See
+[runtime.md §12](./runtime.md#12-path-resolution-contract) for the normative
+Path-Resolution Contract. A starter registry template lives at
+[`docs/templates/domains.yml`](./templates/domains.yml).
 
 ---
 
@@ -117,15 +207,20 @@ HTML files include an in-page navigation bar linking sibling screens.
 
 ---
 
-## .forge-status.yml Schema (v2)
+## .forge-status.yml Schema (v3)
+
+> This inline block is a readable overview. The canonical, authoritative schema
+> is [docs/schema/forge-status-v3.schema.yml](./schema/forge-status-v3.schema.yml)
+> (and the field catalog in [schema.md](./schema.md)); when the two differ, the
+> canonical schema wins.
 
 ```yaml
-schema_version: 2                      # schema version for migration detection
+schema_version: 3                      # schema version for migration detection
 feature: "feature-slug"               # kebab-case feature identifier
 created_at: "2026-03-28"              # ISO date
 phases:
   problem_discovery: pending          # Phase 0 — optional
-  research: pending                   # pending | in_progress | completed | skipped | completed_with_known_issues
+  research: pending                   # pending | in_progress | completed | skipped | not_applicable | completed_with_known_issues
   product_spec: pending
   revalidation: pending               # uses "approved" instead of "completed"
   bridge: pending
@@ -173,8 +268,8 @@ implement:                            # populated by implement (Phase 6)
   progressive_checkpoints: 0
   progressive_warnings: 0
   progressive_critical: 0
-api_docs:                             # populated by api-docs command
-  generated: false
+api_docs_report:                      # populated by api-docs command (renamed from
+  generated: false                    #   api_docs to avoid colliding with phases.api_docs)
   openapi_path: ""
   consistency_drift: 0
 security:                             # populated by security-check command
@@ -200,24 +295,41 @@ last_updated: "2026-03-28T10:00:00"   # ISO timestamp
 | `pending` | Phase not yet started |
 | `in_progress` | Phase currently executing |
 | `completed` | Phase finished successfully |
-| `skipped` | Phase intentionally skipped by user |
-| `approved` | Phase approved (used specifically by `revalidation`) |
-| `completed_with_known_issues` | Phase completed but with documented issues (used by `test_run`, `verify`) |
+| `skipped` | Optional phase intentionally skipped by user (skip-reason policy applies — policy.md §3) |
+| `not_applicable` | Phase was never in scope for this feature (e.g. phases outside a lite/express map, or phases not run for a backfilled feature) — exempt from the skip-reason policy |
+| `completed_with_known_issues` | Phase completed but with documented issues (written by `test_run`; see forge.md Phase 8B) |
+| `approved` | Back-compat alias for `completed`, accepted specifically by `revalidation` |
 
-> **Note:** Supporting commands (`api-docs`, `security-check`, `tracking-plan`) also write
-> completion status to `phases:` using their own keys (`api_docs`, `security_check`, `tracking_plan`).
-> These are not part of the main lifecycle flow but are tracked for status reporting.
+> **Note:** Supporting and extension commands also write completion status to
+> `phases:` using their own keys, alongside the core lifecycle phases. These are
+> recognized in the canonical schema as supporting-command phase keys:
+> `api_docs`, `security_check`, `tracking_plan` (supporting commands),
+> `i18n_harvest`, `migration_plan`, `monitoring_setup`, `experiment_design`
+> (extension phases), plus `design_system_harvest` and `spec_merge` (the v1.6
+> Phase-2 helper and post-release living-spec merge). They are tracked for status
+> reporting but are not part of the main gated flow. Their top-level
+> instrumentation blocks use distinct names where a collision would otherwise
+> arise — e.g. the `api-docs` command writes `phases.api_docs` (status) and the
+> top-level `api_docs_report:` block (metrics), mirroring the `phases.tasks` ↔
+> `task_log[]` split. See [docs/schema/forge-status-v3.schema.yml](./schema/forge-status-v3.schema.yml)
+> for the authoritative phase-key set.
 
 ### Gate Entry Schema (within `gates:` array)
 
 ```yaml
 - phase: "research"                   # phase name
-  decision: "approved"                # approved | approved_with_conditions | revised | skipped | aborted
+  decision: "approved"                # approved | approved_with_conditions | revised | skipped | rolled_back | aborted
   timestamp: "2026-03-28T14:00:00"    # ISO timestamp
   notes: ""                           # user's reasoning (optional)
   conditions: []                      # conditions attached to approval
   sync_result: "clean"                # quick sync result: clean | N_critical | N_warning
+  rolled_back_to: null                # required when decision == "rolled_back" (phase name to rewind to)
+  reviewed_sha: ""                    # git SHA / artifact stamp the gate was reviewed against (W5-A2)
+  risk: ""                            # gate risk class from scripts/gate-risk.js: low | medium | high (W5-A4)
 ```
+
+> The canonical gate entry carries additional optional fields (`approvals`,
+> `skip_reason`); see [docs/schema/forge-status-v3.schema.yml](./schema/forge-status-v3.schema.yml).
 
 ### Change Request Entry Schema (within `change_requests:` array)
 
@@ -381,20 +493,25 @@ Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → 
 | Wireframe files | `wireframe-{screen}.html` | `wireframe-home-screen.html` |
 | Mockup files | `mockup-{screen}.html` | `mockup-settings-panel.html` |
 | Feature slug in YAML | `kebab-case` | `push-notification-preferences` |
+| Canonical requirement IDs | `REQ-NNN` (stable living-spec requirement in `specs/<domain>/spec.md`; root of the traceability chain — distinct from per-feature `FR-NNN`) | `REQ-001`, `REQ-012` |
 | User story IDs | `US-NNN` (3 digits) | `US-001`, `US-012` |
-| Functional req IDs | `FR-NNN` | `FR-001`, `FR-012` |
+| Functional req IDs | `FR-NNN` (per-feature functional requirement; derived from `REQ-NNN`) | `FR-001`, `FR-012` |
 | Smoke test case IDs | `TC-SMK-NNN` | `TC-SMK-001` |
 | E2E test case IDs | `TC-E2E-NNN` | `TC-E2E-005` |
 | API test case IDs | `TC-API-NNN` | `TC-API-003` |
 | Regression test IDs | `TC-REG-NNN` | `TC-REG-002` |
+| Unit test case IDs | `TC-UNIT-NNN` | `TC-UNIT-001` |
+| Integration test case IDs | `TC-INT-NNN` | `TC-INT-004` |
 | Bug IDs | `BUG-NNN` (3 digits) | `BUG-001`, `BUG-012` |
 | Change request IDs | `CR-NNN` (3 digits) | `CR-001`, `CR-003` |
 | Drift finding IDs | `DRIFT-NNN` (3 digits) | `DRIFT-001`, `DRIFT-015` |
 | Code review finding IDs | `REV-NNN` (3 digits) | `REV-001`, `REV-042` |
+| Security finding IDs | `SEC-NNN` | `SEC-001`, `SEC-004` |
+| Unified gate-finding IDs | `F-NNN` (the `- **F-NNN**` bold-bullet form is grepped verbatim by forge.md's auto-recommend pre-gate — preserve the format) | `F-001`, `F-042` |
 | Design finding IDs | `D-NNN` | `D-001`, `D-005` |
 | Architecture finding IDs | `A-NNN` | `A-001`, `A-003` |
 | Risk IDs | `R-NNN` | `R-001`, `R-008` |
-| Task IDs | `T-NNN` (3 digits) | `T-001`, `T-042` |
+| Task IDs | `T0NN` (zero-padded, no hyphen; `TASK-NNN` accepted as alias) | `T001`, `T042` |
 | Architecture Decision Record IDs | `ADR-NNN` | `ADR-001`, `ADR-005` |
 
 ---
@@ -448,9 +565,13 @@ Project-level new files:
 ├── config.yml                            ← project config (existing)
 └── lessons.md                            ← [v1.5] append-only learning log
 scripts/                                  ← [v1.5]
-├── migrate-status-v2-to-v3.js            ← stamps schema_version: 3 lazily
+├── migrate-status-v2-to-v3.js            ← stamps schema_version: 3 lazily (depth-tolerant enumerate)
 ├── acquire-lock.sh                       ← state-lock helpers (runtime.md §2.7)
-└── release-lock.sh
+├── release-lock.sh
+├── gate-risk.js                          ← [v1.6] {phase × risk} classifier for headless gates
+├── validate-traceability.js             ← [v1.6] deterministic traceability validator
+├── lib-paths.js                          ← [v1.7] Path-Resolution Contract resolve()/enumerate() (runtime.md §12)
+└── lib-yaml.js                           ← [v1.6] shared zero-dep YAML subset parser
 ```
 
 Banner rule: every artifact written by `/backfill` carries a

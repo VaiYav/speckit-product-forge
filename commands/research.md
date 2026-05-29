@@ -41,48 +41,62 @@ Sum the scores → **Input Richness Score (0–8)**:
 Load project config from `.product-forge/config.yml`:
 - `project_name`, `project_domain`, `project_tech_stack`, `codebase_path`, `features_dir`
 
-Set `FEATURE_DIR = {features_dir}/{feature-slug}/`
+Resolve `FEATURE_DIR` via the Path-Resolution Contract `resolve(slug)`
+([docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)) — under
+the default `flat` strategy this is `{features_dir}/{feature-slug}/`; under
+`domain-nested` it locates/places the feature at `{features_dir}/<domain>/<slug>/`.
 Set `RESEARCH_DIR = {FEATURE_DIR}/research/`
 
 ---
+
+> **Interaction (normative):** every question in this phase uses the structured
+> convention in [docs/interaction.md](../docs/interaction.md) (ready snippets in
+> [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
+> Ask one decision at a time; the research-scope opt-in uses the multiSelect
+> prompt. Content-gathering questions (description, competitors, constraints, …)
+> are free-text — never dump a single wall of open questions.
 
 ## Step 2: Adaptive Interview
 
 ### FULL_INTERVIEW mode (score 0–2)
 
-Ask all questions in ONE message:
+Ask the questions below as **discrete prompts**, one decision at a time — not as a
+single wall of text. Content questions are free-text; the research-scope opt-in is a
+multiSelect.
 
-```
-Before I start researching, I need to understand the feature better:
-
-1. **Feature description** — What does this feature do? Who uses it and why?
-   (1–3 sentences covering: what it is, who benefits, what problem it solves)
-
-2. **Competitors** — Are there specific apps or products I should analyze?
-   (Leave blank to auto-discover 6–8 competitors)
-
-3. **Tech stack** — What technology does your project use?
-   (e.g., "Node.js + Express + Postgres" or "Django + React" — or say "use config")
-
-4. **Domain** — What industry/domain is this for?
+1. **Feature description** (free text) — *"What does this feature do? Who uses it and
+   why?"* (1–3 sentences: what it is, who benefits, what problem it solves)
+2. **Competitors** (free text) — *"Any specific apps or products I should analyze?"*
+   (leave blank to auto-discover 6–8 competitors)
+3. **Tech stack** (free text) — *"What technology does your project use?"*
+   (e.g., "Node.js + Express + Postgres" — or say "use config")
+4. **Domain** (free text) — *"What industry/domain is this for?"*
    (e.g., "consumer productivity app", "B2B SaaS fintech")
-
-5. **Constraints** — Any hard constraints I should know?
+5. **Constraints** (free text) — *"Any hard constraints I should know?"*
    (technical, budget, timeline, legal, platform)
+6. **Research scope** — present the *Research scope opt-ins (multiSelect)* prompt
+   from [interaction-prompts.md](../docs/templates/interaction-prompts.md):
 
-6. **Additional research?** — Should I also research:
-   - [ ] Tech stack libraries & packages (optional)
-   - [ ] Metrics/ROI & business impact (optional)
+   ```
+   [Research scope] Which research dimensions should run? (select all that apply)
 
-7. **Existing materials** — Do you have any links, docs, designs, or prior art to include?
-   (Paste URLs or describe — I'll incorporate them into the research)
-```
+     - Competitors (default on)
+     - UX/UI patterns (default on)
+     - Codebase analysis (default on)
+     - Tech-stack comparison
+     - Metrics / ROI
+     (or type your own answer)
+   ```
+
+7. **Existing materials** (free text) — *"Any links, docs, designs, or prior art to
+   include?"* (paste URLs or describe — I'll incorporate them into the research)
 
 ### PARTIAL_INTERVIEW mode (score 3–5)
 
-Ask ONLY the dimensions that scored 0. Format as:
+Ask ONLY the dimensions that scored 0, as discrete structured prompts. Lead with:
 *"I have a good understanding of the feature. A few gaps before I start:"*
-Then ask only the missing questions from the list above.
+Then ask only the missing questions from the list above (free-text for content
+questions; the multiSelect for research scope).
 
 ### CONFIRM mode (score 6–8)
 

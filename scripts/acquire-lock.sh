@@ -30,6 +30,13 @@ fi
 feature_dir="$1"
 ttl_seconds="${2:-1800}"
 session_id="${3:-${FORGE_SESSION_ID:-shell-$$}}"
+# Reject session-ids with characters that could break the JSON payload written
+# below or be interpreted as metacharacters by the grep verification (injection
+# / false-match guard). Allow only a conservative safe set.
+if [[ ! "$session_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "invalid session-id (allowed characters: A-Za-z0-9 . _ -): $session_id" >&2
+  exit 64
+fi
 lock_path="$feature_dir/.forge-status.yml.lock"
 now_iso="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 now_epoch="$(date -u +'%s')"

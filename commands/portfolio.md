@@ -2,7 +2,8 @@
 name: speckit.product-forge.portfolio
 description: >
   Cross-cutting portfolio view over every feature managed by Product Forge.
-  Reads `features/*/.forge-status.yml` (and optional `tasks.md`) and produces
+  Reads every feature's `.forge-status.yml` (via the Path-Resolution Contract's
+  `enumerate()`, so flat and domain-nested layouts both work) plus optional `tasks.md`, and produces
   a consolidated report covering feature status, file/module conflicts between
   in-flight features, a dependency graph, and a suggested merge order.
   Use: "show portfolio", "feature portfolio", "what's blocked", "/speckit.product-forge.portfolio"
@@ -42,16 +43,23 @@ Read `.product-forge/config.yml`:
 
 ## Step 1: Discover Features
 
-For each immediate child directory of `{features_dir}/` that contains a
-`.forge-status.yml`:
+Enumerate feature roots via `enumerate()` — the **Path-Resolution Contract**
+([docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)):
+descend from `{features_dir}/`, treat the first directory that contains a
+`.forge-status.yml` as a feature root (then stop descending into it), and skip
+`_`-prefixed top-level dirs. This covers `flat` (depth 1) and `domain-nested`
+(depth 2) alike. For each feature root:
 
 1. Read `.forge-status.yml` (lock-free read; writer-safe).
 2. Read `tasks.md` if it exists (plain-text scan, no LLM required).
 3. Read `<phase>/digest.md` files where `digest_path` is set.
 
 Directories to skip:
-- Names starting with `_` (e.g. `_portfolio`, `_archived`) unless
-  `--include-archived` is given.
+- `_`-prefixed top-level dirs (e.g. `_portfolio`, `_archived`) are **always**
+  excluded by `enumerate()`. When `--include-archived` is given, run a **second,
+  explicit pass** over `_archived/<…>/.forge-status.yml` (outside `enumerate()`)
+  and fold those features in, flagged as archived — `enumerate()` itself never
+  returns them.
 - Directories with no `.forge-status.yml` (not yet under Product Forge).
 
 ---

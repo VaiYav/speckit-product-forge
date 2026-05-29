@@ -13,10 +13,53 @@ safely, and runs sync-verify.
 
 ## 1. Step 0 — Load Config
 
-Read `.product-forge/config.yml` from the project root (or `config-template.yml`
-from the extension if none exists).
+Build the effective config by deep-merging FOUR file/document layers
+(lowest → highest precedence; rightmost wins), then applying environment
+overrides last:
 
-Extract:
+1. **Shipped defaults** — `config-template.yml` from the installed extension.
+   ALWAYS-LOADED BASE (supplies every key's default). Locate via
+   `specify extension path product-forge`.
+2. **Global** — `~/.product-forge/config.yml` (user-level, cross-project).
+   Skip silently if absent. If `$XDG_CONFIG_HOME` is set, also check
+   `$XDG_CONFIG_HOME/product-forge/config.yml`.
+3. **Project** — `<project-root>/.product-forge/config.yml`. Skip silently if
+   absent.
+4. **Per-feature** — `config_override` on `<FEATURE_DIR>/.forge-status.yml`
+   (applied once a feature is selected).
+
+Apply the **deep-merge rule** (below) between every adjacent pair. Then apply
+`PRODUCT_FORGE_*` env vars over the merged result.
+
+This mirrors git's `system → global → local` precedence, with `config_override`
+and env as two Product-Forge-specific top layers. Layers 1, 3, 4, and 5 already
+exist today; the **global layer (2) is the only structural addition**. The
+global file is **hand-authored** (like a personal global git config) — the
+runtime **reads** it but **NEVER prompt-and-saves** to it.
+
+### 1.1 Deep-merge rule
+
+Used between every adjacent pair of layers:
+
+- **Maps merge recursively, key by key.** A higher layer that sets only
+  `telemetry.dashboards` leaves the lower layer's `telemetry.product_analytics`
+  intact.
+- **Scalars and lists REPLACE wholesale.** A higher layer's list value fully
+  replaces the lower one — e.g. a project `default_competitors` **replaces**
+  (does not append to) a global list. By design.
+- **Nested maps that MUST be deep-merged** (not clobbered): `codebase`,
+  `telemetry`, `design_system`, and `sync_verify` (including `drift_budget`,
+  `auto_resolve`, `contract_regen`). Example: a global config may set
+  `sync_verify.contract_differ: oasdiff` (a machine/personal trait) while the
+  project sets `sync_verify.contract_regen.cmd` (intrinsically repo-specific) —
+  both must survive in the merged `sync_verify`.
+- **Env scope.** `PRODUCT_FORGE_*` addresses **top-level scalar keys only**
+  (e.g. `PRODUCT_FORGE_CODEBASE_PATH`). Nested-key env addressing is undefined
+  and out of scope.
+
+### 1.2 Extract
+
+Extract (from the MERGED result):
 
 - `project_name`
 - `project_tech_stack`
@@ -24,15 +67,26 @@ Extract:
 - `codebase_path` (single-root projects, legacy)
 - `codebase.root` / `codebase.paths` / `codebase.workspace_type` (monorepo mode, v1.5+)
 - `features_dir`
+- `storage_strategy` (default `"flat"`; see [§12](#12-path-resolution-contract))
 - `default_speckit_mode`
-- `default_feature_mode` (new in v1.5.0; default `"standard"`)
+- `default_feature_mode` (default `"standard"`)
+- `flow_mode` (`gated` | `fluid`, default `gated`)
+- `default_track_hint`
 - `progressive_verify_interval`
 - `auto_sync_between_phases`
 - `require_skip_reason`
 - `release_readiness` (`required` | `optional` | `skip`)
+- `e2e_runner`
+- `a11y_gate`
+- `telemetry.*`
+- `sync_verify.*`
+- `output_language`
+- `max_tokens_per_doc`
 
-If the config is missing, prompt the user for project name, tech stack, domain,
-and codebase path, and save the answers to `.product-forge/config.yml`.
+**Missing identity:** if required project identity (name, tech stack, domain,
+codebase path) is still unset after merging, prompt the user and SAVE the
+answers to the **PROJECT** config (`<project-root>/.product-forge/config.yml`) —
+**never** to the global file.
 
 ---
 
@@ -125,9 +179,13 @@ scripts/acquire-lock.sh "$FEATURE_DIR" 1800 "$FORGE_SESSION_ID"
 # ... write `.forge-status.yml` via temp + rename ...
 ```
 
-- `scripts/acquire-lock.sh` uses atomic primitives (`mv -n` with `ln` fallback)
-  that work on Linux, macOS, and WSL. It refuses fresh locks and takes over
-  stale ones as described in §2.2.
+- `scripts/acquire-lock.sh` uses `ln` (hardlink) as its atomic acquisition
+  primitive, followed by a `session_id` verification step that confirms the
+  writer owns the lock it just created. `ln` is used deliberately instead of
+  `mv -n` (BSD `mv -n` silently skips on an existing target with exit 0,
+  defeating the race guard); `ln` exits non-zero on an existing target on both
+  GNU and BSD, so it works on Linux, macOS, and WSL. The script refuses fresh
+  locks and takes over stale ones as described in §2.2.
 - `scripts/release-lock.sh` is idempotent and refuses to delete a lock held
   by a different `session_id`, preventing takeover-race foot-guns.
 
@@ -144,9 +202,17 @@ Check `{features_dir}/` for a folder matching the feature name.
 
 ### 3.1 Detect FEATURE_DIR
 
-- If `FEATURE_DESCRIPTION` is provided: slugify it → `{features_dir}/<slug>/`.
-- If no `FEATURE_DESCRIPTION`: list existing feature dirs, prompt the user to
-  pick or enter a new name.
+The feature root is computed **only** through the Path-Resolution Contract
+([§12](#12-path-resolution-contract)) — `resolve(slug)` for an existing or new
+feature. Do not inline a `{features_dir}/<slug>/` join here; the path logic
+lives in one place.
+
+- If `FEATURE_DESCRIPTION` is provided: slugify it → `FEATURE_DIR = resolve(slug)`
+  (under the default `flat` strategy this is `{features_dir}/<slug>/`, byte-for-byte
+  today's behavior).
+- If no `FEATURE_DESCRIPTION`: enumerate existing feature roots
+  (§12.3 `enumerate()`), prompt the user to pick or enter a
+  new name, then `FEATURE_DIR = resolve(slug)`.
 
 ### 3.2 Read `.forge-status.yml`
 
@@ -173,7 +239,7 @@ Before starting any delegation:
    `.forge-status.yml` (v3).
 2. **Validate status-file enums.** Before using any value from
    `.forge-status.yml`:
-   - `feature_mode` MUST be one of `"lite" | "standard" | "v-model"`.
+   - `feature_mode` MUST be one of `"express" | "lite" | "standard" | "v-model"`.
      See [commands/forge.md §Mode Resolution](../commands/forge.md) step 4
      for the exact abort message.
    - Every `phases.<name>.status` MUST be one of
@@ -217,8 +283,8 @@ delegation is needed — the orchestrator handles it internally.
 | Phase 5 → Phase 5B | Layer 3 (spec.md ↔ plan.md) |
 | Phase 5B → Phase 5C | Layer 4 (plan.md ↔ tasks.md) |
 | Phase 5C → Phase 6 | Layers 3, 4 |
-| Phase 6 → Phase 6B | Layers 5, 6 (tasks ↔ code, spec ↔ code) |
-| Phase 6B → Phase 7 | Full (all 7 layers) |
+| Phase 6 → Phase 6B | Layers 5, 6, 8, 9 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code) |
+| Phase 6B → Phase 7 | Full (all 9 layers) |
 | Phase 7 → Phase 8A | Layer 7 (cross-links only) |
 
 ### 5.2 Quick-sync behavior
@@ -232,7 +298,7 @@ delegation is needed — the orchestrator handles it internally.
 ### 5.3 Full sync on demand
 
 At any time, the user can run `/speckit.product-forge.sync-verify` for a full
-7-layer check. The orchestrator also suggests this before Phase 7 if it has
+9-layer check. The orchestrator also suggests this before Phase 7 if it has
 not been run recently.
 
 ---
@@ -255,6 +321,8 @@ gates:
       qa: null
     skip_reason: null         # required when decision == "skipped" and require_skip_reason is true
     rolled_back_to: null      # required when decision == "rolled_back" (phase name to rewind to)
+    reviewed_sha: "abc1234"   # W5-A2 — git SHA / artifact stamp reviewed; enables delta/incremental review on re-run
+    risk: "low"               # W5-A4 — gate risk class (low | medium | high) from scripts/gate-risk.js
 ```
 
 See [docs/policy.md §2](./policy.md#2-gate-decisions) for the full list of
@@ -480,3 +548,229 @@ projected to exceed the active model's window during the next phase:
 
 The digest-first reading strategy keeps the baseline low. Full artifacts are
 read only when a specific cross-artifact check requires them.
+
+---
+
+## 11. Fluid-Mode Runnable-Set Resolution
+
+Under `flow_mode: fluid` (see [policy.md §4.0.1](./policy.md#401-flow-mode-gated-vs-fluid)
+and [commands/forge.md §"Flow Mode"](../commands/forge.md)), the orchestrator
+does not force the single next phase after each transition. Instead it presents
+the **set of currently-runnable phases** and lets the user pick. This section is
+the authoritative definition of how that set is computed; forge.md Flow Mode and
+policy §4.0.1 defer here.
+
+### 11.1 The dependency-to-enabler rule
+
+A phase is **runnable** when *all of its required upstream artifacts already
+exist*. Dependencies are **enablers** ("Plan is ready to run because `spec.md`
+exists"), not strict order gates. A phase is omitted from the runnable set only
+when an upstream artifact it needs is still missing — never merely because an
+earlier phase was skipped or because it is "out of order".
+
+This resolves **runnability only**. Which phases are *in scope* for the feature
+still defers entirely to the mode-specific phase maps in
+[policy.md §4](./policy.md#4-feature-modes-e1) (and the
+[forge.md phase execution map](../commands/forge.md)). The runnable set is the
+intersection: `{ in-scope for the mode } ∩ { upstream artifacts present }`,
+minus any phase already `completed` (re-runs are offered explicitly, not as part
+of the default set).
+
+### 11.2 Per-phase required upstream artifacts
+
+Artifact prerequisites are drawn from the sync-verify artifact map
+([commands/sync-verify.md](../commands/sync-verify.md), "Determine which
+artifacts exist") and the phase execution map. A phase becomes runnable once the
+artifacts in its row are present under `<FEATURE_DIR>/`.
+
+| Phase | Required upstream artifact(s) | Enabler note |
+|-------|-------------------------------|--------------|
+| 0. Problem Discovery | (none) | always runnable |
+| 1. Research | (none) | always runnable |
+| 2. Product Spec | `research/README.md` (standard/v-model); none for express/lite | runnable once research exists (or immediately in express/lite) |
+| 3. Revalidation | `product-spec/README.md` | runnable once the product spec exists |
+| 4. Bridge → SpecKit | `product-spec/README.md` | runnable once the product spec exists |
+| 5. Plan | `spec.md` | runnable once `spec.md` exists |
+| 5B. Tasks | `plan.md` | runnable once `plan.md` exists |
+| 5C. Pre-Impl Review | `tasks.md` | runnable once `tasks.md` exists |
+| 6. Implement | `tasks.md` | runnable once `tasks.md` exists |
+| 6B. Code Review | code files from completed tasks | runnable once code exists |
+| 7. Verify Full | `spec.md` + code files | runnable once code exists to verify against |
+| 8A. Test Plan | `journeys/` + code files | runnable once journeys and code exist |
+| 8B. Test Run | `.spec.ts` from Phase 8A | runnable once generated tests exist |
+| 9. Release Readiness | verify-full + (when in scope) test-run results | runnable once verification has run |
+
+Optional / conditional phases (`0`, `4.5`, `5.5`, `5C`, `6B`, `8A`, `8B`, `9`,
+`9.5`, `9B`) appear in the runnable set only when both their artifact
+prerequisites are met **and** they are in scope per the mode map. V-Model phases
+follow the same rule against their own artifact prerequisites (see
+[v-model-integration.md](./v-model-integration.md)).
+
+### 11.3 Worked example
+
+A standard-mode feature has produced `research/`, `product-spec/`, and `spec.md`,
+but no `plan.md` yet. The runnable set is:
+
+- **Plan** — runnable (`spec.md` exists).
+- **Revalidation**, **Bridge** — runnable (`product-spec/` exists; re-runnable).
+- **Tasks**, **Implement**, **Verify Full** — *not* runnable (`plan.md` /
+  `tasks.md` / code do not exist yet).
+
+The orchestrator presents `{ Plan, Revalidation, Bridge }` as the structured
+`Next step` prompt (recommended-first: Plan), runs `sync-verify` at the chosen
+transition, and records the gate decision exactly as in gated mode.
+
+---
+
+## 12. Path-Resolution Contract
+
+This is the **single normative rule** for computing where a feature lives on
+disk. Every one of the 31 commands and both deterministic scripts consult it
+rather than inlining their own path logic — the path logic lives in **ONE
+place** (here). It is parameterized by the merged `storage_strategy`
+([§1.2](#12-extract)).
+
+Configurability is scoped to **feature-root PLACEMENT only**. The internal
+artifact tree under each feature (`research/`, `product-spec/journeys/`,
+`contracts/`, `.forge-status.yml`, `testing/`, …) is **INVARIANT** across every
+strategy — every command keeps its feature-relative internal paths verbatim.
+The *only* thing a strategy changes is how a single `FEATURE_DIR` is composed
+from `features_dir` and the feature slug.
+
+### 12.1 Storage strategies
+
+| Strategy | `config_value` | Feature root | Status |
+| --- | --- | --- | --- |
+| **Flat** | `flat` | `{features_dir}/<slug>/` | **Active — default.** Status quo, formalized. Every feature is an immediate child of `features_dir`; the filesystem enforces global slug uniqueness. Resolve is a deterministic one-level join with no scan. An absent `storage_strategy` key resolves to `flat`. |
+| **Domain-nested** | `domain-nested` | `{features_dir}/<domain>/<slug>/` | **Active — first-class (opt-in).** One extra grouping folder by area/team/surface. A single depth-tolerant discovery rule subsumes flat (depth 1) and the existing `_archived/<date-slug>` (depth 2). Mixed flat+nested layouts coexist. |
+| **DDD bounded-context** | `ddd` | `{features_dir}/<context>/<slug>/` | **Active (opt-in).** Groups by bounded context mirroring `specs/<domain>/`, backed by a `features/domains.yml` registry for O(1) slug → context resolution (read by `scripts/lib-paths.js`; healed by the orchestrator). |
+| **Workspace-aligned** | `workspace` | `{features_dir}/<workspace>/<slug>/` | **Active (opt-in, monorepo).** Each feature under its primary monorepo workspace (`scope.primary`), mirroring `codebase.paths`. Same on-disk depth as `domain-nested`. |
+
+`flat` is the zero-config default and the only value an absent key resolves to.
+Grouping is opt **into**, never implicit. `storage_strategy` is validated at
+Step 0: it must be one of the four enum values (`flat`, `domain-nested`, `ddd`,
+`workspace`); an unknown value is rejected — do not silently fall back to
+`flat`. `workspace` additionally requires monorepo mode (a `codebase.paths`
+block); selecting it without one is rejected. Although `storage_strategy` is
+global-eligible, once a repo has features the effective strategy MUST be pinned
+at the **project** layer (same lock-after-creation concern as `features_dir`).
+
+The contract exposes exactly **two operations**. No command computes a feature
+path any other way.
+
+### 12.2 `resolve(slug) → FEATURE_DIR`
+
+Given a feature slug (or a qualified reference), return the single `FEATURE_DIR`
+the invariant internal tree hangs off.
+
+| `storage_strategy` | resolve(slug) |
+| --- | --- |
+| `flat` | `join(features_dir, slug)` — direct join, **no scan**, no disambiguation possible. |
+| `domain-nested` | Match `{features_dir}/*/<slug>/.forge-status.yml` plus the legacy-flat fallback `{features_dir}/<slug>/.forge-status.yml`, skipping `_`-prefixed top-level dirs. 0 → not found (CREATE). 1 → use it. More than 1 → require a qualified `<domain>/<slug>` reference or prompt; **never silently pick the first**. |
+| `ddd` | PRIMARY: read `features/domains.yml`, map slug → context, build `join(features_dir, context, slug)` in O(1) (`scripts/lib-paths.js` does this read-only). Miss/stale entry → glob `{features_dir}/*/<slug>/` → flat fallback; the **orchestrator** heals the registry on a single hit (the deterministic resolver never writes). More than 1 → require qualified `<context>/<slug>`. |
+| `workspace` | Scan `{features_dir}/*/<slug>/` (two levels, skip `_`-prefixed first-level dirs), with a depth-1 `{features_dir}/<slug>/` fallback for unmigrated/single-root features. More than 1 → require `--workspace <ws>` or a `workspace/slug` path-style reference. |
+
+**CREATE (new feature) — placement:**
+
+| `storage_strategy` | FEATURE_DIR on create |
+| --- | --- |
+| `flat` | `join(features_dir, slugify(description))`. |
+| `domain-nested` | `join(features_dir, <domain>, slug)`; `<domain>` from an explicit `<domain>/<slug>` / `--domain`, else interactive pick of existing domains plus "new", else `project_domain` as last-resort fallback. Reject `_`-prefixed and multi-segment domains. |
+| `ddd` | `join(features_dir, <context>, slug)`; `<context>` derived from the targeted `specs/<domain>` (or `scope` / prompt), confirmed with the user, then written as a `slug → context` row in `domains.yml` (registry heal). |
+| `workspace` | `join(features_dir, scope.primary, slug)`. A cross-workspace feature gets exactly ONE home under its primary — never split or duplicated. |
+
+### 12.3 `enumerate() → [FEATURE_DIR, …]`
+
+Return every feature root for cross-feature operations (portfolio, status,
+bridge, sync-verify, flag-cleanup).
+
+**Universal rule (depth-tolerant, strategy-agnostic):**
+
+> Descend from `features_dir`. The **first** directory containing a
+> `.forge-status.yml` IS a feature root — record it and **stop descending** into
+> that subtree. Skip any directory whose name starts with `_` at the top level
+> (reserved namespaces). Skip the `domains.yml` file (`ddd`).
+
+This single rule cleanly subsumes:
+
+- `flat` features at depth 1,
+- `domain-nested`, `ddd`, and `workspace` features at depth 2,
+- the existing `_archived/<date-slug>/` convention (already depth 2, excluded
+  via the top-level `_`-skip),
+- mixed flat + nested layouts during migration.
+
+`.forge-status.yml` lives **only** at the feature root and never deeper, so
+"stop on first hit" is unambiguous.
+
+### 12.4 Reserved namespaces (shared by all strategies)
+
+`_`-prefixed top-level children of `features_dir` are excluded from
+`enumerate()`, and `resolve()` never returns one:
+
+- `_portfolio/` — cross-feature report output (`portfolio.md`,
+  `flag-cleanup-{date}.md`). Stays top-level under every strategy.
+- `_archived/` — `spec-merge` archives (`_archived/<date>-<slug>/`, depth 2).
+  Stays top-level. Under the `ddd` strategy, new archives MAY be
+  context-keyed (`_archived/<context>/<date>-<slug>/`) to mirror the live
+  taxonomy.
+
+> **`workspace` caveat (surfaced not hidden):** under `workspace`,
+> archived features sit at the **same depth (2)** as real features, so the
+> top-level `_`-skip becomes **load-bearing** — a bug there silently pulls
+> archived features into every report.
+
+### 12.5 Sites that MUST adopt the contract
+
+Every site below stops inlining path logic and calls `resolve()` /
+`enumerate()`.
+
+**Executable directory scan:**
+
+- `scripts/migrate-status-v2-to-v3.js` — `findStatusFiles()` one-level
+  `readdirSync` → the depth-tolerant `enumerate()` walk (prune-on-match), via
+  the shared `scripts/lib-paths.js`. (Its `.ts` sibling is only a deprecation
+  stub that prints a redirect and exits 64 — it performs no scan and needs no
+  change.)
+
+**Cross-feature enumeration (prose globs in command files):**
+
+- `commands/portfolio.md` — "each immediate child of `{features_dir}/`" →
+  `enumerate()`. Output still `{features_dir}/_portfolio/portfolio.md`.
+- `commands/status.md` — "list all directories in `{features_dir}/`" →
+  `enumerate()`.
+- `commands/bridge.md` — "list all feature directories in `{features_dir}/`" →
+  `enumerate()`; skip-if-empty unchanged.
+- `commands/sync-verify.md` — no-slug "list features and ask which" →
+  `enumerate()`. Per-layer inputs stay `{FEATURE_DIR}/...` (invariant tree).
+- `commands/feature-flag-cleanup.md` — `{features_dir}/*/flags/registry.yml` →
+  `enumerate()` then `<root>/flags/registry.yml`. Report still under
+  `_portfolio/`.
+
+**Single-feature resolution:**
+
+- `scripts/validate-traceability.js` and `scripts/gate-risk.js` — the explicit
+  `--feature-dir <path>` form is placement-agnostic for ALL strategies. The
+  `--feature <slug>` shorthand now resolves **through the contract** as well
+  (shared `scripts/lib-paths.js` → `resolveFeatureDir()`): it matches the flat
+  path plus depth-2 `{features_dir}/*/<slug>/`, and **errors on an ambiguous
+  bare slug**, asking for a qualified `<group>/<slug>` reference. The
+  orchestrator MAY still pass the resolved `--feature-dir` for zero ambiguity.
+- `commands/research.md`, `commands/backfill.md`,
+  `commands/monitoring-setup.md` — replace the inline join with
+  `FEATURE_DIR = resolve(slug)`.
+
+**No glob, operates within one FEATURE_DIR (no change beyond upstream resolve):**
+
+- `commands/forge.md` and all per-feature commands — consume `FEATURE_DIR` from
+  the resolver; internal literals (`flags/registry.yml`,
+  `monitoring/dashboard.json`, `contracts/openapi.yaml`, …) are untouched.
+
+### 12.6 Qualified-reference caveat for `depends_on`
+
+`dependencies.depends_on` in `.forge-status.yml` (see
+[schema.md](./schema.md)) stores **bare sibling slugs**. Under any nesting
+strategy a bare slug can be ambiguous. Nesting strategies SHOULD store qualified
+refs (`<domain>/<slug>`, and — when those strategies ship — `<context>/<slug>`
+or `<workspace>/<slug>`); a bare slug that resolves to more than 1 candidate
+falls back to the same disambiguation prompt as `resolve()`. This is an extra
+real cost the nesting strategies carry and `flat` does not.

@@ -2,9 +2,11 @@
 name: speckit.product-forge.monitoring-setup
 description: >
   Phase 9.5 (optional): produce real monitoring artifacts for a feature — a
-  NewRelic-compatible dashboard JSON, alert rules, and SLI/SLO definitions
-  derived from plan NFRs and tracking-plan events. Wraps the installed
-  `newrelic-dashboard-builder` skill (or equivalent). Runs after
+  dashboard, alert rules, and SLI/SLO definitions derived from plan NFRs and
+  tracking-plan events. Targets the configured backend (`telemetry.dashboards`:
+  PostHog / Sentry; NewRelic optional via the `newrelic-dashboard-builder`
+  skill). When the matching MCP is connected, creates the dashboard/alerts
+  directly; otherwise writes provider-neutral artifact stubs. Runs after
   release-readiness, before deploy.
   Use: "monitoring setup", "build dashboard", "/speckit.product-forge.monitoring-setup"
 ---
@@ -27,16 +29,22 @@ $ARGUMENTS
 ```
 
 Parse for:
-- Feature slug (required) — which `{features_dir}/<slug>` to operate on.
-- `--provider=<name>` — defaults to `telemetry.dashboards` from config
-  (`posthog` / `sentry` / `newrelic`), else `newrelic`. `grafana`, `datadog`
-  also accepted.
+- Feature slug (required) — resolved to `FEATURE_DIR` via the Path-Resolution
+  Contract `resolve(slug)` ([docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract));
+  under the default `flat` strategy this is `{features_dir}/<slug>`.
+- `--provider=<name>` — resolves from `telemetry.dashboards` in config
+  (`posthog` / `sentry` / `newrelic`; `grafana`, `datadog` also accepted).
+  An explicit `--provider` overrides config. If `telemetry.dashboards` is
+  `none` or unset and no `--provider` is given, there is **no** default
+  backend: produce provider-neutral templated stubs and note the gap (do
+  **not** silently assume NewRelic).
 
-> **Real backends (v1.6, Theme D):** when `telemetry.dashboards` is `posthog` or
+> **Real backends (v1.6, Theme D):** when the resolved provider is `posthog` or
 > `sentry` and the matching MCP is connected, create the dashboard/alerts directly
-> via that MCP (PostHog insights/dashboards, Sentry alerts) in addition to writing
-> the artifact files. Map `EVT-*` ids to real event names first. NewRelic remains a
-> supported option via the installed skill; unwired providers produce templated stubs.
+> via that MCP (PostHog insights/dashboards + alerts, Sentry alerts/dashboards) in
+> addition to writing the artifact files. Map `EVT-*` ids to real event names first.
+> NewRelic remains a supported option via the installed skill; unresolved or unwired
+> providers produce provider-neutral templated stubs.
 
 ---
 
@@ -78,8 +86,36 @@ it as an action item instead of inventing a number.
 
 ## Step 2: Build Dashboard
 
-Delegate to `newrelic-dashboard-builder` (if provider is `newrelic` and the
-skill is installed). Pass:
+Branch on the resolved provider. Every branch also writes the artifact file
+`{FEATURE_DIR}/monitoring/dashboard.json` so the output is consistent across
+backends; the MCP branches additionally create the live dashboard.
+
+### 2A: PostHog (provider is `posthog`)
+
+When the PostHog MCP is connected, create the dashboard directly via the MCP:
+
+- Map the SLI table from Step 1 and the `EVT-*` events from the tracking plan
+  to real PostHog event/insight names first (discover names; never guess).
+- Create one PostHog insight per SLI/funnel/trend (rate, latency, adoption
+  funnel across `JRN`/`STEP` events) and group them into a PostHog dashboard.
+- Mirror the resulting insight/dashboard definitions into
+  `{FEATURE_DIR}/monitoring/dashboard.json` for review and replay.
+
+If the MCP is not connected, write the artifact stub and note the gap.
+
+### 2B: Sentry (provider is `sentry`)
+
+When the Sentry MCP is connected, create the dashboard directly via the MCP:
+
+- Build error-rate / regression / latency widgets scoped to the feature's
+  release and code paths (resolve the Sentry project first).
+- Mirror the widget definitions into `{FEATURE_DIR}/monitoring/dashboard.json`.
+
+If the MCP is not connected, write the artifact stub and note the gap.
+
+### 2C: NewRelic (provider is `newrelic`)
+
+Delegate to `newrelic-dashboard-builder` (if the skill is installed). Pass:
 
 - The SLI table from Step 1.
 - Panels proposed in `release-readiness.md` Step 3C.
@@ -88,12 +124,31 @@ skill is installed). Pass:
 
 Produce `{FEATURE_DIR}/monitoring/dashboard.json` — NerdGraph-compatible.
 
-If the provider skill is not installed, fall back to a templated JSON
-with TODOs and note: *"Provider skill missing — dashboard is a stub."*
+If the skill is not installed, fall back to a templated JSON with TODOs and
+note: *"Provider skill missing — dashboard is a stub."*
+
+### 2D: Unresolved / other providers
+
+If no provider resolved (`telemetry.dashboards: none` / unset, no `--provider`)
+or the provider has no wired branch, produce a provider-neutral templated
+`dashboard.json` with TODOs and note: *"No monitoring backend resolved —
+dashboard is a stub."*
 
 ---
 
 ## Step 3: Build Alerts
+
+Always generate the artifact file `{FEATURE_DIR}/monitoring/alerts.yml` (below).
+When the resolved provider's MCP is connected, also create the live alerts:
+
+- **PostHog** — create insight/threshold alerts on the Step-2A insights
+  (error-rate and latency conditions) via the PostHog MCP.
+- **Sentry** — create issue/metric alert rules scoped to the feature's
+  release and code paths via the Sentry MCP.
+- **NewRelic** — alert policies are applied manually from `alerts.yml` (or via
+  `newrelic-dashboard-builder` if it supports policy creation).
+- **Unresolved / other** — write `alerts.yml` only and note that policies must
+  be applied manually.
 
 Generate `{FEATURE_DIR}/monitoring/alerts.yml`:
 
@@ -155,7 +210,7 @@ monitoring:
   dashboard_path: "monitoring/dashboard.json"
   alerts_path: "monitoring/alerts.yml"
   slo_path: "monitoring/slo.md"
-  provider: "{newrelic | ...}"
+  provider: "{resolved telemetry.dashboards — posthog | sentry | newrelic | none}"
 ```
 
 Also produce a short `monitoring/digest.md` following the phase-digest
@@ -190,7 +245,9 @@ template to remain consistent with the digest rule in
    separate capability outside Product Forge's scope.
 2. **No invented numbers.** SLIs without explicit targets are flagged
    rather than filled with defaults.
-3. **Skill delegation, graceful fallback.** If `newrelic-dashboard-builder`
-   is not installed, produce stubs and note the gap; do not abort.
+3. **MCP/skill delegation, graceful fallback.** Use the resolved provider's
+   MCP (PostHog / Sentry) or skill (`newrelic-dashboard-builder`) when wired;
+   if it is unavailable or no provider resolved, produce provider-neutral
+   stubs and note the gap; do not abort.
 4. **Idempotent.** Re-running overwrites only `monitoring/*` files; never
    touches tracking-plan, spec, or plan.

@@ -19,14 +19,20 @@ lifecycle, what artifacts exist, and exactly what to do next.
 $ARGUMENTS
 ```
 
-If `$ARGUMENTS` contains a feature name or slug, show status for that specific feature.
-If empty, list all features in `{features_dir}/` and ask which to inspect (or show all).
+If `$ARGUMENTS` contains a feature name or slug, show status for that specific feature
+(resolve it to `FEATURE_DIR` via the Path-Resolution Contract `resolve(slug)`,
+[docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract) — under
+`domain-nested` an ambiguous bare slug needs a `<domain>/<slug>` qualifier).
+If empty, enumerate all features (`enumerate()`, §12.3) and ask which to inspect (or show all).
 
 ---
 
 ## Step 1: Find Features
 
-List all directories in `{features_dir}/` that contain a `.forge-status.yml`.
+Enumerate feature roots via the Path-Resolution Contract `enumerate()`
+([docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) —
+depth-tolerant over `flat` (depth 1) and `domain-nested` (depth 2), skipping
+`_`-prefixed top-level dirs.
 
 If multiple features exist and no specific feature was requested:
 

@@ -61,6 +61,21 @@ codebase_path: "."
 # Avoid changing this after features have been created
 features_dir: "features"
 
+# Feature-ROOT placement strategy. Controls ONLY where each feature directory
+# sits under features_dir; the internal artifact tree (research/, product-spec/,
+# contracts/, .forge-status.yml, …) is invariant across every strategy.
+# Options:
+#   "flat"          — (default) immediate child: features/<slug>/
+#   "domain-nested" — one grouping level: features/<domain>/<slug>/
+#   "ddd"           — bounded-context, registry-backed (features/domains.yml): features/<context>/<slug>/
+#   "workspace"     — monorepo workspace (scope.primary): features/<workspace>/<slug>/
+# All four are active and selectable. `workspace` requires monorepo mode (a
+# `codebase.paths` block). An absent key resolves to "flat" (byte-for-byte
+# today's layout — no disk change).
+# Avoid changing this after features have been created; relocate with `git mv`
+# (the internal tree is self-path-free and moves intact).
+storage_strategy: "flat"
+
 # ─── SpecKit Integration ───────────────────────────────────────────────────────
 
 # Default SpecKit mode for Phase 4 bridge
@@ -117,8 +132,12 @@ release_readiness: "optional"
 
 # Default phase map selected when a new feature is created.
 # Options:
+#   "express"  — 4-phase combined pass for trivial changes (product-spec minimal →
+#                plan inline → implement → verify); first-class mode, escalatable
+#                to lite/standard. See docs/policy.md §4.1.
 #   "lite"     — 5 phases: problem-discovery (opt) → product-spec → plan → implement → verify
-#   "standard" — full 14-phase lifecycle (recommended for most features)
+#   "standard" — full standard lifecycle: 8 always-on core phases + 12
+#                optional/conditional = 20 phase slots (recommended for most features)
 #   "v-model"  — standard bookends + V1–V13 delegated to the external
 #                V-Model Extension Pack (leocamello/spec-kit-v-model ≥0.5.0).
 #                REQUIRES that plugin to be installed separately:
@@ -153,6 +172,17 @@ default_track_hint: "standard"
 # Options: "playwright-cli" | "none"
 e2e_runner: "playwright-cli"
 
+# Accessibility gate (v1.6, W5-B2). Automated WCAG-AA floor woven into the
+# Phase 8A generated journey specs and run by Phase 8B (test-run §4.7) via
+# `@axe-core/playwright`. This is a deterministic minimum bar, NOT a substitute
+# for manual a11y review.
+# Options:
+#   "axe"  — generate one WCAG-AA axe-core check per JRN (default for any
+#            feature with browser journeys; a no-op for non-browser journeys,
+#            which test-run §4.7 already skips).
+#   "none" — do not generate the automated a11y floor.
+a11y_gate: "axe"
+
 # ─── Telemetry Providers (v1.6.0) ──────────────────────────────────────────────
 
 # Real telemetry backends used by retrospective, monitoring-setup, and
@@ -160,10 +190,13 @@ e2e_runner: "playwright-cli"
 # product_analytics: posthog | amplitude | none
 # error_tracking:    sentry | none
 # dashboards:        posthog | sentry | newrelic | none
+# `posthog` and `sentry` are wired via their MCP servers (no extra setup beyond
+# the MCP). `newrelic` is NOT MCP-wired — it requires the external
+# newrelic-dashboard-builder skill. Default is "none" (no dashboards built).
 telemetry:
   product_analytics: "none"
   error_tracking: "none"
-  dashboards: "newrelic"
+  dashboards: "none"
 
 # ─── Design System (v1.6.0) ────────────────────────────────────────────────────
 
@@ -183,6 +216,19 @@ telemetry:
 # See docs/policy.md §3.
 require_skip_reason: true
 
+# ─── Optional-Phase Governance ───────────────────────────────────────────────
+#
+# These force individual optional phases to run instead of being skippable.
+# All default false (the phase stays optional and may be skipped per §3).
+# See docs/policy.md §6.
+#
+#   require_pre_impl_review — force the pre-implementation review phase.
+#   require_code_review     — force the code-review phase.
+#   require_testing         — force the test-plan / test-run phases.
+require_pre_impl_review: false
+require_code_review: false
+require_testing: false
+
 # ─── Sync-Verify Drift Budget (v1.5.0) ─────────────────────────────────────────
 
 # Drift budget controls how sync-verify categorizes and reports differences.
@@ -195,12 +241,46 @@ sync_verify:
   # Only "cosmetic" is supported; opt-in by setting to true.
   auto_resolve:
     cosmetic: false
+  # Executable contract differ (v1.6, W5-B4). Consumed by sync-verify Layer 8 /
+  # verify-full Layer 9. When set to "oasdiff" AND a regen source is configured
+  # AND `oasdiff` is on PATH, FE↔BE OpenAPI drift becomes a deterministic tool
+  # exit code instead of an LLM prose read. Otherwise the prose check is used.
+  # (OpenAPI only — asyncapi.yaml/events stay on the prose path.)
+  contract_differ: none          # none (default) | oasdiff
+  contract_regen:                # only used when contract_differ != none
+    cmd: ""                      # command that emits the code-derived OpenAPI spec to stdout
+    out: ".forge-tmp/openapi.from-code.yaml"   # temp path the cmd writes to (NEVER inside contracts/)
+
+# ─── Supply Chain (release-readiness) ──────────────────────────────────────────
+
+# License gate for the dependency-license audit run by release-readiness (Phase 9).
+# `license_allowlist` is the set of SPDX license IDs considered acceptable; a
+# dependency whose license is outside this list is flagged as a release blocker.
+# Leave the list as-is to use the permissive default, or tailor it to your
+# organization's policy.
+supply_chain:
+  license_allowlist:
+    - "MIT"
+    - "Apache-2.0"
+    - "BSD-2-Clause"
+    - "BSD-3-Clause"
+    - "ISC"
+    - "0BSD"
+    - "Unlicense"
+
+# ─── Localization (i18n-harvest) ───────────────────────────────────────────────
+
+# Locales the i18n-harvest phase should produce/verify translation coverage for.
+# Leave empty to auto-detect from the existing i18n folder structure (or skip
+# i18n entirely for English-only projects).
+# Example: ["en", "es", "de", "fr"]
+supported_locales: []
 
 # ─── Advanced ──────────────────────────────────────────────────────────────────
 
 # Maximum token budget target per generated document (approximate)
 # Larger features will auto-decompose into multiple files
-# Recommended: 3000-5000 tokens per file
+# Recommended: 3000-6000 tokens per file
 max_tokens_per_doc: 4000
 
 # Language for all generated documents

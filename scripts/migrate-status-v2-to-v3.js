@@ -22,6 +22,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { enumerateFeatures } = require("./lib-paths");
 
 function parseArgs(argv) {
   const opts = { dryRun: false, featuresDir: "features" };
@@ -54,23 +55,14 @@ function printHelp() {
 }
 
 function findStatusFiles(rootDir) {
-  // Find every `.forge-status.yml` exactly one level below rootDir.
-  const out = [];
-  let entries;
-  try {
-    entries = fs.readdirSync(rootDir, { withFileTypes: true });
-  } catch (err) {
-    const reason = err && err.message ? err.message : String(err);
-    throw new Error(`Cannot read features directory at ${rootDir}: ${reason}`);
+  // Depth-tolerant discovery via the Path-Resolution Contract (lib-paths.js /
+  // docs/runtime.md §12.3): every feature root under rootDir — flat (depth 1)
+  // AND domain-nested (depth 2) — excluding `_`-prefixed reserved namespaces
+  // (_portfolio, _archived). Pre-domain-nested this only ever saw depth 1.
+  if (!fs.existsSync(rootDir)) {
+    throw new Error(`Cannot read features directory at ${rootDir}: not found`);
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const candidate = path.join(rootDir, entry.name, ".forge-status.yml");
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-      out.push(candidate);
-    }
-  }
-  return out;
+  return enumerateFeatures(rootDir).map((d) => path.join(d, ".forge-status.yml"));
 }
 
 // Returns one of: "up-to-date" | "upgraded" | "stamped".

@@ -56,7 +56,11 @@ Read `.product-forge/config.yml`:
 1. Resolve `--source` to an absolute path.
 2. Check the path exists and is a directory or file.
 3. Confirm the path is under `codebase_path` (warn if not).
-4. Derive `slug` from `--slug` or last path component (slugify).
+4. Derive `slug` from `--slug` or last path component (slugify). Place/resolve
+   `FEATURE_DIR` via the Path-Resolution Contract CREATE rule (`resolve(slug)`,
+   [docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)) —
+   `flat` → `{features_dir}/<slug>/`; `domain-nested` → prompt for/derive
+   `<domain>` and use `{features_dir}/<domain>/<slug>/`.
 
 Abort with a clear message if the source does not exist or is empty.
 

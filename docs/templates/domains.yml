@@ -1,0 +1,25 @@
+# features/domains.yml — DDD bounded-context registry
+#
+# Used only when `storage_strategy: ddd` (docs/config.md, docs/runtime.md §12).
+# Maps each feature slug to its bounded context so Product Forge can resolve a
+# feature root in O(1): FEATURE_DIR = {features_dir}/<context>/<slug>/.
+#
+# - The deterministic resolver (scripts/lib-paths.js) READS this file; on a miss
+#   or a stale entry it falls back to a depth-tolerant disk scan, so the registry
+#   is an optimization + canonical mapping, never a single point of failure.
+# - The orchestrator HEALS the file (adds/repairs a `slug: context` row) on
+#   create and on a single-hit scan fallback.
+# - Contexts SHOULD mirror the canonical living spec at specs/<context>/.
+# - This is a FILE at the root of features/ (not a feature dir); enumerate()
+#   skips it.
+#
+# Format (one row per feature):
+#   <feature-slug>: <context>
+#
+# Example:
+#   checkout-redesign: ordering
+#   apply-coupon: ordering
+#   invoice-pdf: billing
+#   sso-login: identity
+
+# (empty by default — populated as features are created under storage_strategy: ddd)

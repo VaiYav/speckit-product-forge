@@ -22,11 +22,11 @@ $ARGUMENTS
 ```
 
 Parse the input:
-1. **Feature slug** (e.g., "push-notifications") → target that feature
+1. **Feature slug** (e.g., "push-notifications") → target that feature (resolved to `FEATURE_DIR` via the contract's `resolve(slug)`, [docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract))
 2. **`--quick`** → run only layers relevant to the current phase transition (used by forge orchestrator)
-3. **`--layer N`** → run only layer N (1–7)
+3. **`--layer N`** → run only layer N (1–9)
 4. **`--fix`** → after reporting, apply approved resolutions (default: report only)
-5. **Empty** → list features and ask which to check, then run full 7-layer scan
+5. **Empty** → enumerate features (contract `enumerate()`, [docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) and ask which to check, then run full 9-layer scan
 
 ---
 
@@ -53,6 +53,9 @@ Check existence and load metadata for each artifact:
 | pre-impl-review.md | `{FEATURE_DIR}/pre-impl-review.md` | Supplementary |
 | code-review.md | `{FEATURE_DIR}/code-review.md` | Supplementary |
 | All .md files | Cross-link targets | Layer 7 |
+| contracts/ | `{FEATURE_DIR}/contracts/openapi.yaml`, `{FEATURE_DIR}/contracts/asyncapi.yaml` | Layer 8 |
+| traceability.yml | `{FEATURE_DIR}/traceability.yml` | Layers 8, 9 |
+| specs/ (canonical) | `{FEATURE_DIR}/specs/` | Layer 9 |
 
 Skip layers where either side doesn't exist yet. Report skipped layers.
 
@@ -143,6 +146,145 @@ Skip layers where either side doesn't exist yet. Report skipped layers.
 - **WARNING** for each broken link
 - Check all document navigation headers (`> Related:`) are consistent
 
+### Layer 8: FE ↔ BE Contract Drift (v1.6, Theme F)
+
+Load the API/event contracts (`contracts/openapi.yaml` + `contracts/asyncapi.yaml`)
+and cross-check against the FE and BE implementation. The contract is the single
+source of truth: **FE → contract → BE** (no DB leg).
+
+**Forward check — every contract is implemented and consumed?**
+- For each `API-*` contract referenced by a journey/row (use `traceability.yml`
+  when present; fall back to the contract files directly):
+  - Verify a backend route/handler implements it (BE impl exists).
+  - Verify a frontend client call invokes it (FE call exists).
+  - Verify the FE call and BE handler match the contract shape (path, method,
+    payload/params, status codes).
+- **CRITICAL** if a contract has no backend implementation, or a FE call targets
+  an undefined contract.
+- **CRITICAL** if the FE call or BE handler shape differs from the contract
+  (path/method/payload mismatch).
+
+**Backward check — contract defined but unused?**
+- For each `API-*` defined in the contracts: verify it is referenced by at least
+  one journey/row and reached by FE→BE.
+- **WARNING** if a contract is defined but never used (dead contract).
+
+#### Executable contract differ (v1.6, W5-B4)
+
+The forward/backward shape checks above are an LLM read. When the project
+opts in, run a **deterministic OpenAPI differ** instead, so contract drift is
+a tool exit code, not a prose judgement. Read `sync_verify.contract_differ`
+from `.product-forge/config.yml`:
+
+```yaml
+sync_verify:
+  contract_differ: none          # none (default) | oasdiff
+  contract_regen:                # only used when contract_differ != none
+    cmd: ""                      # command that emits the code-derived OpenAPI spec to stdout
+    out: ".forge-tmp/openapi.from-code.yaml"   # temp path the cmd writes to (NEVER inside contracts/)
+```
+
+**Decision rule (OpenAPI only — `asyncapi.yaml`/events stay on the prose path):**
+
+- `contract_differ: oasdiff` **AND** a regen source is configured (`contract_regen.cmd`
+  is set, or `contract_regen.out` already exists from the build) **AND** `oasdiff`
+  is on `PATH` → run the differ.
+- Otherwise (default `none`, no regen source, or `oasdiff` missing) → fall back
+  to the LLM prose check above. Note the fallback reason in the finding evidence.
+
+When the differ runs, regenerate the code-derived spec to the temp path, then
+diff it against the committed contract (the committed contract is the base/truth):
+
+```bash
+# 1. Regenerate the OpenAPI spec FROM the running code to a temp path (read-only w.r.t. the repo).
+#    contract_regen.cmd is provided by the project (e.g. a framework's openapi export);
+#    it MUST write to contract_regen.out, never into contracts/.
+mkdir -p "$(dirname "$REGEN_OUT")"
+eval "$REGEN_CMD" > "$REGEN_OUT"          # skip this step if contract_regen.out already exists
+
+# 2. Breaking-change detection → CRITICAL evidence (exit 1 == ERR-level breaking change found).
+oasdiff breaking "$FEATURE_DIR/contracts/openapi.yaml" "$REGEN_OUT" --fail-on ERR
+BREAKING_EXIT=$?
+
+# 3. Full structured drift surface → WARNING evidence (any non-breaking divergence).
+oasdiff diff "$FEATURE_DIR/contracts/openapi.yaml" "$REGEN_OUT" -f text
+oasdiff diff "$FEATURE_DIR/contracts/openapi.yaml" "$REGEN_OUT" -f json   # machine-readable for the report
+```
+
+Translate the tool output into DRIFT items — **the exit code is evidence, not a
+verdict**:
+
+- `oasdiff breaking … --fail-on ERR` exits **non-zero** → emit a **CRITICAL**
+  `DRIFT-NNN` (Layer 8, structural) per breaking change, with the oasdiff line as
+  Evidence. This **does not** short-circuit the human loop: it flows through
+  Step 5 like every other finding (interactive-first; never auto-fail a gate —
+  policy §9.3).
+- `oasdiff diff` shows non-breaking divergence → emit **WARNING** `DRIFT-NNN`
+  items (contract ↔ code shape drift) carrying the diff hunks as Evidence.
+- Clean (`breaking` exit 0, empty `diff`) → Layer 8 contract-shape check is ✅.
+
+> Defaults to the prose path **by design** (`contract_differ: none`); the
+> executable differ is opt-in. Config keys `sync_verify.contract_differ` /
+> `sync_verify.contract_regen` must also be documented in `config-template.yml`
+> + `docs/config.md` (out of this file's scope — cross-file dependency).
+
+### Layer 9: Doc ↔ Code Reconciliation (v1.6, Theme G)
+
+Reconcile documented intent against code in both directions, using
+`traceability.yml` + the canonical `specs/` (when present); fall back to raw
+artifacts only where the matrix has no row.
+
+**Forward check — unimplemented docs?**
+- Every documented requirement/endpoint/component (matrix row, `FR-*`,
+  `API-*`, `CMP-*`) maps to implementing code.
+- **CRITICAL** if a documented behavior has no implementing code.
+
+**Backward check — undocumented code?**
+- Every significant code path maps back to a documented requirement/task
+  (a matrix row or a task in `tasks.md`).
+- **WARNING** for a significant undocumented code path (no matrix row, no task) —
+  an orphan.
+- On drift, note the suggested canonical-spec update for `spec-merge` (Theme B)
+  so the reconciliation loop can feed back into the living spec.
+
+#### Attribute every orphan (v1.6, W5-C1)
+
+An orphan is an **attributed event**, not an anonymous warning. For each orphan
+path, resolve the commit SHA + author with real git/index lookups so the
+WARNING names who introduced the out-of-band edit:
+
+```bash
+# A) Path normalisation. task_log[].paths are workspace-prefixed
+#    (e.g. "back/src/...", "backend:src/..."). Strip the prefix to a
+#    repo-relative path before any git call, or git silently returns nothing.
+REPO_PATH="${ORPHAN_PATH#*:}"      # drop a "workspace:" prefix if present
+REPO_PATH="${REPO_PATH#*/}"        # ...or a "workspace/" dir prefix (per the configured layout)
+
+# B) Tasked file — reverse-index task_log[].commit_sha, then resolve the author
+#    from that exact commit (commit_sha carries the SHA but not the author).
+#    (Pick the task_log entry whose .paths contains ORPHAN_PATH → $TASK_SHA.)
+git show -s --format=%h,%an "$TASK_SHA"
+
+# C) Un-tasked file — no task_log row → ask git directly for the last touch.
+git log -1 --format=%h,%an -- "$REPO_PATH"
+```
+
+Attribution rules:
+
+- If a `task_log[]` entry's `paths` contains the orphan path → use its
+  `commit_sha` and resolve the author via `git show -s --format=%h,%an <sha>`
+  (B). This means a task DID touch the file but it has no doc/matrix trace — an
+  attributed orphan.
+- Else fall back to `git log -1 --format=%h,%an -- <repo-path>` (C).
+- If git returns **empty** (uncommitted working-tree edit) → attribute as
+  `uncommitted / working-tree` rather than leaving it blank.
+
+Carry `commit: {sha}` and `author: {name}` into the orphan `DRIFT-NNN`
+Evidence so the finding reads, e.g., *"orphan `src/lib/rate-limit.ts` — no
+matrix row, no task — introduced by `a1b2c3d` (J. Doe)"*. The suggested
+canonical-spec update for `spec-merge` then names a real author, not an
+anonymous drift.
+
 ---
 
 ## Step 3: Compile Drift Report
@@ -154,7 +296,7 @@ For each finding, create an entry:
 
 | Field | Value |
 |-------|-------|
-| **Layer** | {1-7}: {layer name} |
+| **Layer** | {1-9}: {layer name} |
 | **Direction** | Forward (earlier → later) / Backward (later → earlier) |
 | **Severity** | CRITICAL / WARNING / INFO |
 | **Category** | structural / cosmetic (see §3A) |
@@ -244,7 +386,7 @@ Write `{FEATURE_DIR}/sync-report.md`:
 # Sync & Verify Report: {Feature Name}
 
 > Feature: {slug} | Date: {today}
-> Layers checked: {N}/7 | Skipped: {list of skipped layers and why}
+> Layers checked: {N}/9 | Skipped: {list of skipped layers and why}
 > Phase: {current phase from .forge-status.yml}
 
 ## Summary
@@ -266,7 +408,13 @@ Write `{FEATURE_DIR}/sync-report.md`:
 ### Layer 2: product-spec/ ↔ spec.md — {status}
 {findings or "No drift detected"}
 
-... (all 7 layers)
+... (Layers 3–7 as above)
+
+### Layer 8: FE ↔ BE Contract Drift — {✅ CLEAN / ⚠️ {N} findings / ❌ {N} findings}
+{findings or "No drift detected"}
+
+### Layer 9: Doc ↔ Code Reconciliation — {✅ CLEAN / ⚠️ {N} findings / ❌ {N} findings}
+{findings or "No drift detected"}
 
 ## All Drift Items
 
@@ -282,7 +430,7 @@ Write `{FEATURE_DIR}/sync-report.md`:
 
 | Run | Date | Layers | CRITICAL | WARNING | Verdict |
 |-----|------|--------|----------|---------|---------|
-| #{N} | {date} | {N}/7 | {N} | {N} | {verdict} |
+| #{N} | {date} | {N}/9 | {N} | {N} | {verdict} |
 ```
 
 Also write `{FEATURE_DIR}/sync-report.json` with machine-readable format.
@@ -296,7 +444,7 @@ Also write `{FEATURE_DIR}/sync-report.json` with machine-readable format.
   🔄 Sync & Verify: {Feature Name}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Layers checked: {N}/7
+  Layers checked: {N}/9
   Verdict: {CONSISTENT / DRIFT DETECTED / CRITICAL DRIFT}
 
   ❌ CRITICAL:  {N}
@@ -371,8 +519,8 @@ When called with `--quick` by the forge orchestrator between phase transitions, 
 | After Phase 5 → Phase 5B | Layer 3 (spec.md ↔ plan.md) |
 | After Phase 5B → Phase 5C | Layer 4 (plan.md ↔ tasks.md) |
 | After Phase 5C → Phase 6 | Layers 3, 4 |
-| After Phase 6 → Phase 6B | Layers 5, 6 (tasks ↔ code, spec ↔ code) |
-| After Phase 6B → Phase 7 | Full (all 7 layers) |
+| After Phase 6 → Phase 6B | Layers 5, 6, 8, 9 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code) |
+| After Phase 6B → Phase 7 | Full (all 9 layers) |
 | After Phase 7 → Phase 8A | Layer 7 (cross-links only) |
 
 In quick mode:
