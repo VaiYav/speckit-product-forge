@@ -6,13 +6,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [1.6.0] — "Bulbasaur" — 2026-05-29
 
-> Additive groundwork for configurable documentation storage + a global config
-> layer, plus a repo-wide consistency pass. No breaking changes; with no new
-> config keys set, behavior is byte-for-byte identical to 1.6.0.
+> First codenamed release 🌱 (**Bulbasaur**). A minor, fully **additive** release
+> in three strands: (1) the SDD-flow wave — a spec-anchored living spec with a
+> full traceability matrix, structured journeys → Playwright E2E, FE↔BE
+> contract-first APIs, telemetry MCP wiring, a risk-scored two-layer gate review,
+> and a first-class express track; (2) configurable documentation **storage
+> strategies**, a single **path-resolution contract**, and a layered **global
+> config**; (3) a repo-wide **consistency/audit pass** (56 findings). No breaking
+> changes — with no new config keys set, behavior is byte-for-byte identical to
+> v1.5.1. Schema v3 stays additive; the flat layout remains the zero-config
+> default.
 
-### Added
+### Added — Configurable storage strategies + global config
 - **`storage_strategy` config key** — selectable feature-root placement, all
   four values **active**: `flat` (default, today's `features/<slug>/`),
   `domain-nested` (`features/<domain>/<slug>/`), `ddd`
@@ -46,7 +53,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Documented previously-undocumented config keys: `supply_chain.license_allowlist`,
   `supported_locales`, `constitution_path`.
 
-### Fixed
+### Fixed — repo-wide consistency/audit pass (56 findings)
 - Repo-wide consistency pass (56 verified findings; see
   [`docs/improvements/2026-05-system-audit.md`](docs/improvements/2026-05-system-audit.md)):
   command count `29 → 31`; version coherence at `1.6.0` across README / CHANGELOG /
@@ -65,18 +72,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   (rejects unsafe `session_id` to prevent JSON/grep injection).
 - `release-readiness` license-allowlist env override renamed to the documented
   `PRODUCT_FORGE_SUPPLY_CHAIN_LICENSE_ALLOWLIST` prefix.
-
----
-
-## [1.6.0] — 2026-05-29
-
-> Minor release (additive). The SDD-flow wave: a spec-anchored living spec with
-> a full traceability matrix, design-system-grounded mockups, structured
-> journeys that drive E2E, FE↔BE contract-first APIs, telemetry MCP wiring, a
-> two-layer risk-scored gate review, and an express mode. Schema v3 for
-> `.forge-status.yml` stays **additive** — no breaking change to existing
-> features; nothing on disk moves for current installs. The flat layout remains
-> the zero-config default.
 
 ### Added — 2 new commands (catalog now 31)
 
@@ -703,7 +698,6 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
-[Unreleased]: https://github.com/VaiYav/speckit-product-forge/compare/v1.6.0...HEAD
 [1.6.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.4.0...v1.5.0

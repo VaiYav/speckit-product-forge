@@ -570,7 +570,7 @@ scripts/                                  ← [v1.5]
 ├── release-lock.sh
 ├── gate-risk.js                          ← [v1.6] {phase × risk} classifier for headless gates
 ├── validate-traceability.js             ← [v1.6] deterministic traceability validator
-├── lib-paths.js                          ← [v1.7] Path-Resolution Contract resolve()/enumerate() (runtime.md §12)
+├── lib-paths.js                          ← [v1.6] Path-Resolution Contract resolve()/enumerate() (runtime.md §12)
 └── lib-yaml.js                           ← [v1.6] shared zero-dep YAML subset parser
 ```
 

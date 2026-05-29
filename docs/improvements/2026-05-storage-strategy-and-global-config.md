@@ -1,6 +1,6 @@
 # Storage Strategy & Global Config
 
-> **Status:** proposal (normative once accepted) for v1.7.0+
+> **Status:** accepted — shipped in v1.6.0 (normative)
 > **Consumers:** `docs/runtime.md` (owns the Path-Resolution Contract), every
 > `commands/*.md`, the deterministic scripts under `scripts/`, and
 > `config-template.yml` / `docs/config.md`.
@@ -219,7 +219,7 @@ non-flat strategies carry and `flat` does not.
 # ─── Paths ─────────────────────────────────────────────────────────────────────
 features_dir: "features"
 
-# Feature-ROOT placement strategy (v1.7.0). Controls ONLY where each feature
+# Feature-ROOT placement strategy (v1.6.0). Controls ONLY where each feature
 # directory sits under features_dir; the internal artifact tree is invariant.
 # Options:
 #   "flat"          — (default) immediate child: features/<slug>/
