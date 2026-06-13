@@ -229,6 +229,28 @@ require_pre_impl_review: false
 require_code_review: false
 require_testing: false
 
+# ─── Learning Loop → Hermes Skills (v1.7) ──────────────────────────────────────
+#
+# The retrospective always appends lessons to .product-forge/lessons.md (flat,
+# per-project). When running inside Hermes (or any host exposing skill_manage),
+# a recurring lesson can additionally be PROMOTED into a reusable Hermes skill so
+# the pattern carries across projects and sessions (and is cheaper on every
+# subsequent run). See docs/lessons-format.md §9.
+#
+#   promote_to_skills — master switch. Default false (lessons.md only).
+#   min_recurrence    — promote a lesson's pattern only after it has recurred in
+#                       at least this many DISTINCT features (avoids one-off
+#                       trivia becoming a skill). Default 2.
+#   require_confirmation — never write a skill without the user confirming the
+#                       drafted SKILL.md first. Default true (recommended).
+#   skill_category    — optional category passed to skill_manage (groups the
+#                       generated skills, e.g. "product-forge-lessons").
+learning:
+  promote_to_skills: false
+  min_recurrence: 2
+  require_confirmation: true
+  skill_category: "product-forge-lessons"
+
 # ─── Sync-Verify Drift Budget (v1.5.0) ─────────────────────────────────────────
 
 # Drift budget controls how sync-verify categorizes and reports differences.

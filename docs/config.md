@@ -713,3 +713,33 @@ risk signals. `release_readiness` and `spec_merge` are hard-pinned to
 always human. Headless writes follow the gh-aw **safe-outputs** discipline
 (`never_auto_merge`, reviewable PR/comment/issue only, read-only default
 token scope).
+
+---
+
+## v1.7 Config Keys
+
+### Learning loop → Hermes skills — `learning.*` (v1.7, P2-A)
+
+Controls whether the retrospective promotes a recurring lesson into a reusable
+**Hermes skill** (via `skill_manage`) in addition to appending it to
+`.product-forge/lessons.md`. Read by `speckit.product-forge.retrospective`
+Step 5B; see [`docs/lessons-format.md` §9](./lessons-format.md).
+
+```yaml
+learning:
+  promote_to_skills: false        # master switch (default false → lessons.md only)
+  min_recurrence: 2               # promote only after the pattern recurs in ≥N distinct features
+  require_confirmation: true      # never write a skill without user confirmation (recommended)
+  skill_category: "product-forge-lessons"  # optional skill_manage category for grouping
+```
+
+| Key | Layer | Meaning |
+|-----|-------|---------|
+| `learning.promote_to_skills` | either | Master switch; when `false` (default) Step 5B is skipped and only `lessons.md` is written. |
+| `learning.min_recurrence` | either | Minimum distinct features a tagged pattern must appear in before it is eligible for promotion. Guards against one-off trivia becoming a skill. |
+| `learning.require_confirmation` | either | When `true` (default), the drafted `SKILL.md` is shown for confirmation/edit before any write. |
+| `learning.skill_category` | either | Optional category passed to `skill_manage` so generated skills group together. |
+
+Only meaningful when running inside Hermes (or a host exposing `skill_manage`).
+On other hosts the step is a no-op regardless of these keys; `lessons.md` is
+unaffected.

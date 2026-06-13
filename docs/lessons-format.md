@@ -182,3 +182,39 @@ for audit purposes. For performance, readers should:
   cross-feature reuse.
 - No YAML frontmatter. The format is human-readable markdown; tags live
   in the body to stay editable without special tooling.
+
+---
+
+## 9. Promotion to Hermes skills (v1.7, P2-A)
+
+`lessons.md` is **per-project**. When Product Forge runs inside **Hermes** (or any
+host exposing the `skill_manage` tool), the retrospective can take the next step
+and **promote a recurring lesson into a reusable skill** — procedural memory that
+survives across projects and sessions, and is cheaper to apply than re-deriving
+the pattern each time.
+
+**Writer:** `speckit.product-forge.retrospective` Step 5B.
+**Gated on:** config `learning.promote_to_skills` (default `false` — lessons.md
+remains the only output unless opted in). See config-template.yml `learning:`.
+
+Promotion rules:
+
+1. **Recurrence threshold.** A lesson's pattern is promoted only after it has
+   recurred across at least `learning.min_recurrence` **distinct features** (default
+   2), measured by overlapping §4 tags. One-offs stay lessons. This is what makes a
+   skill worth caching rather than noise.
+2. **Generalization.** The generated `SKILL.md` captures the *rule* (trigger +
+   numbered steps + pitfalls), not the original feature's specifics. The lesson is
+   the evidence; the skill is the reusable procedure.
+3. **Human confirmation.** With `learning.require_confirmation: true` (default), the
+   drafted skill is shown for confirmation/edit before any write — no silent skills.
+4. **Idempotency.** If a PF-lessons skill with the same trigger exists, the
+   retrospective **patches** it (refine) rather than creating a duplicate.
+5. **Traceability.** Promoted skill names are recorded on the feature's
+   `.forge-status.yml` under `phases.retrospective.skills_promoted` (a list).
+
+Relationship to the existing loop: `research.md` reads `lessons.md` to seed a new
+feature (§5). Promotion adds a *second* consumer — the Hermes skill store — so a
+hardened pattern is available to **every** future session, not just future
+`research` runs in this project. Outside Hermes the step is a no-op; the lessons.md
+loop is unchanged.

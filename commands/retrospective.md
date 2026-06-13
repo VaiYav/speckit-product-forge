@@ -323,6 +323,48 @@ for the cross-feature learning log.
 
 ---
 
+## Step 5B: Promote Recurring Lessons to Hermes Skills (v1.7, P2-A)
+
+`lessons.md` is flat and **per-project**. The biggest force-multiplier of running
+Product Forge inside **Hermes** (or any host exposing `skill_manage`) is turning a
+*recurring* lesson into a reusable **skill** — procedural memory that carries
+across projects and sessions and is cheaper on every later run. This step is the
+PF→Hermes learning bridge.
+
+**Gated on config `learning.promote_to_skills`** (default `false`; see
+config-template.yml). When `false`, **skip this step entirely** — lessons.md is
+the only output. When `true` AND `skill_manage` is available in the host:
+
+1. **Detect recurrence.** For each lesson confirmed in Step 5, count how many
+   **distinct features** in `.product-forge/lessons.md` already carry a block
+   with an overlapping tag set (the §4 tag taxonomy is the join key). Promote
+   only patterns whose distinct-feature count ≥ `learning.min_recurrence`
+   (default 2) — a one-off stays a lesson, not a skill. Record the deciding
+   count so the choice is auditable.
+2. **Draft the skill.** Synthesize the recurring lesson(s) into a `SKILL.md`
+   body: a trigger ("when building a feature that touches {tags/domain}…"),
+   numbered steps capturing the pattern (the constraint, the check, the recipe),
+   and a pitfalls section sourced from the lessons' "What happened". Keep it
+   generalizable — the skill is the *rule*, not the original feature's specifics.
+3. **Confirm before writing.** When `learning.require_confirmation` is `true`
+   (default), show the drafted `SKILL.md` and ask the user to confirm or edit
+   before any write. Never write a skill silently.
+4. **Write via `skill_manage`** (`action: create`, passing
+   `learning.skill_category` when set; `action: patch` if a PF-lessons skill with
+   the same trigger already exists — refine, don't duplicate). If `skill_manage`
+   is unavailable (non-Hermes host), note that promotion was requested but the
+   host has no skill store, and stop — lessons.md already holds the content.
+5. **Record the carrier.** Append every promoted skill name to
+   `.forge-status.yml` under `phases.retrospective.skills_promoted` (a list),
+   so the promotion is traceable from the feature and a later retro can `patch`
+   rather than recreate.
+
+> Degradation: outside Hermes this step is a no-op (no `skill_manage`); the
+> lessons.md loop (Step 5) is unaffected. Inside Hermes it is the cross-project
+> upgrade of the same learning loop `research.md` already consumes.
+
+---
+
 ## Step 6: Update Status
 
 Update `.forge-status.yml`:
@@ -340,6 +382,7 @@ retrospective:
   open_issues: {N}
   research_accuracy: "{N}/10"
   lessons_added: {N}                  # number of blocks appended to lessons.md in Step 5
+  skills_promoted: []                 # v1.7 — Hermes skill names created/patched in Step 5B (empty unless learning.promote_to_skills)
 last_updated: "{ISO timestamp}"
 ```
 
