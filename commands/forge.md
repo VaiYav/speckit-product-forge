@@ -303,8 +303,11 @@ a `DRY-RUN-REPORT.md` (would-create / would-modify-with-diff / would-delete + th
 status fields that would change), which the orchestrator surfaces in place of the
 gate prompt. **The orchestrator MUST propagate `--dry-run` to every delegated
 sub-skill.** Full normative contract: [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
-`--dry-run` composes with `--ci` (preview a headless run, record nothing),
-`--parallel`, and `--cross-model`.
+`--dry-run` composes with `--ci` (preview a headless run, record nothing). It also
+composes with `--parallel` (implement) and `--cross-model` (code-review) on a
+**standalone sub-skill invocation** — e.g. `implement --parallel --dry-run`; the
+`forge` orchestrator itself does not forward `--parallel`/`--cross-model` to those
+phases (invoke the sub-skill directly to combine them).
 
 ## Mode Resolution
 

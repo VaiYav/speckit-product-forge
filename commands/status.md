@@ -226,10 +226,12 @@ If `verify-report.md` exists with CRITICAL findings:
 
 ## Step 5: Cost / Token Rollup (`--cost`)
 
-When invoked with `--cost`, report the token + tool-call telemetry that
-`.forge-status.yml` already captures per phase
-(`phases.<name>.{tokens_in, tokens_out, tool_calls}`) — turning captured-but-dead
-data into cost visibility. **This is an executable rollup**, not a hand-count:
+When invoked with `--cost`, report the token + tool-call telemetry that the
+orchestrator records per phase **when the host exposes per-phase usage accounting**
+(`phases.<name>.{tokens_in, tokens_out, tool_calls}` — written at phase completion
+per [docs/runtime.md §8.1a](../docs/runtime.md#8-phase-digest-requirement-a4)) —
+turning that data into cost visibility. **This is an executable rollup**, not a
+hand-count:
 
 Run the deterministic reporter via the Path-Resolution-safe wrapper
 ([docs/runtime.md §1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root)):

@@ -21,6 +21,10 @@ product specification — the definitive source of truth before any code is writ
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+write the `product-spec/` artifacts under `{FEATURE_DIR}/.forge-dry-run/product_spec/`,
+do **not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
+
 ---
 
 ## Step 1: Load Context

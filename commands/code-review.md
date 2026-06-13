@@ -26,6 +26,11 @@ surface as a portable package, have a *different* model review it, and ingest th
 result back into the `F-NNN` namespace. See Step 2.5. Without the flag, code-review
 runs single-model as before.
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+write `code-review.md` / `gate-review.md` additions and any cross-review package
+under `{FEATURE_DIR}/.forge-dry-run/code_review/`, record **no** `gates[]` entry
+or status change, emit a `DRY-RUN-REPORT.md`, and make no external side-effect.
+
 ---
 
 ## Step 0: Load Context

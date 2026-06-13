@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // scripts/cost-report.js
 //
-// P3-C — surfaces the token/tool-call telemetry that .forge-status.yml ALREADY
-// captures per phase (phases.<name>.tokens_in / tokens_out / tool_calls) but that
-// nothing in Product Forge ever reported. Turns captured-but-dead data into the
-// cost visibility Hermes users explicitly want (Cost Optimization is a whole
-// category in the Hermes user-stories corpus).
+// P3-C — surfaces the token/tool-call telemetry that the orchestrator records
+// per phase (phases.<name>.tokens_in / tokens_out / tool_calls) WHEN the host
+// exposes per-phase usage accounting (see docs/runtime.md §8.1a). Turns that
+// data into the cost visibility Hermes users want (Cost Optimization is a whole
+// category in the Hermes user-stories corpus). When a host records no usage,
+// the rollup reports "no per-phase token telemetry recorded" rather than zeros.
 //
 // Two scopes:
 //   --feature-dir <path> / --feature <slug>   per-phase rollup for one feature

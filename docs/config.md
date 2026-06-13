@@ -484,10 +484,14 @@ PRODUCT_FORGE_CODEBASE_PATH="./src" \
 ```
 
 The `PRODUCT_FORGE_*` scheme addresses **top-level scalar keys**; there is no
-generic auto-derived addressing for arbitrary nested keys. The one nested key a
-command reads explicitly is `supply_chain.license_allowlist`, overridable via
-`PRODUCT_FORGE_SUPPLY_CHAIN_LICENSE_ALLOWLIST` (comma-separated SPDX ids) —
-see [supply_chain](#advanced).
+generic auto-derived addressing for arbitrary nested keys. A few nested keys are
+read explicitly by individual commands and carry their own env override:
+- `supply_chain.license_allowlist` → `PRODUCT_FORGE_SUPPLY_CHAIN_LICENSE_ALLOWLIST`
+  (comma-separated SPDX ids) — see [supply_chain](#advanced).
+- cost rates for `status --cost` (P3-C) → `PRODUCT_FORGE_COST_RATE_IN` /
+  `PRODUCT_FORGE_COST_RATE_OUT` ($ per 1M tokens) — see
+  [Cross-model review / cost](#v17-config-keys); these have no `config.yml` key
+  (a price is a per-invocation input, not project config).
 
 ---
 
@@ -764,3 +768,20 @@ review:
 
 The chosen reviewer is stamped on the gate entry as `reviewed_by_model` for the
 audit trail (policy §9 gate surface).
+
+### Cost rates — `status --cost` (v1.7, P3-C)
+
+`status --cost` / `scripts/cost-report.js` report token + tool-call counts always,
+and dollar cost **only** when given a price. A price is a per-invocation input
+(not project config), so there is no `config.yml` key — pass it via env or flag:
+
+```bash
+PRODUCT_FORGE_COST_RATE_IN=3.00 PRODUCT_FORGE_COST_RATE_OUT=15.00 \
+  /speckit.product-forge.status --cost            # $ per 1M tokens
+# or per-invocation flags: --rate-in 3.00 --rate-out 15.00
+```
+
+| Env var | Meaning |
+|---------|---------|
+| `PRODUCT_FORGE_COST_RATE_IN` | USD per 1M prompt tokens; omitted → tokens-only report |
+| `PRODUCT_FORGE_COST_RATE_OUT` | USD per 1M completion tokens |

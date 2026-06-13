@@ -184,6 +184,8 @@ gates:
     reviewed_sha: "abc1234"        # NEW v1.6 (W5-A2) — git SHA / artifact stamp the gate was reviewed against.
                                    # On a re-run, the gate shows only the diff since this sha (delta/incremental review).
     risk: "low"                    # NEW v1.6 (W5-A4) — gate risk class from scripts/gate-risk.js: low | medium | high.
+    reviewed_by_model: null        # NEW v1.7 (P1-B) — reviewer id when code-review ran with --cross-model; null otherwise.
+    cross_model_findings: 0        # NEW v1.7 (P1-B) — count of findings the cross-model reviewer added (0 if not run).
 
     # NEW in v3 — role-based approvals.
     # If `role_approvals.solo_mode` is true (see below), this block is omitted.

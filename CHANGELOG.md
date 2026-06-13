@@ -43,9 +43,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   drift class, mirroring the enum single-source). Completes step 3 of the
   schema-as-source design note.
 - **`status --cost` + `scripts/cost-report.js` (P3-C)** — rolls up the
-  per-phase `tokens_in/out` / `tool_calls` telemetry (captured but never
-  surfaced) per feature and `--portfolio`. Dollar cost only when the caller
-  supplies a rate.
+  per-phase `tokens_in/out` / `tool_calls` telemetry (recorded by the orchestrator
+  at phase completion when the host exposes usage accounting; see runtime §8.1a)
+  per feature and `--portfolio`. Dollar cost only when the caller supplies a rate;
+  reports "no telemetry recorded" rather than zeros when the host provides none.
 - `lint-docs` self-test 9→18; `doctor` 12→15 checks; 12 helper scripts.
 
 ---

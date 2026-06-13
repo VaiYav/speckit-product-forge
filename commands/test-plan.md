@@ -19,6 +19,11 @@ and acceptance criteria — before a single test is run.
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+write the generated `testing/test-plan.md` and Playwright specs under
+`{FEATURE_DIR}/.forge-dry-run/test_plan/`, record no status change, emit a
+`DRY-RUN-REPORT.md`, and make no external side-effect.
+
 ---
 
 > **Interaction (normative):** every question and gate in this phase uses the

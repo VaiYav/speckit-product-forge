@@ -370,6 +370,8 @@ gates:
     rolled_back_to: null      # required when decision == "rolled_back" (phase name to rewind to)
     reviewed_sha: "abc1234"   # W5-A2 — git SHA / artifact stamp reviewed; enables delta/incremental review on re-run
     risk: "low"               # W5-A4 — gate risk class (low | medium | high) from scripts/gate-risk.js
+    reviewed_by_model: null   # v1.7 P1-B — reviewer id on a code-review --cross-model gate; null otherwise
+    cross_model_findings: 0   # v1.7 P1-B — findings the cross-model reviewer added (0 if not run)
 ```
 
 See [docs/policy.md §2](./policy.md#2-gate-decisions) for the full list of
@@ -409,24 +411,34 @@ every delegated sub-skill):
    file when it exists) / `would-delete`, plus the status fields that *would* have
    changed. The orchestrator surfaces this report at the (suppressed) gate instead
    of asking for approval.
-5. **Idempotent + disposable.** `.forge-dry-run/` is gitignored and may be deleted
-   at any time; a real run ignores it entirely. A fresh dry-run overwrites the
-   prior one for that phase.
+5. **Idempotent + disposable.** `.forge-dry-run/` is transient and disposable —
+   add it to your project's `.gitignore` (Product Forge does not modify your
+   `.gitignore` for you). It may be deleted at any time; a real run ignores it
+   entirely, and a fresh dry-run overwrites the prior one for that phase.
 
 ### 7.2 Scope
 
 - `--dry-run` composes with `--ci`: a headless dry-run produces the report and
   records nothing (useful for "preview this phase in CI").
-- It composes with `--parallel` and `--cross-model`: subagents/packages write
-  under `.forge-dry-run/` too; no real artifact moves.
+- It composes with `--parallel` (implement) and `--cross-model` (code-review) on a
+  **standalone sub-skill invocation** — subagents/packages write under
+  `.forge-dry-run/` too; no real artifact moves. The `forge` orchestrator does not
+  itself forward `--parallel`/`--cross-model` to delegated phases.
 - `status` and other read-only commands ignore `--dry-run` (they never write).
 
-### 7.3 Degradation
+### 7.3 Degradation & coverage
 
-A sub-skill that genuinely cannot separate compute from write MUST detect
-`--dry-run`, emit `"<phase>: --dry-run not supported (writes are inseparable) —
-aborting without changes"`, and exit without writing. Silently writing for real
-under `--dry-run` is a contract violation.
+The **spine** writing phases (`research`, `product-spec`, `plan`, `tasks`,
+`implement`, `code-review`, `verify-full`, `test-plan`, `test-run`,
+`retrospective`) each carry an explicit `--dry-run` honor-note in their command
+file. Phases without an explicit note (e.g. `bridge`, `revalidate`, the optional
+extension phases) inherit the contract through this section: under `--dry-run`
+they MUST either redirect their writes under `.forge-dry-run/<phase>/` and skip
+status/side-effects, OR — if a sub-skill genuinely cannot separate compute from
+write — detect `--dry-run`, emit `"<phase>: --dry-run not supported (writes are
+inseparable) — aborting without changes"`, and exit without writing. Silently
+writing for real under `--dry-run` is a contract violation regardless of whether
+the phase has an explicit note.
 
 ---
 
@@ -453,6 +465,27 @@ exempt regardless of mode.
 - Template: [`docs/templates/phase-digest.md`](./templates/phase-digest.md).
 - Sections (required): Key decisions, Artifacts produced, Open risks, Handoff notes.
 - Length: soft 300 words, hard 600 words.
+
+#### 8.1a Per-phase cost accounting (producer for `status --cost`)
+
+When the orchestrator marks a phase `completed` and the **host exposes per-phase
+token/tool-call accounting** (e.g. Hermes surfaces usage; Claude Code may not),
+it records the counters on the phase entry alongside the digest:
+
+```yaml
+phases:
+  <phase>:
+    status: completed
+    digest_path: "<phase>/digest.md"
+    tokens_in: <int>       # prompt tokens this phase consumed, when the host reports them
+    tokens_out: <int>      # completion tokens
+    tool_calls: <int>      # tool invocations
+```
+
+These are the **producer** for `status --cost` / `scripts/cost-report.js` (P3-C).
+They are **best-effort and host-dependent**: a host with no usage API simply omits
+them, and the cost rollup then reports "no per-phase token telemetry recorded"
+rather than fabricating zeros. Never invent counts the host did not provide.
 
 ### 8.2 Enforcement
 

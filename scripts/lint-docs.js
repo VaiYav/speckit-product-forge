@@ -367,6 +367,16 @@ function lint(root) {
       producer: ["commands/code-review.md"],        // stamped on the gate entry when --cross-model ran
       consumer: ["docs/templates/gate-review.md"],  // gate surface documents/reads the cross-model stamp
     },
+    {
+      token: "cross_model_findings",
+      producer: ["commands/code-review.md"],        // count stamped on the gate entry
+      consumer: ["docs/schema/forge-status-v3.schema.yml"],  // canonical gates[] shape declares it
+    },
+    {
+      token: "skills_promoted",
+      producer: ["commands/retrospective.md"],      // Step 5B writes the promoted skill names
+      consumer: ["commands/retrospective.md"],      // Step 5B item 4 reads it back for patch-vs-create idempotency
+    },
   ];
   for (const cf of CARRIER_FIELDS) {
     const mentions = (f) => exists(R(f)) && read(R(f)).includes(cf.token);

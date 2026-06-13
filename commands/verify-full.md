@@ -24,6 +24,11 @@ considered done.
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+write `verify-report.md` and any `gate-review.md` additions under
+`{FEATURE_DIR}/.forge-dry-run/verify/`, record no status change, emit a
+`DRY-RUN-REPORT.md`, and make no external side-effect.
+
 ---
 
 ## Step 0: Deterministic pre-gate (W5-A1)

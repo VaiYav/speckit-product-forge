@@ -20,6 +20,10 @@ The depth of onboarding adapts to how much context the user already provided.
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+write the `research/` artifacts under `{FEATURE_DIR}/.forge-dry-run/research/`,
+do **not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
+
 ---
 
 ## Step 1: Assess Input Richness

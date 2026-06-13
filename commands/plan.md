@@ -22,6 +22,10 @@ The next step is `/speckit.product-forge.tasks` (or any custom step you want to 
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+write `plan.md` (and any ADRs) under `{FEATURE_DIR}/.forge-dry-run/plan/`, do
+**not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
+
 ---
 
 > **Interaction (normative):** the approval gate in this phase uses the structured

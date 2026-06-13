@@ -43,6 +43,12 @@ bug pipeline.
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+tests may still execute (read-only), but write `test-report.md` / `bugs/` under
+`{FEATURE_DIR}/.forge-dry-run/test_run/`, do **not** apply auto-fixes to source,
+do **not** update `.forge-status.yml`, emit a `DRY-RUN-REPORT.md`, and make no
+external side-effect.
+
 ---
 
 ## Step 1: Validate Prerequisites

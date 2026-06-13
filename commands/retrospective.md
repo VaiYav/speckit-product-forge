@@ -20,6 +20,12 @@ in Phase 1 research against what actually happened after shipping.
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+draft the retrospective report and any lesson blocks under
+`{FEATURE_DIR}/.forge-dry-run/retrospective/`, do **not** append to
+`.product-forge/lessons.md`, do **not** promote skills (Step 5B), do **not**
+update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md` of what would change.
+
 ---
 
 ## Step 1: Validate Prerequisites
@@ -350,14 +356,18 @@ the only output. When `true` AND `skill_manage` is available in the host:
    (default), show the drafted `SKILL.md` and ask the user to confirm or edit
    before any write. Never write a skill silently.
 4. **Write via `skill_manage`** (`action: create`, passing
-   `learning.skill_category` when set; `action: patch` if a PF-lessons skill with
-   the same trigger already exists — refine, don't duplicate). If `skill_manage`
-   is unavailable (non-Hermes host), note that promotion was requested but the
-   host has no skill store, and stop — lessons.md already holds the content.
+   `learning.skill_category` when set). **Decide create vs. patch by first reading
+   back the prior promotions:** scan `phases.retrospective.skills_promoted` across
+   this project's features (the carrier written in step 5) for a skill already
+   covering this trigger; if one exists, `action: patch` it (refine, don't
+   duplicate) — otherwise `action: create`. If `skill_manage` is unavailable
+   (non-Hermes host), note that promotion was requested but the host has no skill
+   store, and stop — lessons.md already holds the content.
 5. **Record the carrier.** Append every promoted skill name to
-   `.forge-status.yml` under `phases.retrospective.skills_promoted` (a list),
-   so the promotion is traceable from the feature and a later retro can `patch`
-   rather than recreate.
+   `.forge-status.yml` under `phases.retrospective.skills_promoted` (a list).
+   This is the list step 4 reads back on the next retro to choose patch-vs-create,
+   so the loop is idempotent across features and a hardened skill is refined, not
+   recreated.
 
 > Degradation: outside Hermes this step is a no-op (no `skill_manage`); the
 > lessons.md loop (Step 5) is unaffected. Inside Hermes it is the cross-project

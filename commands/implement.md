@@ -31,6 +31,14 @@ path-disjointness proof and the carve-out in
 [docs/policy.md §1.1](../docs/policy.md#1-operating-rules). Without the flag,
 implementation runs sequentially as before.
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor the dry-run contract in
+[docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics): redirect every write
+(implementation edits, `task_log[]`, status, digest) under
+`{FEATURE_DIR}/.forge-dry-run/implement/` instead of the real paths, make **no**
+external side-effect (no commit), write a `DRY-RUN-REPORT.md` of what would change,
+and do **not** update `.forge-status.yml`. If the build truly cannot separate
+compute from write, abort per §7.3 rather than writing for real.
+
 ---
 
 ## Step 1: Validate Prerequisites

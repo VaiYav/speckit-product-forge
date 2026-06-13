@@ -22,6 +22,10 @@ The next step is `/speckit.product-forge.implement` (or any custom step you want
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+write `tasks.md` (and traceability seeding) under `{FEATURE_DIR}/.forge-dry-run/tasks/`,
+do **not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
+
 ---
 
 ## Step 1: Validate Prerequisites
