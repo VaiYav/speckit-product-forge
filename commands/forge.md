@@ -286,6 +286,19 @@ every `require-human` phase.
 > The risk routing semantics are normative in
 > [docs/policy.md §9.3](../docs/policy.md#93-risk-routing-a4--auto-recommend-never-auto-approve).
 
+## Preview mode (`--dry-run`, v1.7, P3-A)
+
+`forge --dry-run` (or any single phase with `--dry-run`) runs the lifecycle
+fully but mutates **nothing** real: artifacts are written under
+`{FEATURE_DIR}/.forge-dry-run/<phase>/`, `.forge-status.yml` is never updated, and
+no external side-effects fire (no commit/PR/tracker/skill writes). Each phase emits
+a `DRY-RUN-REPORT.md` (would-create / would-modify-with-diff / would-delete + the
+status fields that would change), which the orchestrator surfaces in place of the
+gate prompt. **The orchestrator MUST propagate `--dry-run` to every delegated
+sub-skill.** Full normative contract: [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+`--dry-run` composes with `--ci` (preview a headless run, record nothing),
+`--parallel`, and `--cross-model`.
+
 ## Mode Resolution
 
 Before executing any phase, resolve the feature mode:

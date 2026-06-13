@@ -382,18 +382,51 @@ audits. Do not mutate past entries; only append.
 
 ## 7. Dry-Run Semantics
 
-This section is a forward-looking contract for sub-skills. Runtime
-enforcement is planned for a later wave (A3).
+**Normative for v1.7+.** `--dry-run` lets any phase (or `forge` end-to-end) run
+fully — including LLM calls and artifact computation — without mutating the
+feature's real state. It answers *"what would this phase change?"* before
+committing. Every sub-skill that writes artifacts MUST honor it; a sub-skill that
+cannot (rare) MUST say so and refuse rather than write for real.
 
-When invoked with `--dry-run`:
+### 7.1 The contract
 
-- All LLM calls may still run; artifacts may still be computed.
-- Writes are redirected to `.forge-dry-run/<phase>/` instead of real paths.
-- `.forge-status.yml` is NOT updated.
-- At completion, produce a diff report listing files that would have changed.
+When `--dry-run` is present in `$ARGUMENTS` (the orchestrator propagates it to
+every delegated sub-skill):
 
-Sub-skills are expected to support `--dry-run` when feasible. Not all do yet —
-absence is not an error in this version.
+1. **Write redirection.** Every artifact a phase would write to
+   `{FEATURE_DIR}/<path>` is instead written to
+   `{FEATURE_DIR}/.forge-dry-run/<phase>/<path>` (mirror the real relative path
+   under the dry-run root so the diff is readable). Create the root if absent.
+2. **No status mutation.** `.forge-status.yml` is **never** written in dry-run —
+   no phase status change, no `gates[]` entry, no `task_log[]`, no digest counter.
+   The state lock is still acquired for *reads* but released without a write.
+3. **No external side-effects.** No `git commit`, no PR/issue creation, no tracker
+   sync, no skill promotion, no real dependency install. Commands that shell out
+   to mutating tools must skip those calls in dry-run (read-only probes are fine).
+4. **Diff report.** At completion the phase writes
+   `{FEATURE_DIR}/.forge-dry-run/<phase>/DRY-RUN-REPORT.md` listing, for each
+   artifact: `would-create` / `would-modify` (with a unified diff vs. the real
+   file when it exists) / `would-delete`, plus the status fields that *would* have
+   changed. The orchestrator surfaces this report at the (suppressed) gate instead
+   of asking for approval.
+5. **Idempotent + disposable.** `.forge-dry-run/` is gitignored and may be deleted
+   at any time; a real run ignores it entirely. A fresh dry-run overwrites the
+   prior one for that phase.
+
+### 7.2 Scope
+
+- `--dry-run` composes with `--ci`: a headless dry-run produces the report and
+  records nothing (useful for "preview this phase in CI").
+- It composes with `--parallel` and `--cross-model`: subagents/packages write
+  under `.forge-dry-run/` too; no real artifact moves.
+- `status` and other read-only commands ignore `--dry-run` (they never write).
+
+### 7.3 Degradation
+
+A sub-skill that genuinely cannot separate compute from write MUST detect
+`--dry-run`, emit `"<phase>: --dry-run not supported (writes are inseparable) —
+aborting without changes"`, and exit without writing. Silently writing for real
+under `--dry-run` is a contract violation.
 
 ---
 

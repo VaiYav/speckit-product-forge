@@ -539,6 +539,7 @@ features/
 └── <slug>/
     ├── .forge-status.yml                 ← v3 schema (see docs/schema/)
     ├── .forge-status.yml.lock            ← transient state lock (runtime.md §2)
+    ├── .forge-dry-run/                   ← transient --dry-run output (runtime.md §7; gitignored, disposable)
     ├── research/digest.md                ← [v1.5] phase digest (A4)
     ├── product-spec/digest.md            ← [v1.5] phase digest (A4)
     ├── plan/digest.md                    ← [v1.5] phase digest (A4)
