@@ -1,8 +1,10 @@
 # Design Note — Schema-as-Single-Source for Invariants (staged)
 
-> **Status:** PROPOSED / staged — not implemented. Captures the long-term fix for
-> the enum/count/phase-map drift class so a future wave can pick it up with full
-> context. Authored alongside the 2026-06 deep-review hardening
+> **Status:** SHIPPED (steps 2 + 3). Step 2 (enum single-source via
+> `docs/schema/enums.yml`) and step 3 (phase-map single-source via
+> `docs/schema/phase-map.yml`) are both implemented and enforced by
+> `scripts/lint-docs.js` (ENUM + PHASEMAP rules). This note is retained as the
+> design rationale. Authored alongside the 2026-06 deep-review hardening
 > (see [2026-06-deep-review.md](./2026-06-deep-review.md)).
 
 ## Problem

@@ -8,6 +8,48 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+> **Feature wave (v1.7, 2026-06) — roadmap items P1-B/P1-C/P2-A/P2-C/P3-A/P3-B/P3-C**
+> from [docs/improvements/2026-06-feature-roadmap.md](docs/improvements/2026-06-feature-roadmap.md),
+> triangulated from the SpecKit-community gallery × Hermes runtime leverage ×
+> internal gaps. Every addition is executable + gated by a `lint-docs`/`doctor`
+> check and keeps the human gate.
+
+### Added — feature wave (v1.7)
+- **Cross-model code review (P1-B)** — `code-review --cross-model`: exports the
+  consolidated `gate-review.md` + git diff as a portable `review-package.md`,
+  has a *different* model review it out-of-band, and ingests its findings as
+  `F-NNN` (`source: cross-model`). `reviewed_by_model` stamped on the gate
+  (CARRIER-enforced). Config `review.cross_model`.
+- **Constitution↔code standing drift layer (P1-C)** — `sync-verify` **Layer 10**
+  and `verify-full` **Layer 11** re-assert the project architecture constitution
+  against the code (resilience / EDA / layering / security), deterministic probe
+  where possible. New `lint-docs` **LAYER-COUNT** rule keeps the "N-layer" prose
+  honest. All "9-layer" prose → 10.
+- **Lessons → Hermes skills (P2-A)** — `retrospective` Step 5B promotes a lesson
+  that recurs across ≥`learning.min_recurrence` features into a reusable
+  `SKILL.md` via `skill_manage` (`skills_promoted[]` carrier). Cross-project,
+  cross-session. No-op outside Hermes. Config `learning.*`.
+- **Parallel implementation (P2-C)** — `implement --parallel` runs path-disjoint
+  task groups via `delegate_task`, proven independent by the `portfolio` conflict
+  matrix; reconciled serially under the state-lock, single gate. policy §1.1
+  carve-out (intra-phase only).
+- **`--dry-run` is now normative (P3-A)** — runtime §7 rewritten from a "planned"
+  stub into an enforceable contract: write redirection to `.forge-dry-run/`, no
+  status mutation, no external side-effects, a `DRY-RUN-REPORT.md` per phase.
+  Composes with `--ci`/`--parallel`/`--cross-model`.
+- **Phase-map single source (P3-B)** — `docs/schema/phase-map.yml` is the
+  canonical phase set + per-mode applicability; the two forge.md tables now
+  *render* it and `lint-docs` PHASEMAP asserts they agree (kills the phase-map
+  drift class, mirroring the enum single-source). Completes step 3 of the
+  schema-as-source design note.
+- **`status --cost` + `scripts/cost-report.js` (P3-C)** — rolls up the
+  per-phase `tokens_in/out` / `tool_calls` telemetry (captured but never
+  surfaced) per feature and `--portfolio`. Dollar cost only when the caller
+  supplies a rate.
+- `lint-docs` self-test 9→18; `doctor` 12→15 checks; 12 helper scripts.
+
+---
+
 > Repo-hardening + tooling pass on top of v1.6.0 — addresses the 2026-06 deep
 > review ([docs/improvements/2026-06-deep-review.md](docs/improvements/2026-06-deep-review.md)).
 > No behavioural change to the lifecycle; closes a runtime-portability bug, a

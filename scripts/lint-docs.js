@@ -405,6 +405,61 @@ function lint(root) {
     }
   }
 
+  // ── PHASEMAP single-source: docs/schema/phase-map.yml ↔ forge.md tables ────
+  // phase-map.yml is the canonical phase set + per-mode applicability (step 3 of
+  // the schema-as-source design note). Assert the two forge.md tables render it
+  // faithfully: (1) the standard-mode "Phase Map" lists exactly the canonical
+  // phase ids; (2) the "Phase execution map by mode" cells match each phase's
+  // declared modes. Adding/removing a phase or changing a mode in the data then
+  // fails until the rendered tables agree.
+  const pmPath = R("docs/schema/phase-map.yml");
+  if (parseYaml && exists(pmPath) && exists(R("commands/forge.md"))) {
+    let pm = null;
+    try { pm = parseYaml(read(pmPath)); } catch { add("PHASEMAP", "error", "docs/schema/phase-map.yml", "does not parse as YAML"); }
+    const canon = (pm && Array.isArray(pm.phases)) ? pm.phases : null;
+    if (canon) {
+      const forge = read(R("commands/forge.md"));
+      const canonIds = canon.map((p) => String(p.id));
+      // id extractor for a table row's first cell, e.g. "2H. Design System…" → "2H"
+      const idOf = (cell) => { const m = cell.match(/^\s*([0-9]+(?:\.[0-9]+)?[A-Z]?)\.\s/); return m ? m[1] : null; };
+      // (1) standard-mode Phase Map: canonical count + every id present
+      if (phaseMapRows !== null && phaseMapRows !== canonIds.length) {
+        add("PHASEMAP", "warn", "commands/forge.md", `standard-mode Phase Map has ${phaseMapRows} rows but phase-map.yml declares ${canonIds.length} phases`);
+      }
+      const stdStart = forge.indexOf("## Phase Map (standard mode)");
+      if (stdStart >= 0) {
+        const stdBlock = forge.slice(stdStart, forge.indexOf("\n## ", stdStart + 5));
+        const stdIds = new Set(lines(stdBlock).filter((l) => l.startsWith("|")).map((l) => idOf(l.split("|")[1] || "")).filter(Boolean));
+        for (const id of canonIds) if (!stdIds.has(id)) add("PHASEMAP", "warn", "commands/forge.md", `phase '${id}' is in phase-map.yml but missing from the standard-mode Phase Map table`);
+      }
+      // (2) per-mode table cells ↔ phase-map.yml modes
+      const modeStart = forge.indexOf("### Phase execution map by mode");
+      if (modeStart >= 0) {
+        const modeBlock = forge.slice(modeStart, forge.indexOf("\n## ", modeStart + 5));
+        const cellVal = (c) => /✅/.test(c) ? "yes" : /\bopt\b/.test(c) ? "opt" : /—/.test(c) ? "no" : null;
+        const rowById = {};
+        for (const l of lines(modeBlock)) {
+          if (!l.startsWith("|")) continue;
+          const cells = l.split("|").slice(1, -1).map((c) => c.trim());
+          const id = idOf(cells[0] || "");
+          if (id) rowById[id] = cells;
+        }
+        const modeOrder = ["express", "lite", "standard", "v-model"];
+        for (const p of canon) {
+          const cells = rowById[String(p.id)];
+          if (!cells) { add("PHASEMAP", "warn", "commands/forge.md", `phase '${p.id}' missing from the per-mode table (in phase-map.yml)`); continue; }
+          modeOrder.forEach((mode, k) => {
+            const rendered = cellVal(cells[k + 1] || "");
+            const declared = p.modes && p.modes[mode];
+            if (rendered && declared && rendered !== declared) {
+              add("PHASEMAP", "warn", "commands/forge.md", `phase '${p.id}' ${mode}: table shows '${rendered}' but phase-map.yml declares '${declared}'`);
+            }
+          });
+        }
+      }
+    }
+  }
+
   // ── LAYER-COUNT: sync-verify / verify-full layer-count parity ──────────────
   // Each command DEFINES its layers as "### Layer N: …" headings; prose all over
   // the corpus then claims "N-layer" / "all N layers". A mismatch is the same
@@ -631,6 +686,37 @@ function selftest() {
     // matching claim → no finding
     W("commands/sync-verify.md", "---\nname: speckit.product-forge.sync-verify\n---\n### Layer 1: a\n### Layer 2: b\n### Layer 3: c\nRun the full sync-verify 3-layer scan.\n");
     assert(!lint(tmp).some((f) => f.rule === "LAYER-COUNT"), "LAYER-COUNT passes when the claim matches the definition");
+
+    // PHASEMAP single-source: phase-map.yml ↔ forge.md per-mode table.
+    W("docs/schema/phase-map.yml", "phases:\n  - id: \"1\"\n    name: R\n    modes: { express: no, lite: no, standard: yes, v-model: yes }\n  - id: \"2\"\n    name: P\n    modes: { express: yes, lite: yes, standard: yes, v-model: yes }\n");
+    // forge table that AGREES → no PHASEMAP mode finding
+    W("commands/forge.md", [
+      "---", "name: speckit.product-forge.forge", "---",
+      "## Phase Map (standard mode)",
+      "| Phase | Command |", "|---|---|",
+      "| 1. R | x |", "| 2. P | y |",
+      "## Mode", "### Phase execution map by mode",
+      "| Phase | express | lite | standard | v-model |",
+      "|---|---|---|---|---|",
+      "| 1. R | — | — | ✅ | ✅ |",
+      "| 2. P | ✅ | ✅ | ✅ | ✅ |",
+      "## End", "",
+    ].join("\n"));
+    assert(!lint(tmp).some((f) => f.rule === "PHASEMAP" && /declares/.test(f.msg)), "PHASEMAP passes when forge tables match phase-map.yml");
+    // now break one cell (phase 1 express ✅ but data says no) → finding
+    W("commands/forge.md", [
+      "---", "name: speckit.product-forge.forge", "---",
+      "## Phase Map (standard mode)",
+      "| Phase | Command |", "|---|---|",
+      "| 1. R | x |", "| 2. P | y |",
+      "## Mode", "### Phase execution map by mode",
+      "| Phase | express | lite | standard | v-model |",
+      "|---|---|---|---|---|",
+      "| 1. R | ✅ | — | ✅ | ✅ |",
+      "| 2. P | ✅ | ✅ | ✅ | ✅ |",
+      "## End", "",
+    ].join("\n"));
+    assert(lint(tmp).some((f) => f.rule === "PHASEMAP" && /phase '1' express/.test(f.msg)), "PHASEMAP detects a per-mode cell that disagrees with phase-map.yml");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

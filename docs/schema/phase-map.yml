@@ -1,0 +1,104 @@
+# Canonical phase map — the SINGLE SOURCE for Product Forge's phase set and the
+# per-mode applicability matrix.
+#
+# Product Forge restates the phase map in two forge.md tables (the standard-mode
+# "Phase Map" and the "Phase execution map by mode"), plus prose in policy.md /
+# phases.md / how-it-works. Historically those drifted (14-vs-18 phase counts).
+# This file is the machine-readable source; scripts/lint-docs.js (PHASEMAP rule)
+# reads it and asserts the forge.md tables agree — every phase id present in both,
+# the row counts equal, and each per-mode cell matching.
+#
+# This realizes step 3 of docs/improvements/2026-06-schema-as-source-design-note.md
+# (the enum single-source was step 2). It is the DATA; the forge.md tables remain
+# the human-readable rendering — keep them in sync (the linter enforces it).
+#
+# applicability values:
+#   yes  — phase runs in this mode (the ✅ cell, incl. "✅ (minimal)/(light)/(inline)")
+#   opt  — optional/skippable in this mode (the "opt" cell, incl. conditional ones)
+#   no   — not in scope for this mode (the "—" cell)
+#
+# V-Model's V1–V13 progression is a separate extension pack (see
+# docs/v-model-integration.md), not part of this core PF phase set.
+schema_version: 1
+
+phases:
+  - id: "0"
+    name: "Problem Discovery"
+    command: "speckit.product-forge.problem-discovery"
+    modes: { express: no, lite: opt, standard: opt, v-model: opt }
+  - id: "1"
+    name: "Research"
+    command: "speckit.product-forge.research"
+    modes: { express: no, lite: no, standard: yes, v-model: yes }
+  - id: "2"
+    name: "Product Spec"
+    command: "speckit.product-forge.product-spec"
+    modes: { express: yes, lite: yes, standard: yes, v-model: yes }
+  - id: "2H"
+    name: "Design System Harvest"
+    command: "speckit.product-forge.design-system-harvest"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "3"
+    name: "Revalidation"
+    command: "speckit.product-forge.revalidate"
+    modes: { express: no, lite: no, standard: yes, v-model: yes }
+  - id: "4"
+    name: "Bridge"
+    command: "speckit.product-forge.bridge"
+    modes: { express: no, lite: no, standard: yes, v-model: yes }
+  - id: "4.5"
+    name: "i18n Harvest"
+    command: "speckit.product-forge.i18n-harvest"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "5"
+    name: "Plan"
+    command: "speckit.product-forge.plan"
+    modes: { express: yes, lite: yes, standard: yes, v-model: yes }
+  - id: "5B"
+    name: "Tasks"
+    command: "speckit.product-forge.tasks"
+    modes: { express: no, lite: no, standard: yes, v-model: yes }
+  - id: "5.5"
+    name: "Migration Plan"
+    command: "speckit.product-forge.migration-plan"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "5C"
+    name: "Pre-Impl Review"
+    command: "speckit.product-forge.pre-impl-review"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "6"
+    name: "Implement"
+    command: "speckit.product-forge.implement"
+    modes: { express: yes, lite: yes, standard: yes, v-model: yes }
+  - id: "6B"
+    name: "Code Review"
+    command: "speckit.product-forge.code-review"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "7"
+    name: "Verify Full"
+    command: "speckit.product-forge.verify-full"
+    modes: { express: yes, lite: yes, standard: yes, v-model: yes }
+  - id: "8A"
+    name: "Test Plan"
+    command: "speckit.product-forge.test-plan"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "8B"
+    name: "Test Run"
+    command: "speckit.product-forge.test-run"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "9"
+    name: "Release Readiness"
+    command: "speckit.product-forge.release-readiness"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "9.5"
+    name: "Monitoring Setup"
+    command: "speckit.product-forge.monitoring-setup"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "9B"
+    name: "Experiment Design"
+    command: "speckit.product-forge.experiment-design"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }
+  - id: "10"
+    name: "Spec Merge"
+    command: "speckit.product-forge.spec-merge"
+    modes: { express: no, lite: no, standard: opt, v-model: opt }

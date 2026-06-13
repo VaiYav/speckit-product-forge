@@ -78,9 +78,13 @@ node scripts/validate-traceability.js --selftest # structural traceability/spec-
 ```
 
 `scripts/lint-docs.js` is the **consistency compiler** for this spec-as-product
-repo: it blocks dangling refs, plugin-root escapes, command-count/version/
-phase-map/enum drift, dead config switches (a documented key no command reads),
-and bare `node scripts/…` paths (must use `${PLUGIN_ROOT}`, see runtime.md §1A).
+repo: it blocks dangling refs, plugin-root escapes, command-count/version drift,
+**enum drift** (single-sourced from `docs/schema/enums.yml`), **phase-map drift**
+(single-sourced from `docs/schema/phase-map.yml` — both forge.md tables must render
+it), **carrier-field contracts** (every cross-phase field has a producer + a
+consumer), **gate-policy shape**, **sync-verify/verify-full layer-count parity**,
+dead config switches (a documented key no command reads), and bare `node scripts/…`
+paths (must use `${PLUGIN_ROOT}`, see runtime.md §1A).
 `scripts/lib-yaml.js` is a **subset** YAML parser (only what Product Forge's own
 `.forge-status.yml` / `traceability.yml` / `journeys.yml` need — not a general
 engine); no standalone self-test, exercised inside the consumers' self-tests.

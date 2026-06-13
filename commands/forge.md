@@ -44,6 +44,13 @@ Parse the input:
 
 ## Phase Map (standard mode)
 
+> **Single source (v1.7, P3-B).** The canonical phase set + per-mode applicability
+> live in [docs/schema/phase-map.yml](../docs/schema/phase-map.yml). The two tables
+> below (this standard-mode map and the "Phase execution map by mode") **render**
+> that data; `scripts/lint-docs.js` (PHASEMAP rule) fails if they drift from it.
+> When adding/removing a phase or changing a mode, edit `phase-map.yml` first,
+> then update these tables to match.
+
 | Phase | Command | Artifact Signal | Gate |
 |-------|---------|-----------------|------|
 | 0. Problem Discovery *(opt)* | `speckit.product-forge.problem-discovery` | `problem-discovery/problem-statement.md` | Go / No-go decision |
