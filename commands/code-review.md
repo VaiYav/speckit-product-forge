@@ -20,6 +20,12 @@ enriched with full product context from research, spec, and plan artifacts.
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--cross-model`** (optionally `--cross-model <reviewer-id>`),
+run the cross-model review loop in **Step 2.5** — export the consolidated review
+surface as a portable package, have a *different* model review it, and ingest the
+result back into the `F-NNN` namespace. See Step 2.5. Without the flag, code-review
+runs single-model as before.
+
 ---
 
 ## Step 0: Load Context
@@ -177,6 +183,59 @@ carrier `verify-full` uses — so `spec-merge` (Theme B) can consume it.
 > **Severity note (CF-35):** `verify-full` Layer 10 escalates the same doc↔code
 > drift conditions to CRITICAL/WARNING as the final gate. The HIGH/MEDIUM applied
 > here is intentionally phase-appropriate, not a weaker duplicate of that gate.
+
+---
+
+## Step 2.5: Cross-Model Review (opt-in, `--cross-model`, v1.7, P1-B)
+
+PF's Step 2 dimensions are multi-*agent* but run on **one model family** — a model
+reviewing output from its own family tends to rationalize it. A *different* model
+brings different priors, bug sensitivity, and rule interpretation. **Run this step
+only when `--cross-model` was passed**; otherwise skip straight to Step 3.
+
+This builds directly on PF's already-consolidated review surface — no new format:
+the `gate-review.md` `F-NNN` namespace + the git diff *are* the package.
+
+1. **Export a portable review package.** Write
+   `{FEATURE_DIR}/cross-review/<UTC-timestamp>-<slug>/review-package.md`
+   containing, in order:
+   - the feature's `spec.md` acceptance criteria + `plan.md` architecture/threat
+     notes (the contract the reviewer judges against),
+   - the **git diff** of the implementation (`git diff <base>..HEAD`; default
+     base = the feature branch point, overridable with `--base <ref>`),
+   - the current `gate-review.md` open `F-NNN` findings (so the reviewer
+     augments, not re-derives),
+   - an explicit instruction block: *"You are an independent reviewer. Emit
+     findings as `F-NNN` rows (severity, file:line, rule, suggested fix). Do not
+     assume the author's intent was correct."*
+   Also write a sibling `metadata.json` (`base_sha`, `head_sha`, `reviewer_id`,
+   `created_at`). This is the portable handoff — the reviewer needs no access to
+   this session.
+2. **Run the reviewer out-of-band.** The reviewer model is **not** this session.
+   Resolve the reviewer id from `--cross-model <id>` or config
+   `review.cross_model` (e.g. `codex`, `gemini`, another `claude` session, a local
+   model, or a separate Hermes session). Tell the user the exact command to run,
+   e.g.:
+   ```bash
+   PKG={FEATURE_DIR}/cross-review/<ts>-<slug>
+   codex exec --file $PKG/review-package.md > $PKG/review-report.md
+   # or: gemini / a second claude / hermes — any CLI-capable model
+   ```
+   PF does not silently invoke another paid model — the user runs (or confirms)
+   the reviewer. When running inside Hermes, this MAY be delegated to a subagent
+   pinned to a different model, still writing `review-report.md`.
+3. **Ingest the report.** Read `review-report.md`, dedupe its findings against the
+   existing `F-NNN` set (same file:line + rule = same finding; raise severity to
+   the max of the two), and **append genuinely new findings** to `gate-review.md`
+   with `source: cross-model` + `reviewer: <id>` + `raised@{head-sha}`. Cross-model
+   findings flow through the same gate (Step 5) as native ones.
+4. **Stamp the carrier.** Record on the eventual gate entry (Step 6)
+   `reviewed_by_model: <id>` and `cross_model_findings: {N}` so the audit trail
+   shows the review was cross-model and by which model.
+
+> Degradation: if no reviewer is configured/available, emit the package, tell the
+> user where it is, and proceed single-model — the package is still a useful
+> portable artifact. The loop is complementary to PF's flow, never a replacement.
 
 ---
 
@@ -376,6 +435,8 @@ gates:
     rolled_back_to: "{phase}"   # only when decision is rolled_back
     timestamp: "{ISO timestamp}"
     notes: "{summary}"
+    reviewed_by_model: "{reviewer-id or null}"   # v1.7 P1-B — set when --cross-model ran; null otherwise
+    cross_model_findings: {N}                     # v1.7 P1-B — new findings the cross-model reviewer added (0 if not run)
     findings:
       critical: {N}
       high: {N}

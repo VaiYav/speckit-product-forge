@@ -251,6 +251,22 @@ learning:
   require_confirmation: true
   skill_category: "product-forge-lessons"
 
+# ─── Cross-Model Review (v1.7) ─────────────────────────────────────────────────
+#
+# Opt-in cross-model review for `code-review --cross-model` (P1-B): export the
+# consolidated gate-review.md + git diff as a portable package, have a DIFFERENT
+# model review it, and ingest its findings back into the F-NNN namespace. A model
+# reviewing its own family rationalizes; a different model brings different priors.
+# See commands/code-review.md Step 2.5.
+#
+#   cross_model — default reviewer id used when --cross-model is passed without an
+#                 explicit id. Any CLI-capable model/session: codex | gemini |
+#                 claude | hermes | <local-model>. Empty = must pass the id on the
+#                 command line. The reviewer runs OUT-OF-BAND; PF never silently
+#                 invokes another paid model.
+review:
+  cross_model: ""
+
 # ─── Sync-Verify Drift Budget (v1.5.0) ─────────────────────────────────────────
 
 # Drift budget controls how sync-verify categorizes and reports differences.

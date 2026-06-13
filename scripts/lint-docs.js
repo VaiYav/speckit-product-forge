@@ -362,6 +362,11 @@ function lint(root) {
       producer: ["docs/policy.md"],                 // distinct-approver rule defines write
       consumer: ["docs/policy.md"],                 // and reads it (approved_by != produced_by)
     },
+    {
+      token: "reviewed_by_model",
+      producer: ["commands/code-review.md"],        // stamped on the gate entry when --cross-model ran
+      consumer: ["docs/templates/gate-review.md"],  // gate surface documents/reads the cross-model stamp
+    },
   ];
   for (const cf of CARRIER_FIELDS) {
     const mentions = (f) => exists(R(f)) && read(R(f)).includes(cf.token);

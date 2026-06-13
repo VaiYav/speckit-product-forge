@@ -743,3 +743,24 @@ learning:
 Only meaningful when running inside Hermes (or a host exposing `skill_manage`).
 On other hosts the step is a no-op regardless of these keys; `lessons.md` is
 unaffected.
+
+### Cross-model review — `review.cross_model` (v1.7, P1-B)
+
+Default reviewer id for `code-review --cross-model`. The cross-model loop exports
+the consolidated `gate-review.md` + git diff as a portable package, has a
+**different** model review it out-of-band, and ingests its findings back into the
+`F-NNN` namespace (a model reviewing its own family rationalizes). Read by
+`speckit.product-forge.code-review` Step 2.5; see
+[`commands/code-review.md`](../commands/code-review.md).
+
+```yaml
+review:
+  cross_model: ""   # codex | gemini | claude | hermes | <local-model>; empty → pass id on the command line
+```
+
+| Key | Layer | Meaning |
+|-----|-------|---------|
+| `review.cross_model` | either | Default reviewer id when `--cross-model` is passed without one. Empty means the id must be given on the command line. The reviewer always runs out-of-band — Product Forge never silently invokes another paid model. |
+
+The chosen reviewer is stamped on the gate entry as `reviewed_by_model` for the
+audit trail (policy §9 gate surface).

@@ -26,6 +26,7 @@ It supersedes the per-phase id schemes for the gate surface:
 |-----------|-------|-----|
 | `D-NNN` / `A-NNN` / `R-NNN` | pre-impl-review (design / arch / risk) | `F-NNN` with `source: pre-impl-review`, `dimension: design\|architecture\|risk` |
 | `REV-NNN` | code-review | `F-NNN` with `source: code-review`, `dimension: quality\|security\|patterns\|tests\|doc-code` |
+| `REV-NNN` (cross-model) | code-review `--cross-model` (P1-B) | `F-NNN` with `source: cross-model`, `reviewer: <id>` — findings from a different model reviewing the portable package; `reviewed_by_model` is stamped on the `gates[]` entry |
 | `CRITICAL-NNN` / `WARNING-NNN` | verify-full | `F-NNN` with `source: verify-full`, `layer: <N>` |
 
 Each phase appends to the existing `F-` sequence (read the current max `F-NNN`
