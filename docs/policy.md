@@ -17,6 +17,19 @@ to it instead of repeating rules in their own files.
    (§4.0.1) phases still run one at a time but the user may choose the order among
    the currently-runnable phases (dependencies are enablers, not strict gates);
    `sync-verify` and the gate audit trail still apply.
+
+   **Carve-out — intra-phase task parallelism (v1.7, P2-C).** "One phase at a
+   time" is about *phases*. Within the single `implement` phase, independent task
+   groups MAY be executed in parallel (e.g. via Hermes `delegate_task`) — this is
+   **not** running two lifecycle phases at once. It is permitted ONLY when all of:
+   (a) `implement --parallel` was explicitly requested; (b) the task groups are
+   proven **path-disjoint** by the same conflict matrix `portfolio` computes from
+   `tasks.md` `Paths:` lines (no shared path between groups — overlap ⇒ those
+   groups stay sequential); (c) the progressive-verify checkpoints (implement
+   Step 4) and the state-lock still apply, and the phase still ends at one human
+   gate. Test-first `red_gate` tasks and any group touching a shared path are
+   never parallelized. See [`commands/implement.md`](../commands/implement.md)
+   Step 3 (the `--parallel` contract).
 2. **Human gate after every phase.** After each sub-skill completes, summarize the outcome and present a **structured gate prompt** (see [interaction.md](./interaction.md) and the `Gate` template in [templates/interaction-prompts.md](./templates/interaction-prompts.md)) offering:
    - **Approve** → proceed to next phase
    - **Revise** → re-run same phase with feedback

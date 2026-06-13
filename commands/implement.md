@@ -25,6 +25,12 @@ The next step is `/speckit.product-forge.code-review` (Phase 6B) or
 $ARGUMENTS
 ```
 
+If `$ARGUMENTS` contains **`--parallel`**, attempt intra-phase task-group
+parallelism in **Step 3** (Hermes `delegate_task`), strictly bounded by the
+path-disjointness proof and the carve-out in
+[docs/policy.md §1.1](../docs/policy.md#1-operating-rules). Without the flag,
+implementation runs sequentially as before.
+
 ---
 
 ## Step 1: Validate Prerequisites
@@ -96,6 +102,41 @@ Step 5 status update and the orchestrator gate-records the skip.)
 >   before asking the user.
 > After all tasks are completed, do NOT run verification — stop and return control
 > to the Product Forge orchestrator."*
+
+### Step 3P: Parallel task groups (opt-in, `--parallel`, v1.7, P2-C)
+
+Run this only when `--parallel` was passed AND the host exposes `delegate_task`
+(Hermes). This parallelizes **independent task groups within the single
+`implement` phase** — it is the intra-phase carve-out of "one phase at a time"
+(policy §1.1), not concurrent phases.
+
+1. **Build the path-conflict matrix.** Group `tasks.md` tasks by their `Paths:`
+   lines using the **same computation `portfolio` uses**
+   ([`commands/portfolio.md §Step 3`](./portfolio.md)). Two groups *conflict* if
+   they share any path (workspace-prefix-normalized). Build the set of
+   **path-disjoint** groups.
+2. **Eligibility gate — refuse to parallelize when unproven.** A group is eligible
+   only if it is path-disjoint from every other in-flight group. **Exclusions
+   (always sequential):** any task carrying `Test-first: true` (the `red_gate`
+   must run first, ordered), any group whose paths overlap another, and any group
+   touching a shared/`packages/`-style cross-cutting path. If fewer than two
+   eligible disjoint groups remain, **fall back to sequential** Step 3 and say so
+   — do not force parallelism.
+3. **Delegate.** Dispatch each eligible disjoint group as its own `delegate_task`
+   subagent, each with the same enriched context note above scoped to its task
+   group + its `Paths:`. Cap concurrency at the host's configured limit.
+4. **Reconcile under the lock.** Subagents return diffs/summaries; the orchestrator
+   applies/validates them **serially while holding `.forge-status.yml.lock`** (no
+   concurrent status writes), then runs the Step 4 progressive-verify checkpoint
+   over the merged result. A subagent failure isolates to its group — the others
+   still land; the failed group is retried sequentially.
+5. **Single gate.** The phase still ends at exactly **one** human gate (Step 5/§1.2)
+   over the combined result — parallelism changes *how* tasks execute, never the
+   gate or the audit trail.
+
+> Degradation: outside Hermes (no `delegate_task`), or when the matrix proves the
+> groups aren't disjoint, `--parallel` is a no-op and implementation runs
+> sequentially. Correctness never depends on parallelism.
 
 ---
 
