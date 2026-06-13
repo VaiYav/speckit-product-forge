@@ -172,4 +172,5 @@ async function main() {
   process.exit(o.strict && dead > 0 ? 1 : 0);
 }
 
-main();
+if (require.main === module) main();
+module.exports = { collectUrls, IGNORE_URL };

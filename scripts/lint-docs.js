@@ -436,7 +436,17 @@ function lint(root) {
       const modeStart = forge.indexOf("### Phase execution map by mode");
       if (modeStart >= 0) {
         const modeBlock = forge.slice(modeStart, forge.indexOf("\n## ", modeStart + 5));
-        const cellVal = (c) => /✅/.test(c) ? "yes" : /\bopt\b/.test(c) ? "opt" : /—/.test(c) ? "no" : null;
+        // Classify a rendered cell. Symbol vocabulary (✅/opt/—) is what the real
+        // tables use; also accept the word forms so a typo'd cell is judged, not
+        // skipped. Returns null only for a truly empty cell.
+        const cellVal = (c) => {
+          const t = c.trim();
+          if (t === "") return "";                       // empty cell — explicit, see below
+          if (/✅/.test(t) || /\byes\b/i.test(t)) return "yes";
+          if (/\bopt\b/i.test(t)) return "opt";
+          if (/—/.test(t) || /\bno\b/i.test(t) || /^-+$/.test(t)) return "no";
+          return "?";                                    // non-empty but unclassifiable
+        };
         const rowById = {};
         for (const l of lines(modeBlock)) {
           if (!l.startsWith("|")) continue;
@@ -451,7 +461,12 @@ function lint(root) {
           modeOrder.forEach((mode, k) => {
             const rendered = cellVal(cells[k + 1] || "");
             const declared = p.modes && p.modes[mode];
-            if (rendered && declared && rendered !== declared) {
+            if (!declared) return;
+            // An empty or unclassifiable cell that should carry a declared value
+            // is itself a finding — don't let a blanked cell pass silently.
+            if (rendered === "" || rendered === "?") {
+              add("PHASEMAP", "warn", "commands/forge.md", `phase '${p.id}' ${mode}: cell is ${rendered === "" ? "empty" : "unclassifiable (\"" + (cells[k + 1] || "").trim() + "\")"} but phase-map.yml declares '${declared}'`);
+            } else if (rendered !== declared) {
               add("PHASEMAP", "warn", "commands/forge.md", `phase '${p.id}' ${mode}: table shows '${rendered}' but phase-map.yml declares '${declared}'`);
             }
           });
@@ -481,9 +496,11 @@ function lint(root) {
     for (const f of corpus) {
       if (/CHANGELOG\.md$/.test(f)) continue;   // CHANGELOG documents past layer counts (history, not drift)
       for (const line of lines(read(f))) {
-        if (!new RegExp(owner.label).test(line) && !/sync-verify|verify-full/.test(line)) continue;
-        // only judge a line that actually names THIS owner (avoid cross-matching)
+        // Only judge a line that names THIS owner. If it names BOTH owners (e.g.
+        // "verify-full extends sync-verify's layers"), attribution is ambiguous
+        // and a count would be mis-charged to one of them — skip it.
         if (!new RegExp(owner.label).test(line)) continue;
+        if (/sync-verify/.test(line) && /verify-full/.test(line)) continue;
         let m;
         claimRe.lastIndex = 0;
         while ((m = claimRe.exec(line)) !== null) {
@@ -529,15 +546,24 @@ function lint(root) {
   }
 
   // ── SCRIPT-PATH: no bare-relative node script invocation in commands ───────
-  const barePathRe = /(?:node\s+scripts\/|require\((['"])\.\/scripts\/)/;
+  // Per-OCCURRENCE, not per-file: a file that correctly uses ${PLUGIN_ROOT} for
+  // one call must still be flagged for a DIFFERENT bare `node scripts/…` call
+  // elsewhere in it. The correct form `node ${PLUGIN_ROOT}/scripts/…` does not
+  // match the bare regex at all; the only legitimate bare form is
+  // `cd ${PLUGIN_ROOT} && node scripts/…` — so exempt only when the PLUGIN_ROOT
+  // token is on the SAME line as the bare invocation (tightest correct rule).
+  const bareLineRe = /node\s+scripts\//;
+  const requireLineRe = /require\((['"])\.\/scripts\//;
   const pluginRootToken = /\$\{?PLUGIN_ROOT|\$\{?CLAUDE_PLUGIN_ROOT|specify extension path/;
   for (const f of cmdFiles) {
-    const txt = read(f);
-    if (barePathRe.test(txt) && !pluginRootToken.test(txt)) {
-      // find the offending lines for a precise message
-      const bad = lines(txt).map((l, i) => ({ l, i: i + 1 }))
-        .filter((x) => /node\s+scripts\/|require\((['"])\.\/scripts\//.test(x.l))
-        .map((x) => x.i);
+    const ls = lines(read(f));
+    const bad = [];
+    for (let i = 0; i < ls.length; i++) {
+      if (!bareLineRe.test(ls[i]) && !requireLineRe.test(ls[i])) continue;
+      if (pluginRootToken.test(ls[i])) continue;   // same-line cd ${PLUGIN_ROOT} && node scripts/…
+      bad.push(i + 1);
+    }
+    if (bad.length) {
       add("SCRIPT-PATH", "error", rel(f),
         `invokes a bundled script by bare relative path (lines ${bad.join(", ")}) — won't resolve from the plugin cache; route through \${PLUGIN_ROOT}`);
     }
@@ -717,6 +743,42 @@ function selftest() {
       "## End", "",
     ].join("\n"));
     assert(lint(tmp).some((f) => f.rule === "PHASEMAP" && /phase '1' express/.test(f.msg)), "PHASEMAP detects a per-mode cell that disagrees with phase-map.yml");
+
+    // PHASEMAP regression (review R1#3): an EMPTY or word-form cell that should
+    // carry a declared value must be a finding, not silently skipped.
+    W("commands/forge.md", [
+      "---", "name: speckit.product-forge.forge", "---",
+      "## Phase Map (standard mode)",
+      "| Phase | Command |", "|---|---|",
+      "| 1. R | x |", "| 2. P | y |",
+      "## Mode", "### Phase execution map by mode",
+      "| Phase | express | lite | standard | v-model |",
+      "|---|---|---|---|---|",
+      "| 1. R | — | — |   | ✅ |",          // standard blank, data says yes
+      "| 2. P | ✅ | ✅ | ✅ | no |",         // v-model word 'no', data says yes
+      "## End", "",
+    ].join("\n"));
+    const pmEdge = lint(tmp);
+    assert(pmEdge.some((f) => f.rule === "PHASEMAP" && /phase '1' standard: cell is empty/.test(f.msg)), "PHASEMAP flags an empty cell that should carry a value");
+    assert(pmEdge.some((f) => f.rule === "PHASEMAP" && /phase '2' v-model/.test(f.msg)), "PHASEMAP judges a word-form cell ('no' vs declared yes)");
+
+    // LAYER-COUNT regression (review R1#2): a line naming BOTH owners must be
+    // skipped (ambiguous attribution), not mis-charged to one owner.
+    W("commands/sync-verify.md", "---\nname: speckit.product-forge.sync-verify\n---\n### Layer 1: a\n### Layer 2: b\n### Layer 3: c\n");
+    W("commands/verify-full.md", "---\nname: speckit.product-forge.verify-full\n---\n### Layer 1: a\n### Layer 2: b\n");
+    W("docs/both.md", "The verify-full pass runs 2 layers; it extends the sync-verify 3 layers with a check.\n");
+    assert(!lint(tmp).some((f) => f.rule === "LAYER-COUNT"), "LAYER-COUNT skips a line that names both owners (no false positive)");
+    fs.rmSync(path.join(tmp, "docs/both.md"));
+    fs.rmSync(path.join(tmp, "commands/verify-full.md"));
+
+    // SCRIPT-PATH regression (review R1#4): a bare `node scripts/…` must be
+    // flagged even in a file that ALSO uses ${PLUGIN_ROOT} correctly elsewhere.
+    W("commands/mixed.md", "---\nname: speckit.product-forge.mixed\n---\nGood: `node ${PLUGIN_ROOT}/scripts/ok.js`\nBad: `node scripts/evil.js --json`\n");
+    assert(lint(tmp).some((f) => f.rule === "SCRIPT-PATH" && /commands\/mixed\.md/.test(f.file)), "SCRIPT-PATH flags a bare call even when the file also uses ${PLUGIN_ROOT}");
+    // same-line cd ${PLUGIN_ROOT} && node scripts/… is exempt
+    W("commands/mixed.md", "---\nname: speckit.product-forge.mixed\n---\nRun: `cd ${PLUGIN_ROOT} && node scripts/ok.js`\n");
+    assert(!lint(tmp).some((f) => f.rule === "SCRIPT-PATH" && /commands\/mixed\.md/.test(f.file)), "SCRIPT-PATH exempts a same-line cd ${PLUGIN_ROOT} && node scripts/ form");
+    fs.rmSync(path.join(tmp, "commands/mixed.md"));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

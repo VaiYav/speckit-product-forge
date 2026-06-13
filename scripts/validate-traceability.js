@@ -68,7 +68,15 @@ function readCompletedPhases(featureDir) {
   if (!fs.existsSync(p)) return completed;
   const lines = fs.readFileSync(p, "utf8").split(/\r?\n/);
   let currentPhase = null;
+  let inPhases = false;   // only honor phase-status matches INSIDE the `phases:` block
   for (const line of lines) {
+    // A column-0 key delimits top-level blocks. Entering `phases:` arms the
+    // scanner; any other column-0 key disarms it (so sibling blocks like
+    // `gate_summary:` keyed by phase name can't be misread as completed phases).
+    const topKey = line.match(/^([a-z0-9_]+):\s*$/);
+    if (topKey) { inPhases = (topKey[1] === "phases"); currentPhase = null; continue; }
+    if (/^[a-z]/.test(line)) { inPhases = false; currentPhase = null; } // left the phases block (scalar top key)
+    if (!inPhases) continue;
     // phases:\n  <name>:\n    status: "completed"
     const phaseHeader = line.match(/^  ([a-z0-9_]+):\s*$/);
     if (phaseHeader) { currentPhase = phaseHeader[1]; continue; }
@@ -76,7 +84,6 @@ function readCompletedPhases(featureDir) {
     if (statusInline) { completed.add(statusInline[1]); continue; }
     const statusLine = line.match(/^    status:\s*"?(completed|approved|completed_with_known_issues)"?\s*$/);
     if (statusLine && currentPhase) completed.add(currentPhase);
-    if (/^[a-z]/.test(line)) currentPhase = null; // left the phases block
   }
   return completed;
 }
@@ -172,6 +179,11 @@ function checkTraceability(tr, completed, rep) {
     // satisfied by the journey-level tests[] (already enforced above) — we only
     // note the shape so authors can upgrade to per-step coverage.
     const steps = Array.isArray(j.steps) ? j.steps : [];
+    // A `steps:` that exists but isn't a list (e.g. a YAML map) escapes every
+    // per-step check above — flag the mis-shape so it isn't silently ignored.
+    if (j.steps !== undefined && !Array.isArray(j.steps)) {
+      rep.warn("step.shape", `journey ${jid} has a non-list steps: block (expected a sequence of ids or {id, tests} objects) — steps not checked`);
+    }
     for (const s of steps) {
       if (s && typeof s === "object") {
         const sid = s.id || "STEP-?";
@@ -400,6 +412,22 @@ journeys:
   assert(repBare.findings.some((f) => f.rule === "step.shape"), "bare-string steps emit a shape warning");
   assert(!repBare.findings.some((f) => f.rule === "step.tests"), "bare-string steps do not emit step.tests errors");
 
+  // readCompletedPhases must only honor the `phases:` block. A sibling top-level
+  // block keyed by phase name (e.g. gate_summary) must NOT mark phases completed
+  // (regression: the unscoped inline matcher used to do exactly that).
+  const os = require("node:os");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pf-vt-"));
+  try {
+    fs.writeFileSync(path.join(tmp, ".forge-status.yml"),
+      "gate_summary:\n  implement: verified\n  test_run: tested\nphases:\n  implement:\n    status: pending\n  research:\n    status: completed\n");
+    const cp = readCompletedPhases(tmp);
+    assert(!cp.has("implement"), "sibling block does not mark 'implement' completed (scoped to phases:)");
+    assert(!cp.has("test_run"), "sibling block does not mark 'test_run' completed");
+    assert(cp.has("research"), "real completed phase inside phases: is detected");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+
   // 3) phase-awareness: before implement, missing code is NOT an error
   const rep2 = makeReporter();
   const tr2 = parseYaml(`rows:\n  - req: "FR-003"\n    must_have: true\n    tasks: ["TASK-009"]\n`);
@@ -447,4 +475,5 @@ function main() {
   process.exit(emit(o, featureDir, info, rep));
 }
 
-main();
+if (require.main === module) main();
+module.exports = { checkTraceability, readCompletedPhases };

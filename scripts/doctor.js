@@ -189,4 +189,4 @@ function main() {
   process.exit(failed.length === 0 ? 0 : 1);
 }
 
-main();
+if (require.main === module) main();

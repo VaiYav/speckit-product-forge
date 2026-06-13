@@ -335,7 +335,7 @@ For each finding, create an entry:
 
 | Field | Value |
 |-------|-------|
-| **Layer** | {1-9}: {layer name} |
+| **Layer** | {1-10}: {layer name} |
 | **Direction** | Forward (earlier → later) / Backward (later → earlier) |
 | **Severity** | CRITICAL / WARNING / INFO |
 | **Category** | structural / cosmetic (see §3A) |
@@ -425,7 +425,7 @@ Write `{FEATURE_DIR}/sync-report.md`:
 # Sync & Verify Report: {Feature Name}
 
 > Feature: {slug} | Date: {today}
-> Layers checked: {N}/9 | Skipped: {list of skipped layers and why}
+> Layers checked: {N}/{applicable} | Skipped: {list of skipped layers and why}
 > Phase: {current phase from .forge-status.yml}
 
 ## Summary
@@ -472,7 +472,7 @@ Write `{FEATURE_DIR}/sync-report.md`:
 
 | Run | Date | Layers | CRITICAL | WARNING | Verdict |
 |-----|------|--------|----------|---------|---------|
-| #{N} | {date} | {N}/9 | {N} | {N} | {verdict} |
+| #{N} | {date} | {N}/{applicable} | {N} | {N} | {verdict} |
 ```
 
 Also write `{FEATURE_DIR}/sync-report.json` with machine-readable format.
@@ -486,7 +486,7 @@ Also write `{FEATURE_DIR}/sync-report.json` with machine-readable format.
   🔄 Sync & Verify: {Feature Name}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Layers checked: {N}/9
+  Layers checked: {N}/{applicable}
   Verdict: {CONSISTENT / DRIFT DETECTED / CRITICAL DRIFT}
 
   ❌ CRITICAL:  {N}

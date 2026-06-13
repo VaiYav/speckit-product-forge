@@ -35,7 +35,13 @@ const { enumerateFeatures, resolveOrExit } = require("./lib-paths");
 
 const read = (p) => fs.readFileSync(p, "utf8");
 const exists = (p) => fs.existsSync(p);
-const num = (v) => (typeof v === "number" && isFinite(v) ? v : (parseInt(v, 10) || 0));
+// Coerce a counter to a non-negative number. Tolerates string forms incl.
+// thousands separators ("1,000") and decimals ("3500.9"); non-numeric → 0.
+const num = (v) => {
+  if (typeof v === "number") return isFinite(v) ? v : 0;
+  const n = Number(String(v).replace(/[, ]/g, ""));
+  return isFinite(n) ? n : 0;
+};
 
 // Roll up per-phase token/tool-call counters from one parsed status object.
 // Returns { phases: [{phase, tokens_in, tokens_out, tool_calls}], totals }.
@@ -239,4 +245,5 @@ function main() {
   process.exit(0);
 }
 
-main();
+if (require.main === module) main();
+module.exports = { rollupFeature, dollars, num };
