@@ -1,6 +1,8 @@
-# Product Forge — SpecKit Extension
+# Product Forge — SpecKit Extension & Claude Plugin
 
 > **Full product lifecycle:** Problem Discovery → Research → Product Spec → Revalidation → SpecKit → Pre-Impl Review → Implement → Code Review → Verify → Test → Release Readiness → **API Docs · Security · Analytics · Retrospective**
+
+> Installs as a **SpecKit extension** *or* as a **Claude Code / Claude plugin** from this same repo — see [Installation](#installation) and [docs/claude-plugin.md](./docs/claude-plugin.md).
 
 Product Forge is a [SpecKit](https://github.com/github/spec-kit) extension that adds a
 complete **product discovery, specification, and quality pipeline** before and after any SpecKit
@@ -396,31 +398,70 @@ features/
 
 ## Installation
 
-### Install (latest version)
+Product Forge installs **two ways** from this same repository — as a **Claude Code / Claude plugin** or as the original **SpecKit extension**. Pick whichever matches your tooling; the workflows are identical.
+
+### Option A — Claude Code plugin
+
+This repo is also a single-plugin Claude marketplace named **`vaiyav-plugins`** (defined in [`.claude-plugin/marketplace.json`](./.claude-plugin/marketplace.json), with the plugin manifest in [`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json)). Add the marketplace, then install the plugin.
+
+Inside Claude Code (or the Claude desktop app):
+
+```text
+/plugin marketplace add VaiYav/speckit-product-forge
+/plugin install speckit-product-forge@vaiyav-plugins
+```
+
+From the terminal:
+
+```bash
+claude plugin marketplace add VaiYav/speckit-product-forge
+claude plugin install speckit-product-forge@vaiyav-plugins
+```
+
+Pin to a tag or branch with `@ref`:
+
+```bash
+claude plugin marketplace add VaiYav/speckit-product-forge@v1.6.0
+```
+
+**Command names when installed as a plugin** are namespaced with the plugin name — e.g. `/speckit-product-forge:forge`, `/speckit-product-forge:status`, `/speckit-product-forge:research`. (As a SpecKit extension the same commands are `/speckit.product-forge.forge`, etc. — see Option B.)
+
+Verify and update:
+
+```bash
+claude plugin marketplace update vaiyav-plugins   # pull new commits / versions
+# In Claude Code, run /plugin to see speckit-product-forge listed and enabled.
+```
+
+> Validate the manifests locally before pushing changes: `claude plugin validate .`
+
+### Option B — SpecKit extension
+
+#### Install (latest version)
 
 ```bash
 specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/heads/main.zip
 ```
 
-### Install (specific version)
+#### Install (specific version)
 
 ```bash
 specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.6.0.zip
 ```
 
-### Update to latest
+#### Update to latest
 
 ```bash
 specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/heads/main.zip
 ```
 
-### Update to specific version
+#### Update to specific version
 
 ```bash
 specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.6.0.zip
 ```
 
-### Verify installation
+#### Verify installation
 
 ```bash
 specify extension list
@@ -431,11 +472,21 @@ specify extension list
 
 ### After installing: configure your project
 
-Copy the config template to your project root:
+Copy the config template to your project root.
+
+SpecKit extension:
 
 ```bash
 mkdir -p .product-forge
 cp $(specify extension path product-forge)/config-template.yml .product-forge/config.yml
+```
+
+Claude plugin (the template ships in the plugin cache; pull it straight from the repo):
+
+```bash
+mkdir -p .product-forge
+curl -fsSL https://raw.githubusercontent.com/VaiYav/speckit-product-forge/main/config-template.yml \
+  -o .product-forge/config.yml
 ```
 
 Edit `.product-forge/config.yml`:
@@ -452,7 +503,11 @@ default_speckit_mode: "ask"   # classic | v-model | ask
 ### Run
 
 ```
+# SpecKit extension
 /speckit.product-forge.forge Build a push notification preferences screen
+
+# Claude plugin (namespaced with the plugin name)
+/speckit-product-forge:forge Build a push notification preferences screen
 ```
 
 ---

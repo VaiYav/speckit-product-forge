@@ -1,0 +1,25 @@
+{
+  "name": "vaiyav-plugins",
+  "owner": {
+    "name": "Valentin Yakovlev"
+  },
+  "description": "Plugins by Valentin Yakovlev (VaiYav) — SpecKit Product Forge and related developer workflow tooling.",
+  "plugins": [
+    {
+      "name": "speckit-product-forge",
+      "source": "./",
+      "description": "Full product lifecycle orchestrator for SpecKit: research → product-spec → plan → tasks → implement → verify → test → release-readiness, across express/lite/standard/v-model modes with human-in-the-loop gates, cross-artifact sync-verify, a living/delta spec with a REQ→…→TEST→EVT traceability matrix, and brown-field backfill.",
+      "category": "workflow",
+      "tags": [
+        "speckit",
+        "lifecycle",
+        "product-spec",
+        "planning",
+        "testing",
+        "traceability",
+        "v-model",
+        "release-readiness"
+      ]
+    }
+  ]
+}
