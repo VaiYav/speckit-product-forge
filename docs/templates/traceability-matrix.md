@@ -81,7 +81,9 @@ rows:
 journeys:
   - id: "JRN-001"
     title: "Save notification preferences"
-    steps: ["STEP-001", "STEP-002"]
+    steps:                           # bare ids OR {id, tests} objects for per-step coverage
+      - {id: STEP-001, tests: [TC-E2E-003]}
+      - {id: STEP-002, tests: [TC-E2E-003]}
     edges:                           # error / alternate flows, per-edge
       - {id: EDGE-001, priority: P1, tests: [TC-E2E-004]}
     tests: ["TC-E2E-003"]           # journey-level E2E; each step should map to ≥1 test
@@ -93,7 +95,9 @@ journeys:
 
 - Every `must_have: true` row has ≥1 `task`, ≥1 `code` path, and (when testing
   ran) ≥1 `test`.
-- Every `JRN`/`STEP`/`EDGE` maps to ≥1 `TC-E2E`/`TC-SMK` (Theme H).
+- Every `JRN`/`STEP`/`EDGE` maps to ≥1 `TC-E2E`/`TC-SMK` (Theme H). Object-shaped
+  steps (`{id, tests}`) are checked individually once `test_run` completes; bare-id
+  steps fall under the journey-level `tests[]`.
 - Every `component` used by a row exists in `design-system/manifest.yml` (Theme E).
 - Every `contract` is implemented on both FE and BE (Theme F).
 - No orphan tasks (a `T0NN` with no `req`) and no undocumented code (a `code`

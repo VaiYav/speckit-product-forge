@@ -59,6 +59,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   plugin `/speckit-product-forge:X`).
 - `.gitignore`: ignore `.serena/` and `.remember/` agent-runtime dirs.
 
+### Added — deeper enforcement (2026-06 follow-up)
+- **`docs/schema/enums.yml`** — the single canonical source for the
+  `feature_mode` / gate-decision / phase-status / gate-policy-action enums.
+  `lint-docs.js` ENUM now reads it and asserts the curated enumeration *sites*
+  (schema.yml, schema.md, runtime.md, forge.md) list the full canonical set —
+  true single-source enforcement, not a spot-check (step 2 of the schema-as-
+  source design note).
+- **`lint-docs.js` CARRIER rule** — every cross-phase carrier field
+  (`red_gate`, `reviewed_sha`, `commit_sha`, the doc↔code drift carrier,
+  `produced_by`) must have BOTH a producer and a consumer that name it. Direct
+  antidote to the "callout-deep" class (a field written but read by nobody).
+- **`lint-docs.js` GATE-POLICY rule** — validates `docs/templates/gate-policy.yml`:
+  every phase key is a real phase and every routing value is a canonical action,
+  so `forge --ci` can't be driven by a malformed policy.
+- **`validate-traceability.js` STEP coverage** — object-shaped journey steps
+  (`{id, tests}`) are now checked individually (≥1 test once `test_run`
+  completes), fulfilling the template's "each step should map to ≥1 test"; bare
+  steps still fall under journey-level coverage. Demo fixture upgraded to
+  object-shaped steps.
+- **`scripts/check-links.js`** — best-effort external-link liveness checker
+  (zero-dep, built-in `fetch`, `--selftest`, ignores illustrative/placeholder/
+  own-repo URLs). Wired as a `continue-on-error` CI job; never blocks a merge.
+- **`CONTRIBUTING.md`** — contributor workflow anchored on `doctor` + `concept.md`
+  and the linter rules.
+- `doctor` now also runs the `check-links` self-test + STEP-aware fixture smoke
+  (13 checks); lint-docs self-test 14/14, validate-traceability 20/20.
+
+
 ---
 
 ## [1.6.0] — "Bulbasaur" — 2026-05-29

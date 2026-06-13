@@ -50,6 +50,7 @@ function checkSelftests() {
     "scripts/gate-risk.js",
     "scripts/validate-traceability.js",
     "scripts/lint-docs.js",
+    "scripts/check-links.js",
   ];
   for (const s of scripts) {
     if (!exists(R(s))) { record(`selftest ${path.basename(s)}`, false, "script missing"); continue; }

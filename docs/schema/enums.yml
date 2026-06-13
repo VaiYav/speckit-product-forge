@@ -1,0 +1,53 @@
+# Canonical enum definitions — the SINGLE SOURCE for Product Forge's status enums.
+#
+# Product Forge is "spec-as-product": the same enum is restated as prose in
+# several docs (schema.yml, schema.md, runtime.md, policy.md, forge.md, config,
+# migration). Historically those drifted (3-vs-4 feature modes, missing
+# completed_with_known_issues, etc.). This file is the machine-readable source;
+# scripts/lint-docs.js (ENUM rule) reads it and asserts every doc that
+# *enumerates* one of these sets lists exactly the canonical members.
+#
+# When you add/remove an enum value:
+#   1. edit it HERE,
+#   2. update the prose enumerations in the docs,
+#   3. run `node scripts/lint-docs.js` — the ENUM rule fails until they agree.
+#
+# Realizes step 2 of docs/improvements/2026-06-schema-as-source-design-note.md
+# (chose a dedicated companion file over polluting the example status file in
+# forge-status-v3.schema.yml, which is a valid example instance).
+schema_version: 1
+
+enums:
+  # feature_mode — drives the phase map. forge.md Mode Resolution validates against this.
+  feature_mode:
+    values: ["express", "lite", "standard", "v-model"]
+    default: "standard"
+
+  # gates[].decision — the gate audit-trail decision literal (policy.md §2).
+  gate_decision:
+    values:
+      - "approved"
+      - "approved_with_conditions"
+      - "revised"
+      - "skipped"
+      - "rolled_back"
+      - "aborted"
+
+  # phases.<name>.status — per-phase lifecycle status.
+  # NOTE: the `revalidation` phase additionally accepts the legacy literal
+  # "approved" (== completed) for v1/v2 back-compat; it is an ALLOWED EXTRA, not a
+  # core member, so the linter tolerates it but does not require it elsewhere.
+  phase_status:
+    values:
+      - "pending"
+      - "in_progress"
+      - "completed"
+      - "skipped"
+      - "completed_with_known_issues"
+      - "not_applicable"
+    allowed_extras: ["approved"]   # revalidation-only legacy literal
+
+  # gate-policy.yml routing actions (forge --ci). Consumed by scripts/lint-docs.js
+  # GATE-POLICY rule to validate docs/templates/gate-policy.yml.
+  gate_policy_action:
+    values: ["auto-recommend", "require-human", "block"]

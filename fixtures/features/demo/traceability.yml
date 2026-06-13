@@ -25,7 +25,9 @@ rows:
 journeys:
   - id: "JRN-001"
     title: "Save notification preferences"
-    steps: ["STEP-001", "STEP-002"]
+    steps:
+      - {id: STEP-001, tests: [TC-E2E-003]}
+      - {id: STEP-002, tests: [TC-E2E-003]}
     edges:
       - {id: EDGE-001, priority: P1, tests: [TC-E2E-004]}
     tests: ["TC-E2E-003"]

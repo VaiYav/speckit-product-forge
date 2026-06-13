@@ -52,3 +52,19 @@ jobs:
           else
             echo "claude CLI not installed on runner — skipping (manifests are also shape-checked by doctor's version/command-count invariants)."
           fi
+
+  external-links:
+    name: external-link liveness (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # network-dependent; never blocks a merge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probe external links
+        # Advisory: surfaces stale install URLs / upstream repos. Illustrative
+        # (localhost/example), placeholder, and own-repo URLs are filtered out.
+        # Not run with --strict, so dead links annotate but don't fail the merge.
+        run: node scripts/check-links.js --timeout 8000
+

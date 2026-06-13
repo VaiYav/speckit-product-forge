@@ -164,6 +164,29 @@ function checkTraceability(tr, completed, rep) {
     if (edges.some((e) => typeof e === "string")) {
       rep.warn("edge.shape", `journey ${jid} has bare-string edges; use {id, priority, tests} objects so P0/P1 coverage is checkable (CF-19)`);
     }
+
+    // Steps: the journey template promises "each step should map to ≥1 test".
+    // Object-shaped steps ({id, tests}) carry their own coverage and are checked
+    // individually (phase-aware: ERROR once test_run completed, else planning
+    // warning). Bare-string steps cannot carry tests, so their coverage is
+    // satisfied by the journey-level tests[] (already enforced above) — we only
+    // note the shape so authors can upgrade to per-step coverage.
+    const steps = Array.isArray(j.steps) ? j.steps : [];
+    for (const s of steps) {
+      if (s && typeof s === "object") {
+        const sid = s.id || "STEP-?";
+        if (!nonEmptyList(s.tests)) {
+          if (testDone) {
+            rep.error("step.tests", `step ${sid} (journey ${jid}) has no tests[] but test_run is completed`);
+          } else {
+            rep.warn("step.tests", `step ${sid} (journey ${jid}) has no tests[] yet`);
+          }
+        }
+      }
+    }
+    if (steps.some((s) => typeof s === "string")) {
+      rep.warn("step.shape", `journey ${jid} has bare-string steps; use {id, tests} objects for per-step coverage (journey-level tests[] currently covers them)`);
+    }
   }
 
   return { seenTasks };
@@ -352,6 +375,30 @@ journeys:
   assert(errs.some((e) => e.rule === "edge.tests"), "detect P1 edge without tests");
   // FR-001 is fully linked -> should not error
   assert(!errs.some((e) => e.msg.includes("FR-001")), "fully-linked row produces no error");
+
+  // 2b) STEP-level coverage: an object-shaped step with no tests[] is an ERROR
+  // once test_run completed, and bare-string steps emit only a shape warning.
+  const trStep = parseYaml([
+    "journeys:",
+    '  - id: "JRN-9"',
+    '    tests: ["TC-E2E-099"]',
+    "    steps:",
+    '      - {id: STEP-901, tests: [TC-E2E-099]}',
+    '      - {id: STEP-902}',
+    "",
+  ].join("\n"));
+  const repStep = makeReporter();
+  checkTraceability(trStep, new Set(["tasks", "implement", "test_run"]), repStep);
+  assert(repStep.findings.some((f) => f.rule === "step.tests" && /STEP-902/.test(f.msg) && f.severity === "error"),
+    "detect object step without tests[] post test_run");
+  assert(!repStep.findings.some((f) => f.rule === "step.tests" && /STEP-901/.test(f.msg)),
+    "object step WITH tests[] produces no step error");
+  // bare-string steps → shape warning only, no step.tests error
+  const trBareStep = parseYaml('journeys:\n  - id: "JRN-8"\n    tests: ["TC-E2E-088"]\n    steps: ["STEP-801", "STEP-802"]\n');
+  const repBare = makeReporter();
+  checkTraceability(trBareStep, new Set(["tasks", "implement", "test_run"]), repBare);
+  assert(repBare.findings.some((f) => f.rule === "step.shape"), "bare-string steps emit a shape warning");
+  assert(!repBare.findings.some((f) => f.rule === "step.tests"), "bare-string steps do not emit step.tests errors");
 
   // 3) phase-awareness: before implement, missing code is NOT an error
   const rep2 = makeReporter();

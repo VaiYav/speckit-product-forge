@@ -41,6 +41,8 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+let parseYaml;
+try { ({ parseYaml } = require("./lib-yaml")); } catch { parseYaml = null; }
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
 const read = (p) => fs.readFileSync(p, "utf8");
@@ -50,6 +52,28 @@ const lines = (s) => s.split(/\r?\n/);
 function listFiles(dir, ext) {
   if (!exists(dir)) return [];
   return fs.readdirSync(dir).filter((f) => f.endsWith(ext)).map((f) => path.join(dir, f)).sort();
+}
+
+// Parse the canonical `phases:` key set from forge-status-v3.schema.yml. Returns
+// the phase keys (top-level children of `phases:`) — used by GATE-POLICY to
+// validate that gate-policy.yml only references real phases. Best-effort: returns
+// [] if the file/parser is unavailable so the rule degrades to action-only checks.
+function canonicalPhaseKeys(schemaPath) {
+  if (!exists(schemaPath)) return [];
+  const out = [];
+  const ls = lines(read(schemaPath));
+  let inPhases = false, baseIndent = null;
+  for (const line of ls) {
+    if (/^phases:\s*$/.test(line)) { inPhases = true; continue; }
+    if (!inPhases) continue;
+    if (/^\S/.test(line) && line.trim() !== "") break;          // dedented to col 0 → block ended
+    const m = line.match(/^(\s+)([a-z][a-z0-9_]+):\s*(#.*)?$/);  // key: (optional trailing comment)
+    if (!m) continue;
+    const indent = m[1].length;
+    if (baseIndent === null) baseIndent = indent;
+    if (indent === baseIndent) out.push(m[2]);                  // only direct children, not nested fields
+  }
+  return out;
 }
 
 function walk(dir, exts, out = []) {
@@ -130,7 +154,7 @@ function lint(root) {
   const corpus = [
     ...walk(R("commands"), [".md"]),
     ...walk(R("docs"), [".md", ".yml", ".yaml"]).filter((p) => !inImprovements(p)),
-    ...listFiles(root, ".md").filter((f) => /README|CHANGELOG/.test(f)),
+    ...listFiles(root, ".md").filter((f) => /README|CHANGELOG|CONTRIBUTING/.test(f)),
   ];
 
   // ── XREF: relative refs resolve + no escape above plugin root ──────────────
@@ -220,21 +244,134 @@ function lint(root) {
     }
   }
 
-  // ── ENUM: feature_mode / gate-decision / phase-status parity ───────────────
-  // Canonical sets (the schema is the source of truth).
-  const enums = {
-    feature_mode: ["express", "lite", "standard", "v-model"],
-    gate_decision: ["approved", "approved_with_conditions", "revised", "skipped", "rolled_back", "aborted"],
-    phase_status: ["pending", "in_progress", "completed", "skipped", "not_applicable", "completed_with_known_issues"],
-  };
-  // Spot-check: feature_mode must include express wherever a 3-of-4 list appears.
-  const fmDocs = [R("docs/config.md"), R("config-template.yml"), R("docs/schema/migration-v2-to-v3.md"),
-                  R("docs/phases.md"), R("commands/forge.md")];
-  for (const f of fmDocs.filter(exists)) {
-    const txt = read(f);
-    // A list that names lite+standard+v-model but NOT express is the classic drift.
-    if (/\blite\b/.test(txt) && /\bstandard\b/.test(txt) && /\bv-model\b/.test(txt) && !/\bexpress\b/.test(txt)) {
-      add("ENUM", "warn", rel(f), "names lite/standard/v-model but never express (feature_mode drift)");
+  // ── ENUM: single-source parity against docs/schema/enums.yml ───────────────
+  // enums.yml is the canonical source (step 2 of the schema-as-source design
+  // note). Rather than guess which prose lines are enumerations (fragile against
+  // tables / multi-line wraps), we check a curated set of ANCHORED sites — the
+  // normative spots that are supposed to list a full enum. Each site isolates
+  // the enumeration substring with a regex; the rule extracts the quoted/
+  // backticked literals from JUST that substring and asserts the full canonical
+  // set is present with no foreign members. Adding a value to enums.yml then
+  // fails every site that doesn't list it (single-source enforcement).
+  const enumsPath = R("docs/schema/enums.yml");
+  let enums = null;
+  if (parseYaml && exists(enumsPath)) {
+    try { enums = (parseYaml(read(enumsPath)) || {}).enums || null; } catch { /* fall through */ }
+  }
+  if (enums) {
+    const setOf = (name) => new Set((enums[name] && enums[name].values) || []);
+    const extrasOf = (name) => new Set((enums[name] && enums[name].allowed_extras) || []);
+    const litsIn = (s) => [...s.matchAll(/[`"']?([a-z][a-z0-9_-]+)[`"']?(?=\s*(?:\||$|\)|`|"|'))/g)].map((m) => m[1]);
+    // Anchored enumeration sites: { file, enum, find: regex capturing the list substring }
+    const ENUM_SITES = [
+      // feature_mode — full 4-value lists
+      { file: "docs/schema/forge-status-v3.schema.yml", enum: "feature_mode", find: /Valid values:\s*([^\n.]+)/ },
+      { file: "docs/schema.md", enum: "feature_mode", find: /`feature_mode`[^\n]*?`("express"[^`]+)`/ },
+      { file: "commands/forge.md", enum: "feature_mode", find: /resolved value MUST be one of\s*\n?\s*`([^`]+)`/ },
+      // gate_decision — the canonical 6-value list in schema.yml + runtime.md
+      { file: "docs/schema/forge-status-v3.schema.yml", enum: "gate_decision", find: /decision:[^#]*#\s*(approved[^\n]+)/ },
+      { file: "docs/runtime.md", enum: "gate_decision", find: /decision:\s*"\{([^}]+)\}"/ },
+      // phase_status — schema.md single-line "one of ..." enumeration
+      { file: "docs/schema.md", enum: "phase_status", find: /`phases\.<name>\.status`[^\n]*?one of\s*`([^`]+)`/ },
+    ];
+    for (const site of ENUM_SITES) {
+      const p = R(site.file);
+      if (!exists(p)) continue;
+      const m = read(p).match(site.find);
+      if (!m) { add("ENUM", "warn", site.file, `could not locate the ${site.enum} enumeration site (anchor moved? update lint-docs ENUM_SITES)`); continue; }
+      const present = new Set(litsIn(m[1]));
+      const canon = setOf(site.enum), extras = extrasOf(site.enum);
+      const missing = [...canon].filter((v) => !present.has(v));
+      const foreign = [...present].filter((l) => !canon.has(l) && !extras.has(l));
+      if (missing.length) add("ENUM", "warn", site.file, `${site.enum} enumeration missing ${missing.map((x) => `'${x}'`).join(", ")} (canonical in enums.yml)`);
+      if (foreign.length) add("ENUM", "warn", site.file, `${site.enum} enumeration has non-canonical member(s) ${foreign.map((x) => `'${x}'`).join(", ")}`);
+    }
+  } else {
+    // Legacy spot-check fallback when enums.yml / lib-yaml unavailable.
+    const fmDocs = [R("docs/config.md"), R("config-template.yml"), R("docs/schema/migration-v2-to-v3.md"),
+                    R("docs/phases.md"), R("commands/forge.md")];
+    for (const f of fmDocs.filter(exists)) {
+      const txt = read(f);
+      if (/\blite\b/.test(txt) && /\bstandard\b/.test(txt) && /\bv-model\b/.test(txt) && !/\bexpress\b/.test(txt)) {
+        add("ENUM", "warn", rel(f), "names lite/standard/v-model but never express (feature_mode drift)");
+      }
+    }
+  }
+
+  // ── GATE-POLICY: docs/templates/gate-policy.yml shape ──────────────────────
+  // forge --ci reads this; a malformed policy = a silently-wrong CI gate. Assert
+  // every phase key is a real phase and every routing value is a canonical action.
+  const gpPath = R("docs/templates/gate-policy.yml");
+  if (parseYaml && exists(gpPath)) {
+    let gp = null;
+    try { gp = parseYaml(read(gpPath)); } catch { add("GATE-POLICY", "error", "docs/templates/gate-policy.yml", "does not parse as YAML"); }
+    if (gp) {
+      const actions = new Set((enums && enums.gate_policy_action && enums.gate_policy_action.values) || ["auto-recommend", "require-human", "block"]);
+      const knownPhases = new Set(canonicalPhaseKeys(R("docs/schema/forge-status-v3.schema.yml")));
+      const riskKeys = ["low", "medium", "high"];
+      const checkBlock = (block, where) => {
+        if (!block || typeof block !== "object") return;
+        for (const rk of riskKeys) {
+          if (block[rk] !== undefined && !actions.has(String(block[rk]))) {
+            add("GATE-POLICY", "error", "docs/templates/gate-policy.yml", `${where}.${rk} = '${block[rk]}' is not a valid action (${[...actions].join(" | ")})`);
+          }
+        }
+      };
+      checkBlock(gp.defaults, "defaults");
+      if (gp.phases && typeof gp.phases === "object") {
+        for (const [ph, block] of Object.entries(gp.phases)) {
+          if (knownPhases.size && !knownPhases.has(ph)) {
+            add("GATE-POLICY", "warn", "docs/templates/gate-policy.yml", `phases.${ph} is not a known phase key`);
+          }
+          checkBlock(block, `phases.${ph}`);
+        }
+      }
+    }
+  }
+
+  // ── CARRIER: every cross-phase carrier field has BOTH a producer and a ─────
+  // consumer that name it. This is the structural antidote to the "callout-deep"
+  // defect class: a field written by one phase but read by no one (or read but
+  // written by no one) is a broken contract that prose review keeps missing
+  // (it is exactly how the a11y_gate / red-gate-class gaps slipped past two
+  // prior audits). `token` is the literal field name; `producer`/`consumer` are
+  // files that MUST mention it (the schema is always allowed as a co-declarer).
+  const CARRIER_FIELDS = [
+    {
+      token: "red_gate",
+      producer: ["commands/implement.md"],          // writes phases.implement.red_gate
+      consumer: ["commands/forge.md"],              // forge Phase 6 records/verifies it
+    },
+    {
+      token: "reviewed_sha",
+      producer: ["commands/forge.md"],              // stamped at the gate
+      consumer: ["commands/verify-full.md", "docs/policy.md"],  // delta review reads it
+    },
+    {
+      token: "Suggested canonical-spec updates",     // the doc↔code drift carrier (CF-5)
+      producer: ["commands/verify-full.md"],
+      consumer: ["commands/spec-merge.md"],
+    },
+    {
+      token: "commit_sha",
+      producer: ["commands/implement.md"],          // task_log[].commit_sha
+      consumer: ["commands/verify-full.md", "commands/sync-verify.md"],  // provenance / reverse-index
+    },
+    {
+      token: "produced_by",
+      producer: ["docs/policy.md"],                 // distinct-approver rule defines write
+      consumer: ["docs/policy.md"],                 // and reads it (approved_by != produced_by)
+    },
+  ];
+  for (const cf of CARRIER_FIELDS) {
+    const mentions = (f) => exists(R(f)) && read(R(f)).includes(cf.token);
+    const prod = cf.producer.filter(mentions);
+    const cons = cf.consumer.filter(mentions);
+    if (prod.length === 0) {
+      add("CARRIER", "error", cf.producer[0], `carrier field "${cf.token}" has no producer that names it (expected in ${cf.producer.join(" / ")}) — written by nobody?`);
+    }
+    if (cons.length === 0) {
+      add("CARRIER", "error", cf.consumer[0], `carrier field "${cf.token}" has no consumer that names it (expected in ${cf.consumer.join(" / ")}) — read by nobody (callout-deep)?`);
     }
   }
 
@@ -419,6 +556,31 @@ function selftest() {
     // stale version narrative
     W("docs/c.md", "v1.5 adds a thing\n");
     assert(lint(tmp).some((f) => f.rule === "VERSION" && /stale/.test(f.msg)), "detects stale vN.N adds");
+
+    // ENUM single-source: a schema enums.yml + a doc site that omits a member.
+    W("docs/schema/enums.yml", "enums:\n  feature_mode:\n    values: [\"express\", \"lite\", \"standard\", \"v-model\"]\n");
+    W("docs/schema/forge-status-v3.schema.yml", 'phases:\n  implement:\n    status: "x"\n# Valid values: "express" | "lite" | "standard"\n'); // missing v-model
+    assert(lint(tmp).some((f) => f.rule === "ENUM" && /feature_mode.*missing 'v-model'/.test(f.msg)),
+      "ENUM detects a missing canonical member at an anchored site");
+    // fix it → no ENUM finding for that site
+    W("docs/schema/forge-status-v3.schema.yml", 'phases:\n  implement:\n    status: "x"\n# Valid values: "express" | "lite" | "standard" | "v-model"\n');
+    assert(!lint(tmp).some((f) => f.rule === "ENUM" && /schema\.yml/.test(f.file) && /missing/.test(f.msg)),
+      "ENUM passes when the site lists the full canonical set");
+
+    // GATE-POLICY: bad action value + unknown phase key.
+    W("docs/templates/gate-policy.yml", "version: 1\ndefaults:\n  low: auto-recommend\n  medium: require-human\n  high: nuke\nphases:\n  implement:\n    low: auto-recommend\n  not_a_phase:\n    low: block\n");
+    W("docs/schema/enums.yml", read(path.join(tmp, "docs/schema/enums.yml")) +
+      "  gate_policy_action:\n    values: [\"auto-recommend\", \"require-human\", \"block\"]\n");
+    const gpf = lint(tmp);
+    assert(gpf.some((f) => f.rule === "GATE-POLICY" && /nuke.*not a valid action/.test(f.msg)), "GATE-POLICY detects invalid action");
+    assert(gpf.some((f) => f.rule === "GATE-POLICY" && /not_a_phase.*not a known phase/.test(f.msg)), "GATE-POLICY detects unknown phase key");
+
+    // CARRIER: a field with a producer but no consumer.
+    // The lint registry is hard-coded against real repo files; in the fixture
+    // those files don't exist, so every carrier reports both ends missing.
+    // Assert the rule FIRES (producer-missing) — proving it's wired — without
+    // depending on the fixture having the real command files.
+    assert(lint(tmp).some((f) => f.rule === "CARRIER"), "CARRIER rule fires when carrier files are absent");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
