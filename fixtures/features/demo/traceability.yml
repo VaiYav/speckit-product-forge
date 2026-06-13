@@ -1,0 +1,31 @@
+# Fixture traceability matrix — consistent with .forge-status.yml (implement +
+# test_run completed). Designed to pass `validate-traceability.js --strict`:
+# every must_have row reaches a task + code + test, every journey + P0/P1 edge
+# has a test, and there are no orphan tasks (T001/T002 both referenced).
+schema_version: 1
+feature: "demo-save-preferences"
+last_updated: "2026-06-02T14:05:00Z"
+
+rows:
+  - req: "REQ-001"
+    story: "US-001"
+    journeys: ["JRN-001"]
+    frs: ["FR-001"]
+    must_have: true
+    components: []
+    contracts: ["API-savePrefs"]
+    tasks: ["T001", "T002"]
+    code:
+      - "src/prefs/handler.ts"
+      - "src/prefs/PrefsModal.tsx"
+    tests: ["TC-E2E-003", "TC-UNIT-021"]
+    events: ["EVT-prefs_saved"]
+    status: "tested"
+
+journeys:
+  - id: "JRN-001"
+    title: "Save notification preferences"
+    steps: ["STEP-001", "STEP-002"]
+    edges:
+      - {id: EDGE-001, priority: P1, tests: [TC-E2E-004]}
+    tests: ["TC-E2E-003"]

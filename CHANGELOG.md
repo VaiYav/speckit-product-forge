@@ -6,6 +6,61 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+> Repo-hardening + tooling pass on top of v1.6.0 — addresses the 2026-06 deep
+> review ([docs/improvements/2026-06-deep-review.md](docs/improvements/2026-06-deep-review.md)).
+> No behavioural change to the lifecycle; closes a runtime-portability bug, a
+> dead config switch, and residual doc drift, and adds a deterministic
+> consistency gate so the whole class can't silently return.
+
+### Fixed
+- **Bundled-script path resolution (P1).** `forge.md`, `verify-full.md`, and
+  `test-run.md` invoked `node scripts/…` / `require('./scripts/…')` by bare
+  relative path, which does not resolve once the plugin is installed to
+  `~/.claude/plugins/cache` (cwd = user's project). All call sites now route
+  through `${PLUGIN_ROOT}` with a WARN-and-fall-back-to-LLM rule. New normative
+  section [`docs/runtime.md §1A`](docs/runtime.md) "Locating bundled scripts".
+- **`a11y_gate` dead switch.** The key was documented as `axe | none` but no
+  command read it (the axe floor was unconditional). `test-plan.md §4` now gates
+  generation and `test-run.md §4.7` gates execution on `a11y_gate`.
+- **`how-it-works-v2.md §1`** still said "v1.5 adds…" → updated to the v1.6
+  narrative; removed the phantom `docs/adr/` + `docs/reviews/` tree lines (those
+  dirs were intentionally removed) and refreshed the doc/script tree to reality.
+- **QA test plan** quick-smoke said "18 phase rows" (actual 20), pinned
+  `version: "1.5.0"`, and carried an `express`-omitting abort message → corrected
+  and made executable (delegates to `doctor.js` / `lint-docs.js`; dynamic counts
+  replace hard-coded ones).
+- **Task-ID drift.** Canonicalized on `T0NN` (with `TASK-NNN` as an accepted
+  alias) across `schema.md §8`, `file-structure.md`, `traceability-matrix.md`,
+  and `verify-full.md`; added missing `SEC-` / `F-` rows to the ID registry.
+- **`docs/claude-plugin.md`** relative-ref typo (`./config-template.yml`).
+
+### Added
+- **`scripts/lint-docs.js`** — deterministic doc-corpus consistency linter
+  (zero-dep, `--selftest`, `--json`). Rules: XREF (dangling refs + plugin-root
+  escapes + anchors), CMD-COUNT, VERSION (extension.yml == plugin.json + stale
+  narrative), ENUM, PHASEMAP, CONFIG-READER (dead-switch detection), SCRIPT-PATH
+  (`${PLUGIN_ROOT}` enforcement), ID-FORMAT.
+- **`scripts/doctor.js`** — aggregate self-check (every `--selftest` + lint-docs
+  + a live fixture smoke + release-blocking invariants). One command to gate a
+  change; `node scripts/doctor.js`.
+- **`.github/workflows/ci.yml`** — runs `doctor` on every push/PR (+ best-effort
+  `claude plugin validate`). The repo's first automated consistency gate.
+- **`fixtures/features/demo/`** — a known-good feature state (`.forge-status.yml`
+  + `traceability.yml` + `journeys.yml`) that passes
+  `validate-traceability.js --strict`; real-file test input for `doctor` and CI.
+- **`docs/concept.md`** — 10-minute mental model + the producer→consumer wiring
+  map for new contributors.
+- **`docs/improvements/2026-06-schema-as-source-design-note.md`** — staged design
+  for single-sourcing enum/count invariants from the schema (preventive fix for
+  the drift class).
+- **`forge.md`** command-syntax note (extension `/speckit.product-forge.X` vs
+  plugin `/speckit-product-forge:X`).
+- `.gitignore`: ignore `.serena/` and `.remember/` agent-runtime dirs.
+
+---
+
 ## [1.6.0] — "Bulbasaur" — 2026-05-29
 
 > First codenamed release 🌱 (**Bulbasaur**). A minor, fully **additive** release

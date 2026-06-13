@@ -90,6 +90,53 @@ answers to the **PROJECT** config (`<project-root>/.product-forge/config.yml`) �
 
 ---
 
+## 1A. Locating bundled scripts (`${PLUGIN_ROOT}`)
+
+> **Status:** normative for v1.6.0+. **Consumers:** every command that shells out
+> to a bundled helper (`forge.md`, `verify-full.md`, `test-run.md`, and any
+> future caller of `scripts/*`).
+
+Product Forge ships executable helpers under `scripts/` (`gate-risk.js`,
+`validate-traceability.js`, `lib-yaml.js`, `lint-docs.js`, the lock scripts, the
+migrator). **Once installed, these do NOT live in the user's project** — the
+SpecKit extension installs them under the extension path and the Claude plugin
+copies them to `~/.claude/plugins/cache/...`. A command's working directory at
+run time is the **user's project root**, where `scripts/` does not exist. So a
+bare `node scripts/<name>.js` (or `require('<plugin-root>/scripts/<name>.js')`
+with a bare `./` prefix) **silently fails**,
+disabling the deterministic risk-routing and traceability pre-gate that the gate
+flow depends on.
+
+Every script invocation MUST therefore resolve through a `${PLUGIN_ROOT}`
+indirection rather than a bare relative path. Resolve `PLUGIN_ROOT` once, at the
+start of any command that needs a script, in this order:
+
+1. **Claude plugin form:** the host exports `${CLAUDE_PLUGIN_ROOT}` for an
+   installed plugin — use it directly.
+2. **SpecKit extension form:** `PLUGIN_ROOT="$(specify extension path product-forge)"`.
+3. **Dev / in-repo form:** if neither is set and `./scripts/` exists relative to
+   the repo, `PLUGIN_ROOT="."` (running from a checkout).
+
+```bash
+# Resolve the plugin root once (Claude plugin → SpecKit extension → in-repo dev).
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(specify extension path product-forge 2>/dev/null || echo .)}"
+node "$PLUGIN_ROOT/scripts/gate-risk.js" --feature-dir "$FEATURE_DIR" --json
+```
+
+**Graceful-degradation rule (mandatory).** The deterministic scripts are an
+*accelerator*, not a hard dependency of the LLM workflow. If `PLUGIN_ROOT` cannot
+be resolved or the target script is absent, the command MUST emit a one-line
+`WARNING: <script> not found at $PLUGIN_ROOT — falling back to the LLM review
+path` and continue with the prose/LLM equivalent (e.g. classify gate risk by the
+documented heuristic, run the verify layers without the structural pre-gate). A
+missing script never aborts a run and never silently auto-approves a gate.
+
+> The `node -e` one-liners that `require()` a bundled module (e.g. `lib-yaml.js`
+> for selector extraction) follow the same rule: `require("$PLUGIN_ROOT/scripts/
+> lib-yaml.js")`, with the same WARN-and-fallback if the module is absent.
+
+---
+
 ## 2. State Lock Protocol (A2)
 
 Every writer to `.forge-status.yml` — the orchestrator and every sub-skill —

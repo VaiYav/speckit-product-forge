@@ -20,6 +20,8 @@ Thumbs.db
 
 # Local agent / tool runtime artifacts (not part of the plugin)
 .claude/
+.serena/
+.remember/
 agentdb.rvf
 agentdb.rvf.lock
 ruvector.db

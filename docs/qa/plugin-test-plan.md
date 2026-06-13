@@ -18,12 +18,13 @@ is a YAML file inside each feature directory.
 **The plugin is not runnable software in the traditional sense.** It
 ships ~50 files total. 31 of them are slash-command definitions in
 `commands/*.md` — markdown instructions to an LLM, not code. The rest
-are reference docs under `docs/`, manifests at the root, and 8 helper
+are reference docs under `docs/`, manifests at the root, and 10 helper
 files under `scripts/` (all Node zero-dep or bash):
 
 - `scripts/migrate-status-v2-to-v3.js` (Node, zero-dep)
 - `scripts/acquire-lock.sh`, `scripts/release-lock.sh` (bash)
-- `scripts/gate-risk.js`, `scripts/validate-traceability.js` (Node, zero-dep; each exposes a `--selftest`)
+- `scripts/gate-risk.js`, `scripts/validate-traceability.js`, `scripts/lint-docs.js` (Node, zero-dep; each exposes a `--selftest`)
+- `scripts/doctor.js` (Node aggregate self-check — runs every `--selftest` + `lint-docs` + the release-blocking invariants)
 - `scripts/lib-paths.js` (shared Path-Resolution Contract lib; has a `--selftest`), `scripts/lib-yaml.js` (shared YAML lib; tested via consumers' `--selftest`)
 - `scripts/migrate-status-v2-to-v3.ts` (deprecation stub)
 
@@ -297,7 +298,7 @@ sequence, assert the artifact state.
 
 | Test | Input | Expected |
 |------|-------|----------|
-| Malformed feature_mode | `feature_mode: "full-spectrum"` (not a valid value) | orchestrator aborts at Mode Resolution step 4 with "Invalid feature_mode: 'full-spectrum'. Expected one of lite, standard, v-model." No phases run; no silent fallthrough. See [commands/forge.md §Mode Resolution](../../commands/forge.md). |
+| Malformed feature_mode | `feature_mode: "full-spectrum"` (not a valid value) | orchestrator aborts at Mode Resolution step 4 with "Invalid feature_mode: 'full-spectrum'. Expected one of express, lite, standard, v-model." No phases run; no silent fallthrough. See [commands/forge.md §Mode Resolution](../../commands/forge.md). |
 | Phase name typo in status file | `phases.research: { status: "done" }` (not a valid enum) | orchestrator aborts at Pre-flight step 2 with "Invalid phases.research.status: 'done' in .forge-status.yml. Expected one of …". No auto-coercion, no silent re-run. See [docs/runtime.md §4](../runtime.md#4-step-2--pre-flight-check). |
 | Missing v-model-config.yml but v-model mode selected | v-model mode, no config file | orchestrator warns that no domain file was found; proceeds with domain `generic`; does not abort |
 | Lock file corrupted (non-JSON) | write garbage to `.forge-status.yml.lock` | acquire-lock's JSON parser is tolerant (greps for `"acquired_at"`); if the grep fails, it treats the lock as unreadable and takes over with warning. Exit 0. |
@@ -345,20 +346,28 @@ sequence, assert the artifact state.
 
 ## 9. Quick smoke (if time is short)
 
-Minimal sanity run — ~15 minutes of manual work:
+Minimal sanity run — ~15 minutes of manual work. **Fastest path: run the
+aggregate self-check** (it bundles every invariant below into one command):
+
+```bash
+node scripts/doctor.js          # runs every script --selftest + lint-docs + invariants
+```
+
+If `doctor` is green, the plugin has no gross regressions. The individual checks
+it wraps, for manual spot-checking:
 
 1. `node scripts/migrate-status-v2-to-v3.js --dry-run --features-dir=fixtures/features` — confirm it reports correctly.
 2. `bash scripts/acquire-lock.sh fixtures/features/demo 1800 s1 && bash scripts/release-lock.sh fixtures/features/demo s1` — confirm acquire+release.
-3. `grep '^  version:' extension.yml` — must print `version: "1.5.0"`.
+3. Version coherence (dynamic): the `version:` in `extension.yml` MUST equal the `version` in `.claude-plugin/plugin.json` (doctor's VERSION check; do not hard-code a number here).
 4. `grep 'optional_extensions:' extension.yml` — must match exactly one line; block underneath must contain `id: "v-model"` and `install:` command.
-5. Open `commands/forge.md`, confirm the Phase Map has 18 rows including 4.5 / 5.5 / 9.5 / 9B, and the Mode Resolution table has all 13 V-Model rows.
-6. Verify all new v1.5 docs are present: `docs/v-model-integration.md`, `docs/testing-strategy.md`, `docs/qa/plugin-test-plan.md` (this file), `docs/runtime.md §9 Monorepo-Aware Operations`, `docs/schema/forge-status-v3.schema.yml`.
-7. `grep -rn 'v2\.0\|2\.0\.0' . --include='*.md' --include='*.yml' | grep -v 'docs/qa/plugin-test-plan.md'` — must return 0 matches in any shipped file.
+5. Phase-map parity (dynamic): the `## Phase Map (standard mode)` table row count in `commands/forge.md` MUST equal the "Phase execution map by mode" non-V row count and every doc's claimed count (`lint-docs.js` PHASEMAP rule). At v1.6 this is **20 phase slots** (8 always-on core + 12 optional/conditional, including 4.5 / 5.5 / 9.5 / 9B / 2H / 10); the Mode Resolution table carries the V-Model rows.
+6. Verify the v1.6 normative docs are present: `docs/v-model-integration.md`, `docs/testing-strategy.md`, `docs/qa/plugin-test-plan.md` (this file), `docs/runtime.md §1A Locating bundled scripts` + `§9 Monorepo-Aware Operations`, `docs/schema/forge-status-v3.schema.yml`.
+7. `node scripts/lint-docs.js` — must exit 0 with no `error`-severity findings (XREF / CMD-COUNT / VERSION / SCRIPT-PATH).
 8. Grep the tree for any identifiers specific to the authoring environment (product names, internal codenames, app-specific tech stack strings). Reviewers should add their own patterns — the shipped check is a placeholder: `grep -rniE 'authoring-project-name-1\|authoring-project-name-2' . --include='*.md' --include='*.yml'` — must return 0 matches in any shipped file.
 9. `rg -l '[\u0400-\u04FF]' --glob '*.{md,yml}'` — must return no files in the shipped tree. (Unicode range U+0400–U+04FF covers the Cyrillic block.)
 10. `grep -rn 'docs/adr\|docs/brainstorms\|docs/reviews' . --include='*.md' | grep -v 'docs/qa/plugin-test-plan.md'` — must return 0 matches. If non-test-plan files reference the removed historical directories, those are broken links that need to be cleaned up before release.
 
-If all ten pass, the plugin has no gross regressions. Deeper validation
+If all checks pass, the plugin has no gross regressions. Deeper validation
 still requires Layers B and C.
 
 ## 10. Known open issues

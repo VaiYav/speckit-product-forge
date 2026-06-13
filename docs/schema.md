@@ -161,10 +161,11 @@ mirrors / links back to this table.
 | `FR-`  | Functional requirement | bridge / plan |
 | `CMP-` | Design-system component | design-system-harvest / component-map |
 | `API-` | Endpoint / event contract | bridge / plan (OpenAPI + AsyncAPI) |
-| `TASK-`| Implementation task | tasks |
+| `TASK-`| Implementation task — canonical id form is **`T0NN`** (zero-padded, no hyphen: `T001`, `T042`), as emitted by `tasks.md` and `task_log[]`. `TASK-NNN` is an accepted alias that `validate-traceability.js` normalizes to `T<int>`; prefer `T0NN` in new artifacts. | tasks |
 | `REV-` | Code-review finding *(legacy — folded into `F-` on the gate surface, W5-A3)* | code-review |
 | `TC-`  | Test case (`TC-SMK/E2E/API/UNIT/INT/REG`) | test-plan |
 | `EVT-` | Telemetry event | tracking-plan |
+| `SEC-` | Security finding | security-check |
 | `F-`   | Unified gate-review finding (W5-A3 — consolidates `REV-` / `CRITICAL-`/`WARNING-` / `D-`/`A-`/`R-` into one gate surface; carries `source` + `dimension`/`layer`) | pre-impl-review / code-review / verify-full → `gate-review.md` |
 
 IDs are stable across artifacts. Every downstream artifact references upstream

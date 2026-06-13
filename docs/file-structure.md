@@ -482,6 +482,12 @@ Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → 
 
 ## Naming Conventions
 
+> The **cross-artifact ID system** (prefixes that flow along the traceability
+> chain — `REQ`/`US`/`JRN`/`FR`/`CMP`/`API`/`TASK`→`T0NN`/`TC`/`EVT`/`F`) is
+> canonically defined in [schema.md §8](./schema.md#8-cross-artifact-id-system).
+> The table below is the fuller file/ID naming reference; where the two overlap,
+> schema.md §8 wins for the chain IDs.
+
 | What | Convention | Example |
 |------|-----------|---------|
 | Feature directory | `kebab-case` | `push-notification-preferences` |
@@ -496,12 +502,15 @@ Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → 
 | Canonical requirement IDs | `REQ-NNN` (stable living-spec requirement in `specs/<domain>/spec.md`; root of the traceability chain — distinct from per-feature `FR-NNN`) | `REQ-001`, `REQ-012` |
 | User story IDs | `US-NNN` (3 digits) | `US-001`, `US-012` |
 | Functional req IDs | `FR-NNN` (per-feature functional requirement; derived from `REQ-NNN`) | `FR-001`, `FR-012` |
+| Task IDs | `T0NN` (zero-padded, no hyphen; `TASK-NNN` is an accepted alias normalized to `T<int>` — see schema.md §8) | `T001`, `T042` |
 | Smoke test case IDs | `TC-SMK-NNN` | `TC-SMK-001` |
 | E2E test case IDs | `TC-E2E-NNN` | `TC-E2E-005` |
 | API test case IDs | `TC-API-NNN` | `TC-API-003` |
 | Regression test IDs | `TC-REG-NNN` | `TC-REG-002` |
 | Unit test case IDs | `TC-UNIT-NNN` | `TC-UNIT-001` |
 | Integration test case IDs | `TC-INT-NNN` | `TC-INT-004` |
+| Unified gate-finding IDs | `F-NNN` (one namespace across pre-impl-review / code-review / verify-full; consumed by forge.md's auto-recommend pre-gate grep, so the `**F-NNN**` bullet format is load-bearing) | `F-001`, `F-042` |
+| Security finding IDs | `SEC-NNN` (security-check) | `SEC-001`, `SEC-004` |
 | Bug IDs | `BUG-NNN` (3 digits) | `BUG-001`, `BUG-012` |
 | Change request IDs | `CR-NNN` (3 digits) | `CR-001`, `CR-003` |
 | Drift finding IDs | `DRIFT-NNN` (3 digits) | `DRIFT-001`, `DRIFT-015` |

@@ -16,10 +16,14 @@ shipped code through a gated lifecycle. The user interacts through slash
 commands (`/speckit.product-forge.*`). Every command is a markdown file
 in `commands/` that instructs an LLM to do one phase of the job. State
 between phases lives in `.forge-status.yml` inside each feature's
-folder. v1.5 adds: a portfolio view across features, a lite mode for
-small work, brown-field backfill from existing code, extension phases
-for monitoring / migrations / i18n / experiments / flag cleanup, and a
-learning loop.
+folder. v1.6 adds: a first-class `express` track for trivial changes, a
+design-system harvest that grounds mockups in the project's in-code components,
+structured journeys → Playwright E2E, a living/delta spec with a
+REQ→…→TEST→EVT traceability matrix, FE↔BE contract-first OpenAPI/AsyncAPI,
+telemetry MCP wiring, a risk-scored two-layer gate review, a WCAG-AA
+accessibility gate, and a 9-layer sync-verify — on top of the v1.5 portfolio
+view, lite mode, brown-field backfill, monitoring/migration/i18n/experiment
+extensions, and a learning loop.
 
 ---
 
@@ -45,12 +49,19 @@ speckit-product-forge/
 │   ├── schema/
 │   │   ├── forge-status-v3.schema.yml   # canonical schema reference
 │   │   └── migration-v2-to-v3.md        # migration rules
-│   ├── templates/
+│   ├── templates/               # report/section templates read by commands
 │   │   ├── phase-digest.md       # required section template
-│   │   └── portfolio-report.md   # portfolio output template
+│   │   ├── portfolio-report.md   # portfolio output template
+│   │   ├── gate-review.md        # unified F-NNN gate surface (W5-A3)
+│   │   ├── gate-policy.yml        # --ci {phase × risk} routing (W5-B1)
+│   │   ├── traceability-matrix.md # REQ→…→TEST→EVT matrix template
+│   │   ├── journey-spec.md        # structured journey template
+│   │   ├── interaction-prompts.md # structured gate/track prompts
+│   │   └── domains.yml            # ddd bounded-context registry starter
 │   ├── lessons-format.md        # .product-forge/lessons.md format
-│   ├── adr/                     # architecture decision records
-│   ├── reviews/                 # self-review artifacts
+│   ├── interaction.md / journeys.md / testing-strategy.md / v-model-integration.md
+│   ├── qa/plugin-test-plan.md   # plugin QA test plan
+│   ├── improvements/            # dated design / audit memos (not shipped behaviour)
 │   └── phases.md / file-structure.md / config.md  # user-facing docs
 │
 ├── scripts/                     # zero-dependency helpers
@@ -61,7 +72,9 @@ speckit-product-forge/
 │   ├── gate-risk.js            # {phase × risk} classifier for headless gates (--selftest)
 │   ├── validate-traceability.js  # deterministic traceability validator (--selftest)
 │   ├── lib-paths.js            # Path-Resolution Contract resolve()/enumerate() (--selftest)
-│   └── lib-yaml.js             # shared zero-dep YAML subset parser
+│   ├── lib-yaml.js             # shared zero-dep YAML subset parser
+│   ├── lint-docs.js            # doc-corpus consistency linter (--selftest)
+│   └── doctor.js               # aggregate self-check (self-tests + lint + invariants)
 │
 ├── extension.yml                # registers all 31 commands + config keys + tags
 ├── config-template.yml          # user copies to .product-forge/config.yml

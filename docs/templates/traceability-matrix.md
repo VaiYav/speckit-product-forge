@@ -36,7 +36,7 @@ Each phase updates the rows it owns; verification checks the matrix for gaps.
 | `FR-`  | Functional requirement | bridge / plan |
 | `CMP-` | Design-system component | design-system-harvest / component-map |
 | `API-` | Endpoint / event contract | bridge / plan (OpenAPI + AsyncAPI) |
-| `TASK-`| Implementation task | tasks |
+| `TASK-`| Implementation task — canonical form `T0NN` (e.g. `T012`); `TASK-NNN` accepted as alias (see schema.md §8) | tasks |
 | `REV-` | Code-review finding | code-review |
 | `TC-`  | Test case (`TC-SMK/E2E/API/UNIT/INT/REG`) | test-plan |
 | `EVT-` | Telemetry event | tracking-plan |
@@ -67,7 +67,7 @@ rows:
     must_have: true
     components: ["CMP-Button", "CMP-Modal"]   # FE surfaces (Theme E)
     contracts: ["API-getPrefs", "API-savePrefs"]  # FE↔BE (Theme F)
-    tasks: ["TASK-012", "TASK-013"]
+    tasks: ["T012", "T013"]
     code:                            # filled by implement
       - "frontend:apps/web/src/prefs/PrefsModal.tsx"
       - "backend:apps/api/src/prefs/handler.ts"
@@ -96,7 +96,7 @@ journeys:
 - Every `JRN`/`STEP`/`EDGE` maps to ≥1 `TC-E2E`/`TC-SMK` (Theme H).
 - Every `component` used by a row exists in `design-system/manifest.yml` (Theme E).
 - Every `contract` is implemented on both FE and BE (Theme F).
-- No orphan tasks (a `TASK-` with no `req`) and no undocumented code (a `code`
+- No orphan tasks (a `T0NN` with no `req`) and no undocumented code (a `code`
   path with no row) — the doc↔code reconciliation (Theme G).
 
 Gaps become `verify-report.md` findings; the matrix is the single source the

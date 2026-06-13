@@ -1,0 +1,107 @@
+# Fixture: a complete, consistent Product Forge feature state.
+#
+# Purpose: a known-good `.forge-status.yml` that the helper scripts run against
+# in CI (scripts/doctor.js, validate-traceability.js, gate-risk.js) and that the
+# QA plan's quick-smoke references (fixtures/features/demo). It is NOT a shipped
+# plugin artifact — it lives under fixtures/ purely as test input.
+#
+# Shape conforms to docs/schema/forge-status-v3.schema.yml. Kept small but valid:
+# a standard-mode feature that has completed implement + test_run cleanly, so the
+# traceability validator's phase-aware checks (code present, tests present) all
+# pass and gate-risk classifies it deterministically.
+schema_version: 3
+feature: "demo-save-preferences"
+created_at: "2026-06-01"
+v2_native: true
+feature_mode: "standard"
+flow_mode: "gated"
+speckit_mode: "classic"
+
+phases:
+  problem_discovery:
+    status: "completed"
+  research:
+    status: "completed"
+  product_spec:
+    status: "completed"
+  design_system_harvest:
+    status: "not_applicable"
+  revalidation:
+    status: "approved"
+  bridge:
+    status: "completed"
+  plan:
+    status: "completed"
+  tasks:
+    status: "completed"
+  pre_impl_review:
+    status: "skipped"
+    skipped: true
+    skip_reason: "trivial surface; risk register empty"
+  implement:
+    status: "completed"
+    red_gate:
+      status: "confirmed_failing"
+      tests: ["TC-UNIT-021"]
+      skip_reason: null
+  code_review:
+    status: "completed"
+  verify:
+    status: "completed"
+  test_plan:
+    status: "completed"
+  test_run:
+    status: "completed"
+  release_readiness:
+    status: "skipped"
+    skipped: true
+    skip_reason: "internal tool; no staged rollout needed"
+  spec_merge:
+    status: "not_applicable"
+  retrospective:
+    status: "pending"
+
+testing:
+  final_pass_rate: "100%"
+  bugs_found: 1
+  bugs_fixed: 1
+  bugs_deferred: 0
+  test_runs_total: 2
+
+task_log:
+  - id: "T001"
+    size: "S"
+    status: "completed"
+    paths: ["src/prefs/handler.ts"]
+    commit_sha: "abc1234"
+  - id: "T002"
+    size: "M"
+    status: "completed"
+    paths: ["src/prefs/PrefsModal.tsx"]
+    commit_sha: "def5678"
+
+gates:
+  - phase: "research"
+    decision: "approved"
+    timestamp: "2026-06-01T10:00:00Z"
+    notes: ""
+    sync_result: "clean"
+    reviewed_sha: "0000001"
+    risk: "low"
+  - phase: "verify"
+    decision: "approved"
+    timestamp: "2026-06-02T14:00:00Z"
+    notes: ""
+    sync_result: "clean"
+    reviewed_sha: "def5678"
+    risk: "low"
+
+sync_runs:
+  last_run: "2026-06-02T14:05:00Z"
+  total_runs: 6
+  last_drift_count: 0
+  last_critical_count: 0
+  last_verdict: "CONSISTENT"
+
+change_requests: []
+last_updated: "2026-06-02T14:05:00Z"

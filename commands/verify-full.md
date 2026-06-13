@@ -33,8 +33,14 @@ fast, reproducible, and CI-friendly — it catches the "callout-deep" linkage ga
 that prose review misses):
 
 ```bash
-node scripts/validate-traceability.js --feature-dir {FEATURE_DIR} --json
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(specify extension path product-forge 2>/dev/null || echo .)}"
+node "$PLUGIN_ROOT/scripts/validate-traceability.js" --feature-dir {FEATURE_DIR} --json
 ```
+
+> `$PLUGIN_ROOT` is resolved per [docs/runtime.md §1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root).
+> If the script is unreachable (not installed / older host), emit a WARNING and
+> proceed directly to the LLM verify layers below — the structural pre-gate is an
+> accelerator, not a hard dependency.
 
 It traverses `traceability.yml` (+ `journeys.yml` / `spec.md` / `tasks.md`) and
 asserts the **structural** half of the chain: every `must_have` row reaches a
@@ -574,8 +580,8 @@ Rendered directly from `traceability.yml` rows (live-schema columns):
 
 | req | story | journeys | frs | tasks | code | tests | events | status |
 |-----|-------|----------|-----|-------|------|-------|--------|--------|
-| REQ-001 | US-001 | JRN-001 | FR-001, FR-002 | TASK-012, TASK-013 | ✅ | TC-E2E-003 | EVT-prefs_saved | verified |
-| — | US-002 | JRN-002 | FR-003 | TASK-014 | ✅ | ⚠️ none | — | implemented |
+| REQ-001 | US-001 | JRN-001 | FR-001, FR-002 | T012, T013 | ✅ | TC-E2E-003 | EVT-prefs_saved | verified |
+| — | US-002 | JRN-002 | FR-003 | T014 | ✅ | ⚠️ none | — | implemented |
 
 > `req` is populated only for V-Model/backfill rows; the standard forward flow
 > keys on `frs` and leaves `req` null (`—`).

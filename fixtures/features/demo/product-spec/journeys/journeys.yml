@@ -1,0 +1,23 @@
+# Fixture structured journeys — mirrors traceability.yml journeys[] block.
+# Source-of-truth shape per docs/journeys.md (journeys.yml + JRN-*.md).
+schema_version: 1
+feature: "demo-save-preferences"
+
+journeys:
+  - id: "JRN-001"
+    title: "Save notification preferences"
+    priority: "Must-Have"
+    persona: "signed-in user"
+    steps:
+      - id: "STEP-001"
+        action: "Open the notification preferences modal"
+        tests: ["TC-E2E-003"]
+      - id: "STEP-002"
+        action: "Toggle a preference and save"
+        tests: ["TC-E2E-003"]
+    edges:
+      - id: "EDGE-001"
+        priority: "P1"
+        condition: "save fails (network error)"
+        expected: "inline error, no data loss, retry available"
+        tests: ["TC-E2E-004"]

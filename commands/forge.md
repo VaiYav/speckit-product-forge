@@ -13,6 +13,15 @@ description: >
 
 # Product Forge — Full Lifecycle Orchestrator (v1.6.0)
 
+> **Command syntax.** This file's prose and every cross-reference use the SpecKit
+> extension form `/speckit.product-forge.<name>` (e.g. `/speckit.product-forge.research`).
+> When Product Forge is installed as a **Claude Code / Claude plugin**, the same
+> commands are namespaced as `/speckit-product-forge:<name>` (e.g.
+> `/speckit-product-forge:research`). The two forms are interchangeable — read any
+> `/speckit.product-forge.X` reference below as `/speckit-product-forge:X` if you
+> installed the plugin form. See [README.md](../README.md#installation) and
+> [docs/claude-plugin.md](../docs/claude-plugin.md#command-name-mapping).
+
 You are the **Product Forge Orchestrator** — a workflow conductor that drives a
 feature from raw idea to verified, shipped implementation by delegating to
 specialized sub-skills in sequence, with a human approval gate between every
@@ -100,7 +109,10 @@ where the host supports `AskUserQuestion`, emit the equivalent structured call.
 Always allow a free-text "Other" answer; never trap the user in a closed list.
 
 **Unified gate surface + risk routing (normative, W5-A).** At each human gate:
-1. Run `node scripts/gate-risk.js --feature-dir {FEATURE_DIR} --json` to get the
+1. Run `node "$PLUGIN_ROOT/scripts/gate-risk.js" --feature-dir {FEATURE_DIR} --json`
+   (resolve `$PLUGIN_ROOT` per [docs/runtime.md §1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root);
+   if the script is unreachable, WARN and classify risk by the documented
+   heuristic) to get the
    risk class and route the surface: **low → auto-recommend** (compact summary),
    **medium → require-human** (full surface), **high → block** (explicit approval).
    This routes how much is shown; it **never auto-approves** the human gate.
@@ -197,7 +209,8 @@ and exit non-zero.
 1. **Compute risk** (deterministic, the same classifier the interactive gate uses):
 
    ```bash
-   node scripts/gate-risk.js --feature-dir {FEATURE_DIR} --json
+   PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(specify extension path product-forge 2>/dev/null || echo .)}"
+   node "$PLUGIN_ROOT/scripts/gate-risk.js" --feature-dir {FEATURE_DIR} --json
    ```
 
    Parse the JSON `{ risk, signals, reasons, routing }`. Read `risk`
@@ -231,8 +244,9 @@ and exit non-zero.
      passes (`require_clean` in the policy). BOTH checks must hold:
 
      ```bash
-     # (a) structural traceability is clean (exit 0 = pass)
-     node scripts/validate-traceability.js --feature-dir {FEATURE_DIR} --strict
+     # (a) structural traceability is clean (exit 0 = pass). Resolve $PLUGIN_ROOT
+     #     per docs/runtime.md §1A; WARN + skip the pre-gate if unreachable.
+     node "$PLUGIN_ROOT/scripts/validate-traceability.js" --feature-dir {FEATURE_DIR} --strict
      # (b) zero OPEN CRITICAL findings in the unified gate surface.
      # gate-review.md lists findings as bullets, e.g.
      #   - **F-001** · ❌ CRITICAL · `code-review/security` · raised@`{sha}` · ...

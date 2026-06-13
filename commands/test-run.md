@@ -248,7 +248,11 @@ Run **once per journey at its final state** (B2 is JRN-scoped), against the same
 closes it. Failures here become bugs exactly like functional failures (mapped to
 the case's `JRN`/`STEP`/`EDGE`).
 
-**(a) WCAG-AA accessibility floor — axe-core (W5-B2).** Inject axe-core into the
+**(a) WCAG-AA accessibility floor — axe-core (W5-B2).** **Gated on the `a11y_gate`
+config key** (default `axe`): when `a11y_gate: none`, skip this leg entirely
+(the test-plan generator emitted no axe check, so there is nothing to run) and
+record `a11y: skipped (a11y_gate=none)` in the run notes rather than silently
+passing. When `a11y_gate: axe`, inject axe-core into the
 live page and run it scoped to WCAG 2.0/2.1 A + AA rules. This is a deterministic
 minimum bar; manual a11y review is still required.
 
@@ -298,7 +302,10 @@ dependency:
 
 ```bash
 # Resolve {SELECTORS} for the journey — the CMP-* selectors the manifest owns.
-node -e "const {parseYaml}=require('./scripts/lib-yaml.js');const fs=require('fs');
+# $PLUGIN_ROOT per docs/runtime.md §1A; if lib-yaml.js is unreachable, fall back
+# to reading the selector list inline from the manifest by hand.
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(specify extension path product-forge 2>/dev/null || echo .)}"
+node -e "const {parseYaml}=require('$PLUGIN_ROOT/scripts/lib-yaml.js');const fs=require('fs');
   const m=parseYaml(fs.readFileSync('{FEATURE_DIR}/design-system/manifest.yml','utf8'));
   console.log(JSON.stringify((m.components||[]).map(c=>c.selector).filter(Boolean)));"
 ```

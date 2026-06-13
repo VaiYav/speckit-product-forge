@@ -393,14 +393,20 @@ Resolve selectors from `mockups/component-map.yml` / `design-system/manifest.yml
 Into **each** per-journey spec also emit (executable, not prose — substitute the
 literals at generation time):
 
-- **(v1.6, W5-B2) one WCAG-AA accessibility test per `JRN`** using
+- **(v1.6, W5-B2) one WCAG-AA accessibility test per `JRN`** — **gated on the
+  `a11y_gate` config key** (default `axe`; see config-template.yml). Read
+  `a11y_gate` from the merged config: when it is `axe`, generate the check below;
+  when it is `none`, **skip generation entirely** (emit nothing for the a11y leg)
+  and note `a11y_gate: none — automated floor disabled by config` in the
+  test-plan's Entry Criteria so the omission is auditable rather than silent.
+  When generated, the check uses
   `@axe-core/playwright` — `new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa',
   'wcag21a','wcag21aa']).analyze()` then `expect(a11y.violations, 'JRN-NNN …').toEqual([])`,
   scanned at the journey's end state. This is an **automated AA floor** — manual
   review is still required and this is *not* a hard zero-violations claim beyond AA.
   Fulfils the bridge AC "Accessibility requirements pass automated + manual testing".
   Add `@axe-core/playwright` to the project's dev deps (entry in the test-plan
-  "Entry Criteria") if absent.
+  "Entry Criteria") if absent. (A no-op for non-browser journeys regardless of the key.)
 - **(v1.6, W5-B5) one component + variant + design-token conformance test per `JRN`**.
   For every `mockups/component-map.yml` region whose `journeys:` includes this `JRN`,
   read its `component` (`CMP-*`), `variant`, look up the component's `selector` in
