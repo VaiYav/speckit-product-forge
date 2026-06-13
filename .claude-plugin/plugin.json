@@ -1,6 +1,6 @@
 {
   "name": "speckit-product-forge",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Full product lifecycle orchestrator for SpecKit: research → product-spec → plan → tasks → implement → verify → test → release-readiness, across express/lite/standard/v-model modes with human-in-the-loop gates, cross-artifact sync-verify, a design-system harvest that grounds mockups in in-code components, structured journeys → Playwright E2E, a living/delta spec with a REQ→…→TEST→EVT traceability matrix, contract-first OpenAPI/AsyncAPI, telemetry wiring, a risk-scored gate review, a WCAG-AA accessibility gate, and brown-field backfill.",
   "author": {
     "name": "Valentin Yakovlev"

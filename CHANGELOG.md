@@ -8,11 +8,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [1.7.0] — "Ivysaur" — 2026-06-13
+
 > **Feature wave (v1.7, 2026-06) — roadmap items P1-B/P1-C/P2-A/P2-C/P3-A/P3-B/P3-C**
 > from [docs/improvements/2026-06-feature-roadmap.md](docs/improvements/2026-06-feature-roadmap.md),
 > triangulated from the SpecKit-community gallery × Hermes runtime leverage ×
 > internal gaps. Every addition is executable + gated by a `lint-docs`/`doctor`
-> check and keeps the human gate.
+> check and keeps the human gate. Followed by a two-reviewer independent code
+> review whose findings are folded into the **Fixed** section below.
 
 ### Added — feature wave (v1.7)
 - **Cross-model code review (P1-B)** — `code-review --cross-model`: exports the
@@ -47,7 +54,44 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   at phase completion when the host exposes usage accounting; see runtime §8.1a)
   per feature and `--portfolio`. Dollar cost only when the caller supplies a rate;
   reports "no telemetry recorded" rather than zeros when the host provides none.
-- `lint-docs` self-test 9→18; `doctor` 12→15 checks; 12 helper scripts.
+- `lint-docs` self-test 9→23; `doctor` 12→15 checks; 12 helper scripts.
+
+### Fixed — independent code review (post-wave)
+> A two-reviewer pass (Node-scripts + doc-contract integrity) on the feature wave.
+> All findings reproduced and fixed; each lint-rule fix carries a regression test.
+- **Phase-status scope (HIGH).** `validate-traceability.js readCompletedPhases`
+  matched `name: completed` lines anywhere, so a sibling block keyed by phase name
+  (e.g. `gate_summary:`) falsely marked phases complete → spurious
+  `must_have.code/tests` errors and a false `--strict` FAIL. Now scoped to the
+  `phases:` block.
+- **Layer-count report templates (HIGH).** `sync-verify`'s report still emitted
+  `{1-9}` / `{N}/9` after Layer 10 (P1-C) was added, so constitution↔code drift
+  had no report slot. Fixed to `{1-10}` / `{N}/{applicable}`.
+- **Gate carrier schema (P1-B).** `reviewed_by_model` + `cross_model_findings`
+  were stamped on `gates[]` but missing from the canonical schema and the runtime
+  §6 audit trail — added to both.
+- **`skills_promoted` read-back (P2-A).** `retrospective` Step 5B wrote the carrier
+  but never read it; it now drives the create-vs-patch decision (idempotent across
+  features). `skills_promoted` + `cross_model_findings` added to the lint CARRIER
+  registry.
+- **Token-telemetry producer (P3-C).** `status --cost` consumed per-phase
+  `tokens_*`/`tool_calls` that no step produced; added the producer hook in runtime
+  §8.1a (host-dependent) and corrected the overstated "already captures" wording.
+- **`--dry-run` implementation gap (P3-A).** The §7 mandate was callout-deep; added
+  explicit honor-notes to all 10 spine writing phases and a coverage clause (§7.3).
+- **Lint-rule precision.** LAYER-COUNT no longer false-positives on a line naming
+  both `sync-verify` and `verify-full`; SCRIPT-PATH is now per-occurrence (a bare
+  `node scripts/…` is flagged even in a file that uses `${PLUGIN_ROOT}` elsewhere);
+  PHASEMAP flags empty/word-form per-mode cells instead of skipping them.
+- **Script hygiene.** `cost-report.js num()` uses `Number()` (decimals + thousands
+  separators no longer truncate); `require.main` guards + `module.exports` added to
+  cost-report/check-links/validate-traceability/doctor; a non-list `steps:` block
+  now warns instead of being silently ignored.
+- **Docs.** `.forge-dry-run/` described as "add to your project `.gitignore`" (it
+  lives in the consumer project); `PRODUCT_FORGE_COST_RATE_IN/OUT` documented in
+  config.md; the `--dry-run` "composes with `--parallel`/`--cross-model`" note
+  scoped to standalone sub-skill invocation.
+- `lint-docs` self-test 18→23; `validate-traceability` 20→23.
 
 ---
 
@@ -824,6 +868,7 @@ Introduced the `features/<name>/` directory convention with:
 
 ---
 
+[1.7.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/VaiYav/speckit-product-forge/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/VaiYav/speckit-product-forge/compare/v1.4.0...v1.5.0

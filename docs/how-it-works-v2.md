@@ -16,12 +16,15 @@ shipped code through a gated lifecycle. The user interacts through slash
 commands (`/speckit.product-forge.*`). Every command is a markdown file
 in `commands/` that instructs an LLM to do one phase of the job. State
 between phases lives in `.forge-status.yml` inside each feature's
-folder. v1.6 adds: a first-class `express` track for trivial changes, a
-design-system harvest that grounds mockups in the project's in-code components,
-structured journeys → Playwright E2E, a living/delta spec with a
-REQ→…→TEST→EVT traceability matrix, FE↔BE contract-first OpenAPI/AsyncAPI,
-telemetry MCP wiring, a risk-scored two-layer gate review, a WCAG-AA
-accessibility gate, and a 10-layer sync-verify — on top of the v1.5 portfolio
+folder. v1.7 adds: a normative `--dry-run` preview, cross-model code review,
+intra-phase parallel implementation, and a constitution↔code drift layer
+(10-layer sync-verify), plus lessons→skills promotion, `status --cost` token
+rollups, and a phase-map single source. It builds on v1.6's first-class
+`express` track for trivial changes, a design-system harvest that grounds
+mockups in the project's in-code components, structured journeys → Playwright
+E2E, a living/delta spec with a REQ→…→TEST→EVT traceability matrix, FE↔BE
+contract-first OpenAPI/AsyncAPI, telemetry MCP wiring, a risk-scored two-layer
+gate review, and a WCAG-AA accessibility gate — on top of the v1.5 portfolio
 view, lite mode, brown-field backfill, monitoring/migration/i18n/experiment
 extensions, and a learning loop.
 

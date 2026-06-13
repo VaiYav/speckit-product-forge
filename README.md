@@ -11,6 +11,17 @@ patterns, and your codebase — craft an approved product spec — review design
 let SpecKit implement it with progressive verification — run multi-agent code review — then
 automatically generate and run Playwright tests with a bug-fix loop until the feature is ready to ship.
 
+**New in v1.7.0 ("Ivysaur"):**
+- **`--dry-run` preview (normative)** — any phase (or `forge` end-to-end) runs fully but mutates nothing real: writes are redirected under `.forge-dry-run/<phase>/`, status is untouched, no external side-effects, and each phase emits a `DRY-RUN-REPORT.md` of what *would* change.
+- **Cross-model code review** — `code-review --cross-model` exports the consolidated gate surface + diff and has a *different* model review it out-of-band, ingesting findings back into the single `F-NNN` namespace.
+- **Parallel implementation** — `implement --parallel` runs path-disjoint task groups concurrently (proven independent by the portfolio conflict matrix), reconciled serially under the state-lock with a single gate.
+- **Constitution↔code drift layer** — `sync-verify` Layer 10 / `verify-full` Layer 11 re-assert the project architecture constitution against the code as a *standing* check, not just at planning time.
+- **Lessons → reusable skills** — `retrospective` promotes a lesson that recurs across features into a reusable skill (Hermes host), cross-project and idempotent.
+- **`status --cost`** — rolls up per-phase token / tool-call telemetry per feature and across the portfolio (dollar cost when a rate is supplied).
+- **Phase-map single source** — `docs/schema/phase-map.yml` is the canonical phase set + per-mode matrix; the forge.md tables render it and the linter enforces agreement.
+
+Full change list in [CHANGELOG.md](./CHANGELOG.md).
+
 **New in v1.6.0:**
 - **Express mode** — first-class `feature_mode: express`: a 4-phase combined pass (product-spec minimal → plan inline → implement → verify) for the smallest changes, escalatable to lite/standard.
 - **Design System Harvest** (Phase 2H) — discover the project's existing design system (component library, tokens, Storybook, Tailwind/CSS config) and emit a read-only manifest so mockups, component decomposition, and verification stay grounded in real code (`/speckit.product-forge.design-system-harvest`).
@@ -421,7 +432,7 @@ claude plugin install speckit-product-forge@vaiyav-plugins
 Pin to a tag or branch with `@ref`:
 
 ```bash
-claude plugin marketplace add VaiYav/speckit-product-forge@v1.6.0
+claude plugin marketplace add VaiYav/speckit-product-forge@v1.7.0
 ```
 
 **Command names when installed as a plugin** are namespaced with the plugin name — e.g. `/speckit-product-forge:forge`, `/speckit-product-forge:status`, `/speckit-product-forge:research`. (As a SpecKit extension the same commands are `/speckit.product-forge.forge`, etc. — see Option B.)
@@ -446,7 +457,7 @@ specify extension add product-forge --from https://github.com/VaiYav/speckit-pro
 #### Install (specific version)
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.6.0.zip
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.7.0.zip
 ```
 
 #### Update to latest
@@ -458,14 +469,14 @@ specify extension update product-forge --from https://github.com/VaiYav/speckit-
 #### Update to specific version
 
 ```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.6.0.zip
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.7.0.zip
 ```
 
 #### Verify installation
 
 ```bash
 specify extension list
-# Should show: product-forge  v1.6.0  enabled
+# Should show: product-forge  v1.7.0  enabled
 ```
 
 ---
