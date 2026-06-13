@@ -414,6 +414,26 @@ Flags:
 
 ---
 
+### Layer 11: Constitution ↔ Code (v1.7, P1-C)
+
+The final standing-pattern check: does the implemented code honor the project
+**architecture constitution** (resilience, EDA, layering, security posture)? This
+is the verification-time counterpart of `sync-verify` Layer 10 and the standing
+re-assertion of `plan`'s one-shot compliance check.
+
+Read `constitution_path` from config (default `.specify/memory/constitution.md`).
+**If absent, skip** (`Layer 11: N/A — no constitution configured`) — not a finding.
+When present, check the feature's `code` paths against each mandated pattern
+(deterministic probe where the pattern allows — grep/AST for the wrapper symbol,
+the event-name convention, forbidden cross-layer imports — else an LLM read):
+
+- **CRITICAL** when code breaches a pattern the constitution marks MUST/mandatory.
+- **WARNING** for a SHOULD-level deviation or an uncertain non-deterministic read.
+- Reconcile with Layer 10 / `code-review` security so a single violation is not
+  triple-counted; cite the constitution section in the finding.
+
+---
+
 ## Step 4: Generate verify-report.md
 
 > **Emit into the unified gate surface (W5-A3).** In addition to `verify-report.md`,
@@ -540,6 +560,16 @@ Write `{FEATURE_DIR}/verify-report.md`:
 > **Provenance** from `git log -1 --format=%h,%an` (W5-C1); **Task match**
 > reverse-indexes the SHA against `task_log[].commit_sha`. Rows with `none` are
 > routed to the carrier below as `ADD FR-NNN` candidates.
+
+## Layer 11: Constitution ↔ Code
+
+| Mandated pattern (constitution §) | Probe | Status |
+|-----------------------------------|-------|--------|
+| {e.g. circuit-breaker on external calls (§3.2)} | grep wrapper symbol in new code | ✅ / ❌ CRITICAL |
+| {e.g. event naming convention (§4.1)} | grep emitted event names | ⚠️ WARNING |
+
+> N/A when no `constitution_path` file exists. Reconcile with Layer 10 / security
+> so one violation isn't double-counted; cite the constitution section.
 
 ### Suggested canonical-spec updates (Theme G)
 

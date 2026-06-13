@@ -405,6 +405,42 @@ function lint(root) {
     }
   }
 
+  // ── LAYER-COUNT: sync-verify / verify-full layer-count parity ──────────────
+  // Each command DEFINES its layers as "### Layer N: …" headings; prose all over
+  // the corpus then claims "N-layer" / "all N layers". A mismatch is the same
+  // drift class as command-count (P1-C added Layer 10/11 and several prose
+  // sites). Source of truth = the max defined "Layer N" heading in the command.
+  const layerOwners = [
+    { file: "commands/sync-verify.md", label: "sync-verify" },
+    { file: "commands/verify-full.md", label: "verify-full" },
+  ];
+  for (const owner of layerOwners) {
+    const p = R(owner.file);
+    if (!exists(p)) continue;
+    const defined = [...read(p).matchAll(/^#{2,4}\s+Layer\s+(\d{1,2})\b/gm)].map((m) => parseInt(m[1], 10));
+    if (!defined.length) continue;
+    const maxLayer = Math.max(...defined);
+    // "N-layer" / "N layer" / "all N layers" claims anywhere in the corpus that
+    // sit near this owner's name (same line) must equal its max defined layer.
+    const claimRe = /(\d{1,2})[ -]layers?\b|all\s+(\d{1,2})\s+layers\b/gi;
+    for (const f of corpus) {
+      if (/CHANGELOG\.md$/.test(f)) continue;   // CHANGELOG documents past layer counts (history, not drift)
+      for (const line of lines(read(f))) {
+        if (!new RegExp(owner.label).test(line) && !/sync-verify|verify-full/.test(line)) continue;
+        // only judge a line that actually names THIS owner (avoid cross-matching)
+        if (!new RegExp(owner.label).test(line)) continue;
+        let m;
+        claimRe.lastIndex = 0;
+        while ((m = claimRe.exec(line)) !== null) {
+          const n = parseInt(m[1] || m[2], 10);
+          if (n >= 5 && n <= 30 && n !== maxLayer) {
+            add("LAYER-COUNT", "warn", rel(f), `${owner.label} claims ${n} layers but it defines ${maxLayer} (max "Layer N" heading): "${line.trim().slice(0, 70)}"`);
+          }
+        }
+      }
+    }
+  }
+
   // ── CONFIG-READER: every documented config key has a reader ────────────────
   // A "reader" is a command file body OR an orchestrator-level normative doc
   // (policy.md / runtime.md) that names the key — those docs ARE where the
@@ -586,6 +622,15 @@ function selftest() {
     // Assert the rule FIRES (producer-missing) — proving it's wired — without
     // depending on the fixture having the real command files.
     assert(lint(tmp).some((f) => f.rule === "CARRIER"), "CARRIER rule fires when carrier files are absent");
+
+    // LAYER-COUNT: a command defines Layers 1..N; a prose claim of a different
+    // count on a line naming that command is drift.
+    W("commands/sync-verify.md", "---\nname: speckit.product-forge.sync-verify\n---\n### Layer 1: a\n### Layer 2: b\n### Layer 3: c\nRun the full sync-verify 9-layer scan.\n");
+    const lc = lint(tmp);
+    assert(lc.some((f) => f.rule === "LAYER-COUNT" && /claims 9 layers but it defines 3/.test(f.msg)), "LAYER-COUNT detects a mismatched layer claim");
+    // matching claim → no finding
+    W("commands/sync-verify.md", "---\nname: speckit.product-forge.sync-verify\n---\n### Layer 1: a\n### Layer 2: b\n### Layer 3: c\nRun the full sync-verify 3-layer scan.\n");
+    assert(!lint(tmp).some((f) => f.rule === "LAYER-COUNT"), "LAYER-COUNT passes when the claim matches the definition");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

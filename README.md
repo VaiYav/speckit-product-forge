@@ -15,7 +15,7 @@ automatically generate and run Playwright tests with a bug-fix loop until the fe
 - **Express mode** — first-class `feature_mode: express`: a 4-phase combined pass (product-spec minimal → plan inline → implement → verify) for the smallest changes, escalatable to lite/standard.
 - **Design System Harvest** (Phase 2H) — discover the project's existing design system (component library, tokens, Storybook, Tailwind/CSS config) and emit a read-only manifest so mockups, component decomposition, and verification stay grounded in real code (`/speckit.product-forge.design-system-harvest`).
 - **Spec Merge** (Phase 10, living spec) — merge a shipped feature's delta specs into the canonical `specs/` source of truth and archive the change with audit history (`/speckit.product-forge.spec-merge`).
-- **Sync-verify now 9 layers** — adds Layer 8 (FE↔BE contract drift) and Layer 9 (doc↔code) on top of the seven artifact-pair layers.
+- **Sync-verify now 10 layers** — adds Layer 8 (FE↔BE contract drift), Layer 9 (doc↔code), and Layer 10 (constitution↔code) on top of the seven artifact-pair layers.
 - **Structured journeys** — `journeys/` (journeys.yml + JRN-*.md) as the machine-readable E2E source of truth for spec, tests, and tracking.
 - **Automated WCAG-AA accessibility floor** — Phase 8A generates one `@axe-core/playwright` check per journey and Phase 8B runs it.
 
@@ -79,7 +79,7 @@ The result: a **complete traceability chain** — problem → research → produ
 | `/speckit.product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
 | `/speckit.product-forge.test-run` | 8B | Execute tests with playwright-cli, auto-fix bugs, loop until done |
 | `/speckit.product-forge.release-readiness` | 9 | **[NEW]** Pre-ship checklist: feature flags, rollout, docs, monitoring |
-| `/speckit.product-forge.sync-verify` | cross-cutting | **[NEW]** 9-layer artifact consistency check (incl. contract-drift + doc↔code), runnable between any phases |
+| `/speckit.product-forge.sync-verify` | cross-cutting | **[NEW]** 10-layer artifact consistency check (incl. contract-drift + doc↔code + constitution↔code), runnable between any phases |
 | `/speckit.product-forge.change-request` | cross-cutting | **[NEW]** Formal scope change with impact analysis and artifact propagation |
 | `/speckit.product-forge.api-docs` | post-impl | Generate OpenAPI 3.1 spec + Postman collection from plan.md |
 | `/speckit.product-forge.security-check` | post-impl | OWASP audit scoped to detected surfaces (auth, input, payments) |
@@ -272,7 +272,7 @@ The result: a **complete traceability chain** — problem → research → produ
 │  CROSS-CUTTING COMMANDS  [Runnable at any time]                  [NEW v1.3]  │
 │                                                                              │
 │  /speckit.product-forge.sync-verify                                          │
-│  9-layer consistency check across all artifacts (forward + backward drift)   │
+│  10-layer consistency check across all artifacts (forward + backward drift)  │
 │  Auto-runs in quick mode between every phase transition                      │
 │  Full run on demand or before Phase 7                                        │
 │                                                                              │

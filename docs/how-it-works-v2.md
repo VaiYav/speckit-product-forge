@@ -21,7 +21,7 @@ design-system harvest that grounds mockups in the project's in-code components,
 structured journeys → Playwright E2E, a living/delta spec with a
 REQ→…→TEST→EVT traceability matrix, FE↔BE contract-first OpenAPI/AsyncAPI,
 telemetry MCP wiring, a risk-scored two-layer gate review, a WCAG-AA
-accessibility gate, and a 9-layer sync-verify — on top of the v1.5 portfolio
+accessibility gate, and a 10-layer sync-verify — on top of the v1.5 portfolio
 view, lite mode, brown-field backfill, monitoring/migration/i18n/experiment
 extensions, and a learning loop.
 
@@ -184,7 +184,7 @@ tracked separately on `.forge-status.yml`.
 
 Plus cross-cutting commands runnable at any time:
 
-- `/sync-verify` — 9-layer drift check (incl. contract-drift + doc↔code)
+- `/sync-verify` — 10-layer drift check (incl. contract-drift + doc↔code + constitution↔code)
 - `/change-request` — formal scope change
 - `/portfolio` — multi-feature view
 - `/feature-flag-cleanup` — stale-flag audit
@@ -376,13 +376,15 @@ module-not-found noise.
 
 ## 12. Sync-verify with drift budget (D11)
 
-Nine-layer consistency check. Layers 1–7 compare the artifact-pair chain;
-Layer 8 checks FE↔BE contract drift and Layer 9 checks doc↔code drift:
+Ten-layer consistency check. Layers 1–7 compare the artifact-pair chain;
+Layer 8 checks FE↔BE contract drift, Layer 9 checks doc↔code drift, and
+Layer 10 checks constitution↔code drift:
 
 ```
 Layers 1–7  research ↔ product-spec ↔ spec.md ↔ plan.md ↔ tasks.md ↔ code
 Layer 8     FE↔BE contract drift   (frontend contracts ↔ backend contracts)
 Layer 9     doc↔code               (docs ↔ implementation)
+Layer 10    constitution↔code      (mandated patterns ↔ implementation)
 ```
 
 Each drift item is categorized:

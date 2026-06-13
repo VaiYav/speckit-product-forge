@@ -119,7 +119,7 @@ their `forge.md` numbers.
 | `gate-policy.yml` ({phase × risk} routing) | project (copied from template) | `forge --ci` headless gates |
 | canonical `specs/` + `_archived/` | 10 spec-merge (upsert by `FR-id`, idempotent) | next feature's bridge (delta base) |
 
-Cross-cutting (run any time): `sync-verify` (9-layer drift), `change-request`
+Cross-cutting (run any time): `sync-verify` (10-layer drift), `change-request`
 (`CR-NNN`), `portfolio`, `feature-flag-cleanup`.
 
 ---

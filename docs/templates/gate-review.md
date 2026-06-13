@@ -6,7 +6,7 @@
 >
 > **Path:** `<FEATURE_DIR>/gate-review.md`
 > **Writers:** `pre-impl-review` (design/architecture/risk), `code-review`
-> (quality/security/patterns/tests/doc↔code), `verify-full` (Layers 1–10). Each
+> (quality/security/patterns/tests/doc↔code), `verify-full` (Layers 1–11). Each
 > phase still does its own analysis; it emits findings here under one `F-NNN`
 > namespace rather than minting `D-/A-/R-`, `REV-`, `CRITICAL-/WARNING-` ids.
 > **Readers:** the human at each gate; `spec-merge` (canonical-drift section, CF-5);

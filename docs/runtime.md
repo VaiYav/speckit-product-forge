@@ -330,8 +330,8 @@ delegation is needed — the orchestrator handles it internally.
 | Phase 5 → Phase 5B | Layer 3 (spec.md ↔ plan.md) |
 | Phase 5B → Phase 5C | Layer 4 (plan.md ↔ tasks.md) |
 | Phase 5C → Phase 6 | Layers 3, 4 |
-| Phase 6 → Phase 6B | Layers 5, 6, 8, 9 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code) |
-| Phase 6B → Phase 7 | Full (all 9 layers) |
+| Phase 6 → Phase 6B | Layers 5, 6, 8, 9, 10 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code, constitution ↔ code) |
+| Phase 6B → Phase 7 | Full (all 10 layers) |
 | Phase 7 → Phase 8A | Layer 7 (cross-links only) |
 
 ### 5.2 Quick-sync behavior
@@ -345,7 +345,7 @@ delegation is needed — the orchestrator handles it internally.
 ### 5.3 Full sync on demand
 
 At any time, the user can run `/speckit.product-forge.sync-verify` for a full
-9-layer check. The orchestrator also suggests this before Phase 7 if it has
+10-layer check. The orchestrator also suggests this before Phase 7 if it has
 not been run recently.
 
 ---

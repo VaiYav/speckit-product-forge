@@ -24,9 +24,9 @@ $ARGUMENTS
 Parse the input:
 1. **Feature slug** (e.g., "push-notifications") → target that feature (resolved to `FEATURE_DIR` via the contract's `resolve(slug)`, [docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract))
 2. **`--quick`** → run only layers relevant to the current phase transition (used by forge orchestrator)
-3. **`--layer N`** → run only layer N (1–9)
+3. **`--layer N`** → run only layer N (1–10)
 4. **`--fix`** → after reporting, apply approved resolutions (default: report only)
-5. **Empty** → enumerate features (contract `enumerate()`, [docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) and ask which to check, then run full 9-layer scan
+5. **Empty** → enumerate features (contract `enumerate()`, [docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) and ask which to check, then run full 10-layer scan
 
 ---
 
@@ -56,6 +56,7 @@ Check existence and load metadata for each artifact:
 | contracts/ | `{FEATURE_DIR}/contracts/openapi.yaml`, `{FEATURE_DIR}/contracts/asyncapi.yaml` | Layer 8 |
 | traceability.yml | `{FEATURE_DIR}/traceability.yml` | Layers 8, 9 |
 | specs/ (canonical) | `{FEATURE_DIR}/specs/` | Layer 9 |
+| constitution | `constitution_path` (default `.specify/memory/constitution.md`) | Layer 10 |
 
 Skip layers where either side doesn't exist yet. Report skipped layers.
 
@@ -287,6 +288,44 @@ anonymous drift.
 
 ---
 
+### Layer 10: Constitution ↔ Code (v1.7, P1-C)
+
+Reconcile the implemented code against the project **architecture constitution**
+— the standing patterns the team committed to (resilience, EDA rules, layering,
+security posture), not just this feature's spec. `plan` runs a one-shot
+constitution-compliance check at planning time; this is the **standing** guard
+that re-asserts those patterns against the code as it exists now.
+
+Read `constitution_path` from the merged config
+([docs/config.md](../docs/config.md) — default `.specify/memory/constitution.md`).
+**If no constitution file exists, skip this layer** (emit `Layer 10: N/A — no
+constitution configured`) — it is not a finding.
+
+When present, extract the constitution's **mandated patterns** and check the
+feature's code (the `task_log[].paths` + `traceability.yml` `code` paths) against
+each. Prefer a deterministic probe where the pattern allows one, fall back to an
+LLM read otherwise:
+
+| Mandated pattern (examples) | Deterministic probe where possible |
+|---|---|
+| External calls wrapped in a circuit-breaker / retry policy | grep the new code's outbound-call sites for the mandated wrapper symbol |
+| Domain events follow the EDA naming/▸publish contract | grep emitted event names against the constitution's convention |
+| Layering (e.g. controllers never touch the repo directly) | AST/grep for forbidden cross-layer imports in the new files |
+| Required security posture (authz on mutations, input validation) | overlaps Layer 9 / code-review security — reconcile, don't double-count |
+
+- **CRITICAL** when code violates a constitution pattern the document marks
+  **mandatory/MUST**.
+- **WARNING** for a SHOULD-level deviation or a pattern that can't be checked
+  deterministically and the LLM read is uncertain.
+- Carry each violation as a `DRIFT-NNN` (Layer 10) with the constitution section
+  it breaches in the Evidence. Where a fix implies a spec/plan change, note the
+  suggested canonical-spec update for `spec-merge` (Theme G), same as Layer 9.
+
+This makes the constitution a *continuous* contract (the
+`architecture-guard`-style standing check) rather than a one-time planning gate.
+
+---
+
 ## Step 3: Compile Drift Report
 
 For each finding, create an entry:
@@ -416,6 +455,9 @@ Write `{FEATURE_DIR}/sync-report.md`:
 ### Layer 9: Doc ↔ Code Reconciliation — {✅ CLEAN / ⚠️ {N} findings / ❌ {N} findings}
 {findings or "No drift detected"}
 
+### Layer 10: Constitution ↔ Code — {✅ CLEAN / ⚠️ {N} findings / ❌ {N} findings / N/A — no constitution}
+{findings or "No drift detected"}
+
 ## All Drift Items
 
 {DRIFT-001 through DRIFT-NNN with approval checkboxes}
@@ -519,8 +561,8 @@ When called with `--quick` by the forge orchestrator between phase transitions, 
 | After Phase 5 → Phase 5B | Layer 3 (spec.md ↔ plan.md) |
 | After Phase 5B → Phase 5C | Layer 4 (plan.md ↔ tasks.md) |
 | After Phase 5C → Phase 6 | Layers 3, 4 |
-| After Phase 6 → Phase 6B | Layers 5, 6, 8, 9 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code) |
-| After Phase 6B → Phase 7 | Full (all 9 layers) |
+| After Phase 6 → Phase 6B | Layers 5, 6, 8, 9, 10 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code, constitution ↔ code) |
+| After Phase 6B → Phase 7 | Full (all 10 layers) |
 | After Phase 7 → Phase 8A | Layer 7 (cross-links only) |
 
 In quick mode:
