@@ -18,12 +18,12 @@ is a YAML file inside each feature directory.
 **The plugin is not runnable software in the traditional sense.** It
 ships ~50 files total. 31 of them are slash-command definitions in
 `commands/*.md` — markdown instructions to an LLM, not code. The rest
-are reference docs under `docs/`, manifests at the root, and 11 helper
+are reference docs under `docs/`, manifests at the root, and 12 helper
 files under `scripts/` (all Node zero-dep or bash):
 
 - `scripts/migrate-status-v2-to-v3.js` (Node, zero-dep)
 - `scripts/acquire-lock.sh`, `scripts/release-lock.sh` (bash)
-- `scripts/gate-risk.js`, `scripts/validate-traceability.js`, `scripts/lint-docs.js`, `scripts/check-links.js` (Node, zero-dep; each exposes a `--selftest`)
+- `scripts/gate-risk.js`, `scripts/validate-traceability.js`, `scripts/lint-docs.js`, `scripts/check-links.js`, `scripts/cost-report.js` (Node, zero-dep; each exposes a `--selftest`)
 - `scripts/doctor.js` (Node aggregate self-check — runs every `--selftest` + `lint-docs` + the release-blocking invariants)
 - `scripts/lib-paths.js` (shared Path-Resolution Contract lib; has a `--selftest`), `scripts/lib-yaml.js` (shared YAML lib; tested via consumers' `--selftest`)
 - `scripts/migrate-status-v2-to-v3.ts` (deprecation stub)

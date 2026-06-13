@@ -51,6 +51,7 @@ function checkSelftests() {
     "scripts/validate-traceability.js",
     "scripts/lint-docs.js",
     "scripts/check-links.js",
+    "scripts/cost-report.js",
   ];
   for (const s of scripts) {
     if (!exists(R(s))) { record(`selftest ${path.basename(s)}`, false, "script missing"); continue; }
@@ -79,6 +80,10 @@ function checkFixture() {
   let risk;
   try { risk = JSON.parse(gr.out).risk; } catch { /* */ }
   record("fixture gate-risk classifies", gr.code === 0 && !!risk, risk ? `risk=${risk}` : `exit ${gr.code}`);
+  const cr = runNode("scripts/cost-report.js", ["--feature-dir", fx, "--json"]);
+  let toks;
+  try { toks = JSON.parse(cr.out).totals.tokens_in; } catch { /* */ }
+  record("fixture cost-report rolls up", cr.code === 0 && typeof toks === "number" && toks > 0, toks ? `tokens_in=${toks}` : `exit ${cr.code}`);
 }
 
 // ── 2. doc-corpus lint ───────────────────────────────────────────────────────

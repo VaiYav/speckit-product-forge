@@ -25,6 +25,10 @@ If `$ARGUMENTS` contains a feature name or slug, show status for that specific f
 `domain-nested` an ambiguous bare slug needs a `<domain>/<slug>` qualifier).
 If empty, enumerate all features (`enumerate()`, §12.3) and ask which to inspect (or show all).
 
+If `$ARGUMENTS` contains **`--cost`**, render the cost/token rollup (Step 5)
+instead of the full lifecycle view — see Step 5. `--cost` combines with a feature
+slug (one feature) or `all` / no slug (portfolio).
+
 ---
 
 ## Step 1: Find Features
@@ -217,3 +221,37 @@ If `verify-report.md` exists with CRITICAL findings:
   Total: {N} features — {N} complete, {N} in progress, {N} pending
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+---
+
+## Step 5: Cost / Token Rollup (`--cost`)
+
+When invoked with `--cost`, report the token + tool-call telemetry that
+`.forge-status.yml` already captures per phase
+(`phases.<name>.{tokens_in, tokens_out, tool_calls}`) — turning captured-but-dead
+data into cost visibility. **This is an executable rollup**, not a hand-count:
+
+Run the deterministic reporter via the Path-Resolution-safe wrapper
+([docs/runtime.md §1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root)):
+
+```bash
+# one feature
+node ${PLUGIN_ROOT}/scripts/cost-report.js --feature-dir {FEATURE_DIR}
+# whole portfolio (no slug / "all")
+node ${PLUGIN_ROOT}/scripts/cost-report.js --portfolio
+```
+
+Dollar figures are shown **only** when the user supplies their own price
+(`--rate-in <$/Mtok> --rate-out <$/Mtok>`, or the `PRODUCT_FORGE_COST_RATE_IN` /
+`PRODUCT_FORGE_COST_RATE_OUT` env). Product Forge never hard-codes provider
+prices — tokens are always real (captured); dollars require the caller's rate.
+Render the script's table to the user verbatim, then add the one-line headline:
+
+```
+💰 {feature|portfolio}: {tokens_in} in / {tokens_out} out across {N} phases
+   {+ "≈ $X at your rates" when rates supplied}
+```
+
+If no phase carries token telemetry yet (older v2 features, or phases that did
+not record digests), say so plainly rather than printing zeros as if measured:
+*"No per-phase token telemetry recorded for this feature yet."*

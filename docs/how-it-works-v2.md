@@ -75,6 +75,7 @@ speckit-product-forge/
 │   ├── lib-yaml.js             # shared zero-dep YAML subset parser
 │   ├── lint-docs.js            # doc-corpus consistency linter (--selftest)
 │   ├── check-links.js          # external-link liveness, advisory (--selftest)
+│   ├── cost-report.js          # token/tool-call rollup per-phase + portfolio (--selftest)
 │   └── doctor.js               # aggregate self-check (self-tests + lint + invariants)
 │
 ├── extension.yml                # registers all 31 commands + config keys + tags

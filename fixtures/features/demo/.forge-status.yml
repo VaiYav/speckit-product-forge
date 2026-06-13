@@ -22,6 +22,9 @@ phases:
     status: "completed"
   research:
     status: "completed"
+    tokens_in: 14000
+    tokens_out: 4200
+    tool_calls: 18
   product_spec:
     status: "completed"
   design_system_harvest:
@@ -40,6 +43,9 @@ phases:
     skip_reason: "trivial surface; risk register empty"
   implement:
     status: "completed"
+    tokens_in: 32000
+    tokens_out: 11000
+    tool_calls: 47
     red_gate:
       status: "confirmed_failing"
       tests: ["TC-UNIT-021"]
