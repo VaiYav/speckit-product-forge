@@ -16,7 +16,8 @@ shipped code through a gated lifecycle. The user interacts through slash
 commands (`/speckit.product-forge.*`). Every command is a markdown file
 in `commands/` that instructs an LLM to do one phase of the job. State
 between phases lives in `.forge-status.yml` inside each feature's
-folder. v1.7 adds: a normative `--dry-run` preview, cross-model code review,
+folder. v1.8 adds a machine-readable feature catalog carrier (`_portfolio/catalog.yml`,
+read first by agents and `portfolio`). v1.7 added: a normative `--dry-run` preview, cross-model code review,
 intra-phase parallel implementation, and a constitution↔code drift layer
 (10-layer sync-verify), plus lessons→skills promotion, `status --cost` token
 rollups, and a phase-map single source. It builds on v1.6's first-class
@@ -34,7 +35,7 @@ extensions, and a learning loop.
 
 ```
 speckit-product-forge/
-├── commands/                    # 31 slash-command definitions
+├── commands/                    # 33 slash-command definitions
 │   ├── forge.md                 # the orchestrator (invokes all phase sub-skills)
 │   ├── {phase}.md               # one file per phase (research, plan, implement…)
 │   ├── portfolio.md             # cross-feature view
@@ -79,9 +80,11 @@ speckit-product-forge/
 │   ├── lint-docs.js            # doc-corpus consistency linter (--selftest)
 │   ├── check-links.js          # external-link liveness, advisory (--selftest)
 │   ├── cost-report.js          # token/tool-call rollup per-phase + portfolio (--selftest)
+│   ├── build-catalog.js        # feature catalog carrier _portfolio/catalog.yml (--selftest, --check)
+│   ├── retrieve-catalog.js     # deterministic retrieval over the catalog (--selftest)
 │   └── doctor.js               # aggregate self-check (self-tests + lint + invariants)
 │
-├── extension.yml                # registers all 31 commands + config keys + tags
+├── extension.yml                # registers all 33 commands + config keys + tags
 ├── config-template.yml          # user copies to .product-forge/config.yml
 ├── README.md                    # user-facing entry doc
 └── CHANGELOG.md                 # history

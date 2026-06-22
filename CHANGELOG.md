@@ -12,6 +12,42 @@ _Nothing yet._
 
 ---
 
+## [1.8.0] — "Venusaur" — 2026-06-22
+
+> **Feature wave (v1.8) — the feature catalog carrier + freshness loop.** A compact,
+> machine-readable index over every feature so agents and `portfolio` read one small file
+> instead of re-walking every folder. Same bar as prior waves: executable, gated by a
+> `doctor`/`--check` check, human gate preserved.
+
+### Added
+
+- **`/speckit.product-forge.catalog`** + **`scripts/build-catalog.js`** — builds and verifies
+  `_portfolio/catalog.yml`, a deterministic carrier (per feature: slug, name, summary, mode,
+  status, phase progress, code path, REQ/FR/US counts, artifact map) generated via the
+  Path-Resolution Contract `enumerate()`. Zero-dependency (shares `lib-paths` / `lib-yaml`),
+  with `--selftest` and a `--check` staleness/quality gate. Folded into `doctor`.
+- **`/speckit.product-forge.retrieve`** + **`scripts/retrieve-catalog.js`** — deterministic
+  retrieval over the catalog: a query / slug / bounded-context / status returns the matching
+  feature(s) and the exact files to open (one index scan + 1–3 reads, no embeddings). Builds
+  the catalog in-memory so results are always fresh; `--json` and `--selftest`.
+- **Data-quality surfacing** — the carrier flags `.forge-status.yml` files with duplicate
+  mapping keys (silent data loss under last-key-wins), duplicate feature numbers / slugs, and
+  features with no extractable summary.
+- **Carrier-refresh contract** ([docs/runtime.md §2.8](docs/runtime.md)) — every site that
+  writes `.forge-status.yml` refreshes the carrier; the `forge` orchestrator does it at each
+  phase transition (§5.2); CI / pre-commit run `--check` as the backstop.
+
+### Changed
+
+- **`portfolio`** now consumes `catalog.yml` as a freshness-gated fast path, falling back to a
+  full `enumerate()` scan when the carrier is stale or absent (conflict detection still reads
+  the live `.forge-status.yml`).
+- **`lint-docs`** registers the `catalog.yml` carrier (producer ↔ consumer) and exempts
+  `CHANGELOG.md` from the command-count claim check — mirroring the existing VERSION-rule
+  exemption, since the changelog records historical counts.
+
+---
+
 ## [1.7.0] — "Ivysaur" — 2026-06-13
 
 > **Feature wave (v1.7, 2026-06) — roadmap items P1-B/P1-C/P2-A/P2-C/P3-A/P3-B/P3-C**

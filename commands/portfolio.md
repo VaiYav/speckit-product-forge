@@ -62,6 +62,25 @@ Directories to skip:
   returns them.
 - Directories with no `.forge-status.yml` (not yet under Product Forge).
 
+### Fast path: the catalog carrier (optional)
+
+If `{features_dir}/_portfolio/catalog.yml` exists, prefer it as the source for the
+per-feature **scalar** fields in Step 2 (slug, name, summary, mode, status, phase
+progress, code path, IDs) instead of re-reading every `.forge-status.yml`. It is the
+machine-readable carrier produced by [`catalog`](./catalog.md) (`scripts/build-catalog.js`)
+from this same `enumerate()` walk — one small file rather than a full re-scan. Before
+trusting it, confirm freshness:
+
+```bash
+node ${PLUGIN_ROOT}/scripts/build-catalog.js --features-dir {features_dir} --check
+```
+
+If `--check` reports `catalog.yml` STALE (or the file is absent), fall back to the direct
+`enumerate()` + `.forge-status.yml` scan above and advise the user to run
+`/speckit.product-forge.catalog` to refresh it. Conflict detection (Step 3) and
+dependency analysis **always** read the live `.forge-status.yml` / `tasks.md`, never the
+cached summary.
+
 ---
 
 ## Step 2: Build Feature Table

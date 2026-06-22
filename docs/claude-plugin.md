@@ -7,7 +7,7 @@ Product Forge ships from a single repository in **two installable forms**:
 | SpecKit extension | `extension.yml` | `specify extension add product-forge --from <zip>` | `/speckit.product-forge.forge` |
 | Claude Code / Claude plugin | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | `/plugin install speckit-product-forge@vaiyav-plugins` | `/speckit-product-forge:forge` |
 
-Both forms reuse the **same 31 command files** in [`commands/`](../commands) and the same [`docs/`](.) and [`scripts/`](../scripts). Nothing was rewritten to add plugin support — only manifest files were added.
+Both forms reuse the **same 33 command files** in [`commands/`](../commands) and the same [`docs/`](.) and [`scripts/`](../scripts). Nothing was rewritten to add plugin support — only manifest files were added.
 
 ## What makes this a plugin
 
@@ -38,7 +38,7 @@ The command name comes from the file name, namespaced by the plugin name. As a p
 | `commands/forge.md` | `/speckit.product-forge.forge` | `/speckit-product-forge:forge` |
 | `commands/status.md` | `/speckit.product-forge.status` | `/speckit-product-forge:status` |
 | `commands/research.md` | `/speckit.product-forge.research` | `/speckit-product-forge:research` |
-| …all 31 commands | `/speckit.product-forge.<name>` | `/speckit-product-forge:<name>` |
+| …all 33 commands | `/speckit.product-forge.<name>` | `/speckit-product-forge:<name>` |
 
 The dotted `name:` field still present in each command's frontmatter is the SpecKit identifier; Claude Code ignores it and derives the slash command from the file name, so both forms coexist without conflict.
 

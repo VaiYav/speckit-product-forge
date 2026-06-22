@@ -1,7 +1,7 @@
 # Contributing to Product Forge
 
 Thanks for improving Product Forge. This repo is **"spec-as-product"** — its
-deliverable is a process expressed as prompts (31 command files + normative docs
+deliverable is a process expressed as prompts (33 command files + normative docs
 + a few zero-dependency Node helpers), not an application. Its correctness is the
 **internal consistency** of ~140 documents, so the contribution workflow is built
 around a deterministic consistency gate.

@@ -143,6 +143,7 @@ Always allow a free-text "Other" answer; never trap the user in a closed list.
   (parameterized by `storage_strategy`; `flat` is the zero-config default).
 - **Pre-flight** — see [docs/runtime.md §4](../docs/runtime.md#4-step-2--pre-flight-check).
 - **Sync-verify integration** — see [docs/runtime.md §5](../docs/runtime.md#5-sync-verify-integration).
+- **Catalog carrier refresh** — after each transition's status write, regenerate `_portfolio/catalog.yml` so cross-feature reads stay fresh; see [docs/runtime.md §2.8](../docs/runtime.md#28-carrier-refresh-catalog-freshness).
 - **Gate audit trail** — see [docs/runtime.md §6](../docs/runtime.md#6-gate-audit-trail).
 - **Dry-run semantics (forward contract)** — see [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
 - **Phase digest requirement** — see [docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4).

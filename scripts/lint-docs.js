@@ -209,6 +209,10 @@ function lint(root) {
   // any "<N> slash command(s)"/"<N> command files" claim that disagrees
   const countClaimRe = /(\d{1,3})\s+(?:slash[- ]command|command files|commands)/gi;
   for (const f of corpus) {
+    // CHANGELOG.md is exempt (same rationale as the VERSION rule below): it
+    // documents every past release, so a dated "N commands total" entry is a
+    // historical fact, not a claim about the current count.
+    if (/(^|[\\/])CHANGELOG\.md$/.test(f)) continue;
     const txt = read(f);
     let m;
     while ((m = countClaimRe.exec(txt)) !== null) {
@@ -376,6 +380,11 @@ function lint(root) {
       token: "skills_promoted",
       producer: ["commands/retrospective.md"],      // Step 5B writes the promoted skill names
       consumer: ["commands/retrospective.md"],      // Step 5B item 4 reads it back for patch-vs-create idempotency
+    },
+    {
+      token: "catalog.yml",
+      producer: ["commands/catalog.md"],            // build-catalog.js writes _portfolio/catalog.yml
+      consumer: ["commands/portfolio.md"],          // portfolio's fast-path reads the carrier
     },
   ];
   for (const cf of CARRIER_FIELDS) {

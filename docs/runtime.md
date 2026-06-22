@@ -241,6 +241,31 @@ writes they perform on `.forge-status.yml` and call out that they rely on
 the LLM following the protocol voluntarily. This is best-effort — see
 the caveat in OB-3 of the code review.
 
+### 2.8 Carrier refresh (catalog freshness)
+
+`_portfolio/catalog.yml` is a **derived carrier** — a cache over every feature's
+`.forge-status.yml` plus headers — not a per-feature artifact. It is therefore **outside
+the lock** (§2.6) and rebuilt wholesale, last-writer-wins. After any site successfully
+writes a feature's `.forge-status.yml`, refresh the carrier:
+
+```bash
+node ${PLUGIN_ROOT}/scripts/build-catalog.js --features-dir {features_dir}
+```
+
+The build is deterministic and idempotent: re-running it with no source change yields a
+no-op diff, so an over-eager refresh is harmless. A writer that cannot shell out should
+note that it relies on the next `catalog` / `portfolio` run (or the CI gate) to refresh
+the carrier. The staleness gate is:
+
+```bash
+node ${PLUGIN_ROOT}/scripts/build-catalog.js --features-dir {features_dir} --check
+```
+
+which exits non-zero when the on-disk `catalog.yml` differs from a fresh build (or a
+source `.forge-status.yml` is malformed). `doctor` runs the script's `--selftest`; a
+project wires `--check` into CI / pre-commit (see
+[`commands/catalog.md`](../commands/catalog.md)).
+
 ---
 
 ## 3. Step 1 — Feature Detection & Resume
@@ -341,6 +366,7 @@ delegation is needed — the orchestrator handles it internally.
 - If zero CRITICAL: auto-proceed with note *"Quick sync: clean"*.
 - If CRITICAL found: pause and present to user before allowing phase transition.
 - Update `sync_runs` on `.forge-status.yml`.
+- Refresh the catalog carrier after the status write — `${PLUGIN_ROOT}/scripts/build-catalog.js` (§2.8).
 
 ### 5.3 Full sync on demand
 
@@ -738,7 +764,7 @@ transition, and records the gate decision exactly as in gated mode.
 ## 12. Path-Resolution Contract
 
 This is the **single normative rule** for computing where a feature lives on
-disk. Every one of the 31 commands and both deterministic scripts consult it
+disk. every one of the 33 commands and both deterministic scripts consult it
 rather than inlining their own path logic — the path logic lives in **ONE
 place** (here). It is parameterized by the merged `storage_strategy`
 ([§1.2](#12-extract)).

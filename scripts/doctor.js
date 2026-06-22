@@ -52,6 +52,8 @@ function checkSelftests() {
     "scripts/lint-docs.js",
     "scripts/check-links.js",
     "scripts/cost-report.js",
+    "scripts/build-catalog.js",
+    "scripts/retrieve-catalog.js",
   ];
   for (const s of scripts) {
     if (!exists(R(s))) { record(`selftest ${path.basename(s)}`, false, "script missing"); continue; }

@@ -77,7 +77,7 @@ the two shell helpers.
 
 ## 3. What's in it (inventory)
 
-- **31 slash commands** in `commands/*.md` covering problem-discovery,
+- **33 slash commands** in `commands/*.md` covering problem-discovery,
   research, product-spec, design-system-harvest, revalidate, bridge, plan,
   tasks, pre-impl-review, implement, code-review, verify-full, test-plan,
   test-run, release-readiness, spec-merge, retrospective, api-docs,

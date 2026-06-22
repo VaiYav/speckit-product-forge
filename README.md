@@ -98,6 +98,8 @@ The result: a **complete traceability chain** — problem → research → produ
 | `/speckit.product-forge.retrospective` | post-launch | Predicted vs actual metrics, research accuracy, lessons learned (appends to `.product-forge/lessons.md`) **[UPD v1.5]** |
 | `/speckit.product-forge.status` | — | Show lifecycle status, gate audit trail, sync history |
 | `/speckit.product-forge.portfolio` | cross-cutting | **[NEW v1.5]** Multi-feature view: table, file-conflict matrix, dependency graph, merge order |
+| `/speckit.product-forge.catalog` | cross-cutting | **[NEW v1.8]** Build/verify the feature catalog carrier (`_portfolio/catalog.yml`) — compact machine-readable index read first by agents and `portfolio`; flags malformed status files + duplicate numbers |
+| `/speckit.product-forge.retrieve` | cross-cutting | **[NEW v1.8]** Deterministic lookup over the catalog: query/slug/context → matching feature(s) + the exact files to open (one scan + 1–3 reads, no embeddings) |
 | `/speckit.product-forge.backfill` | alt entry | **[NEW v1.5]** Reverse-engineer an existing module into a feature folder with gaps report |
 | `/speckit.product-forge.monitoring-setup` | 9.5 | **[NEW v1.5]** Build real dashboard JSON, alerts, SLO doc against the configured backend (PostHog/Amplitude, Sentry; NewRelic optional) |
 | `/speckit.product-forge.migration-plan` | 5.5 | **[NEW v1.5]** Zero-downtime migration plan with forward/rollback/validation/backfill when plan.md has schema changes |
