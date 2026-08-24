@@ -597,3 +597,7 @@ MIT — see [LICENSE](./LICENSE)
 Valentin Yakovlev — [github.com/VaiYav](https://github.com/VaiYav)
 
 Contributions welcome. See [CHANGELOG.md](./CHANGELOG.md) for version history.
+
+## Portfolio
+
+More about Valentyn Yakovliev: https://vaiyav.online/
