@@ -1,148 +1,73 @@
 ---
 name: speckit.product-forge.revalidate
 description: >
-  Phase 3: Iterative revalidation and correction cycle. Shows product spec summary,
-  collects user feedback in chat, applies corrections via a dedicated agent, and loops
-  until explicit user approval. All revision history recorded in review.md.
-  Use with: "revalidate spec", "review product spec", "/speckit.product-forge.revalidate"
+  Reviews the product spec with the user in a correction loop (Phase 3): shows a
+  summary, applies requested changes, logs every revision in review.md, and locks
+  the spec only on explicit approval. Use before bridge.
 ---
 
 # Product Forge — Phase 3: Revalidation
 
-You are the **Product Spec Revalidation Coordinator** for Product Forge Phase 3.
-Your goal: ensure the product spec is exactly right before it becomes the foundation
-for all implementation work. Nothing proceeds until the user explicitly approves.
+You are the **Product Spec Revalidation Coordinator**. You make the product spec
+exactly right before it becomes the foundation for implementation: summarise it,
+apply the user's corrections, log every revision in `review.md`, and lock the
+spec once the user explicitly approves. Nothing proceeds without that approval.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
----
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
-> **Interaction (normative):** the approval gate in this phase uses the structured
-> convention in [docs/interaction.md](../docs/interaction.md) (ready snippets in
-> [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
-> Present the *Gate* template — labeled options, recommended first, free-text
-> fallback — at the genuine approve/revise decision rather than a free-form
-> "say APPROVED" prompt. Mid-loop change confirmations stay free-text.
+- **Phase key:** `revalidation` (Phase 3)
+- **Config keys:** none beyond the contract
+- **Writes:** `{FEATURE_DIR}/review.md`, edits under `{FEATURE_DIR}/product-spec/`,
+  the phase table in `{FEATURE_DIR}/README.md`, `phases.revalidation.status`
+- **Contract deltas:**
+  - The approve / revise decision is a Gate prompt (Steps 2 and 3E), never a
+    free-form "say APPROVED". Mid-loop change-list confirmations (Step 3B) stay
+    free text.
+  - `--from-forge`: Steps 1–4 run as written — the review loop is this phase's
+    work. After approval, return the outcome to forge instead of writing
+    `phases.revalidation.status` or a `gates[]` entry.
+  - `--dry-run`: product-spec edits are mirrored under
+    `{FEATURE_DIR}/.forge-dry-run/revalidation/` along with `review.md`.
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-`review.md` and product-spec edits are redirected under
-`{FEATURE_DIR}/.forge-dry-run/revalidation/`, and no status or gate entry is written.
+## Step 1: Load artifacts
 
----
+Read the full `{FEATURE_DIR}/product-spec/` folder: `README.md` (index),
+`product-spec.md` (main PRD), `journeys/journeys.yml` + `JRN-*.md`,
+`wireframes*.md` or `wireframes/`, and `metrics.md` / `mockups/` if present.
 
-## Step 1: Load All Artifacts
+When `{FEATURE_DIR}/review.md` does not exist, create it from the **Skeleton** in
+[docs/templates/revalidate-review.md](../docs/templates/revalidate-review.md).
+Result: all product-spec documents read; `review.md` exists.
 
-Read the full product-spec/ folder:
-- `{FEATURE_DIR}/product-spec/README.md` — document index
-- `{FEATURE_DIR}/product-spec/product-spec.md` — main PRD
-- `{FEATURE_DIR}/product-spec/journeys/journeys.yml` + `JRN-*.md` — structured journeys
-- `{FEATURE_DIR}/product-spec/wireframes*.md` or `wireframes/` — all wireframe files
-- `{FEATURE_DIR}/product-spec/metrics.md` — if exists
-- `{FEATURE_DIR}/product-spec/mockups/` — if exists
+## Step 2: Present the summary and ask for a decision
 
-Also initialize `{FEATURE_DIR}/review.md` if it doesn't exist:
+**Re-run?** A `## ✅ APPROVED` section in `review.md` (or a populated
+`## Change History`) means the spec was approved before. Then lead the review with
+what changed since that approval — Added / Changed / Removed — from the
+*"Diff since last approved state"* section of `{FEATURE_DIR}/product-spec/digest.md`
+(per [phase-digest.md](../docs/templates/phase-digest.md)), and summarise in full
+only the sections the digest does not cover. When the digest is missing, say
+*"No prior digest — showing full summary"* and show the full summary. On a first
+run, show the full summary.
 
-```markdown
-# Review Log: {Feature Name}
+**Full summary** — a navigable overview, not pasted documents:
 
-> Feature: {feature-slug} | Status: OPEN
-> Started: {date}
+- `product-spec.md`: problem and solution (one line each); user stories
+  ({N} total: {N} Must / {N} Should / {N} Could Have); top 3 FRs; top 3
+  out-of-scope items; {N} risks; {N} open questions.
+- Journeys: per flow — {N} steps, {N} alternative paths, {N} error scenarios.
+- Wireframes: per screen — a brief description.
+- Metrics (if present): primary KPI and target; success definition in one sentence.
+- Mockups (if present): {N} screens with names.
+- Totals: {N} documents, {N} open questions in the spec.
 
-## Current Status: UNDER REVIEW
-
-## Open Questions Resolution
-
-> Track how open questions from product-spec.md were answered during revalidation.
-> Move resolved questions here instead of marking them ~~strikethrough~~ in the spec.
-
-| # | Question | Decision | Rationale | Resolved in Revision |
-|---|----------|----------|-----------|----------------------|
-<!-- Add rows as questions are resolved -->
-
-## Decision Log
-
-> Key decisions made during revalidation — not individual edits, but significant choices.
-
-| Date | Decision | Rationale |
-|------|----------|-----------|
-<!-- Append decisions as they are made -->
-
-## Change History
-
-> High-level version deltas — one line per revision.
-
-<!-- Format: v1.0 → v1.1: [summary of what changed] -->
-
-## Revision History
-
-<!-- Individual revision records will be added below -->
-```
-
----
-
-## Step 2: Present Summary for Review
-
-### 2.0. Re-run? Lead with the diff since last approval
-
-Check for a prior approval: a `## ✅ APPROVED` section in `{FEATURE_DIR}/review.md`
-(or a populated `## Change History`) means this feature was approved before and is now
-being re-revalidated.
-
-- **On a re-run (prior approval exists):** read the *"Diff since last approved state"*
-  section of the product-spec digest at `{FEATURE_DIR}/product-spec/digest.md` (written
-  per [phase-digest.md](../docs/templates/phase-digest.md)) and lead the review with
-  **what changed since the last approval** — Added / Changed / Removed — rather than a
-  full re-read of every document. Reviewers read the diff, not the whole artifact.
-  Fall back to the full summary below only for sections the digest does not cover.
-  If the digest is missing, note *"No prior digest — showing full summary"* and proceed
-  to the full summary.
-- **On the first run (no prior approval):** skip this sub-step and show the full
-  summary below.
-
-### 2.1. Full summary
-
-Show the user a structured overview of everything in the product spec.
-**Do not** paste full documents — show a navigable summary:
-
-```
-📋 Product Spec Review: {Feature Name}
-══════════════════════════════════════
-
-📄 product-spec.md
-   Problem: {1-line summary}
-   Solution: {1-line summary}
-   User stories: {N} total ({N} Must Have, {N} Should Have, {N} Could Have)
-   Key requirements: {top 3 FRs listed}
-   Out of scope: {top 3 listed}
-   Risks: {N} identified
-   Open questions: {N} remaining
-
-🗺️ User Journey(s)
-   {for each journey file:}
-   • {flow-name}: {N} steps, {N} alternative paths, {N} error scenarios
-
-📐 Wireframes
-   {for each wireframe:}
-   • {screen-name}: {brief description}
-
-📊 Metrics (if exists)
-   Primary KPI: {name} — target: {value}
-   Success definition: {1 sentence}
-
-🎨 Mockups (if exist)
-   {N} screens: {list screen names}
-
-══════════════════════════════════════
-Total documents: {N}
-Open questions in spec: {N}
-```
-
-Then present the **Gate** prompt from
-[interaction-prompts.md](../docs/templates/interaction-prompts.md):
+Then ask:
 
 ```
 [Gate] Product spec ready for review — {N} documents, {N} open questions. How do you want to proceed?
@@ -154,73 +79,69 @@ Then present the **Gate** prompt from
   (or type your own answer)
 ```
 
-No Skip option: revalidation and the next phase (bridge) are both required in
+There is no Skip option: revalidation and bridge are both required in
 `standard` / `v-model` ([phase-map.yml](../docs/schema/phase-map.yml),
 [runtime.md §6.3](../docs/runtime.md#63-gate-prompt)).
 
-Read the full documents in `{FEATURE_DIR}/product-spec/` first, then route the
-answer per [runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+Read the full documents in `{FEATURE_DIR}/product-spec/`, then route the answer:
 
 | Option | Decision | Next |
 |--------|----------|------|
 | Approve | `approved` | Step 4 → `phases.revalidation.status: completed` |
-| Revise | `revised` | Step 3 revision loop; the phase stays `in_progress` (rounds are logged in `review.md`, not as gate entries) |
-| Rollback | `rolled_back` | Offer only phases already `completed`; set the chosen phase and every later phase to `pending`, archive rewound artifacts per [policy.md §8](../docs/policy.md#8-change-management), record `rolled_back_to`, and stop |
+| Revise | `revised` | Step 3; the phase stays `in_progress` (rounds are logged in `review.md`, not as gate entries) |
+| Rollback | `rolled_back` | Offer only `completed` phases; set the chosen phase and every later one to `pending`, archive rewound artifacts per [policy.md §8](../docs/policy.md#8-change-management), record `rolled_back_to`, and stop |
 | Abort | `aborted` | Leave all statuses unchanged and stop |
 
-On the first Revise, set `phases.revalidation.status: in_progress` if it is still
-`pending`. Every terminal decision (approved / rolled_back / aborted) is written via the
-status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)): on a
-standalone run, append one `gates[]` entry (`phase: revalidation`, the decision,
-`rolled_back_to` when rolling back); when `$ARGUMENTS` contains `--from-forge`,
-the revision loop still runs (it is this phase's work), but once the user approves
-the spec, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return to the orchestrator.
+Standalone only: on the first Revise, set `phases.revalidation.status: in_progress`
+if it is still `pending`, and write a terminal decision (approved / rolled_back /
+aborted) to status with one `gates[]` entry (`phase: revalidation`, the decision,
+`rolled_back_to` when rolling back). Under `--from-forge`, return every terminal
+decision (approve, rollback, abort) to forge, which records it.
 
----
+## Step 3: Revision loop
 
-## Step 3: Revision Loop
+Repeat 3A–3F until the user approves. When the loop passes 5 revisions, ask:
+*"We've gone through {N} rounds of revisions. Would it help to step back and
+restructure the approach?"*
 
-This is a loop. Repeat until the user approves.
+### 3A. Receive feedback
 
-### 3A. Receive Feedback
+Classify the user's reply:
 
-Wait for the user's response. It will be one of:
-1. **List of changes** — proceed to 3B
-2. **Questions** — answer them directly, then ask again for changes
-3. **"APPROVED" / "LGTM" / "looks good" / "approve"** — proceed to Step 4 (approval)
-4. **Partial changes + approval signal** — apply changes first, then re-confirm
+1. A list of changes → 3B.
+2. Questions → answer them, then ask again for changes.
+3. Approval ("APPROVED", "LGTM", "looks good", "approve") → Step 4.
+4. Changes plus an approval signal → apply the changes first, then re-confirm.
 
-### 3B. Parse and Confirm Changes
+### 3B. Parse and confirm changes
 
-Parse the user's feedback into a structured change list:
+Turn the feedback into a change list, one entry per change, each tagged with its
+type and target and carrying the user's request:
 
 ```
-📝 Change List — Revision #{N}
-─────────────────────────────
-{for each change, categorize it:}
+Change List — Revision #{N}
 
 [MODIFY] product-spec.md § User Stories
   → Change: {what to change}
   → Details: {user's exact request}
-
 [ADD] journeys/JRN-00N-checkout.md (+ journeys.yml entry)
   → Add: {what to add}
-
 [REMOVE] metrics.md § Leading Indicators
   → Remove: {what to remove}
-
 [RESTRUCTURE] wireframes/ → split screen-3 into two screens
   → Details: {user's request}
 
 Total changes: {N}
 ```
 
-Ask: *"I've identified {N} changes. Should I apply all of them, or adjust the list first?"*
+Ask: *"I've identified {N} changes. Should I apply all of them, or adjust the
+list first?"* When a request is unclear, ask for clarification rather than
+interpreting it freely. Prefer small rounds (2–3 changes, then confirm) over
+batching many changes at once.
 
-### 3C. Apply Changes
+### 3C. Apply changes
 
-For each change, launch a **Revision Agent** with these instructions:
+For each change, launch a **Revision Agent** with:
 
 > You are the Product Spec Revision Agent for Product Forge.
 > Apply ONE specific change to the product spec document.
@@ -231,62 +152,31 @@ For each change, launch a **Revision Agent** with these instructions:
 > User's exact words: `{user's original text}`
 >
 > Rules:
-> 1. Read the current file content first
-> 2. Apply ONLY the requested change — do not add unrequested improvements
-> 3. Preserve all cross-links and relative paths
-> 4. If a change requires splitting a file, create new files and update README.md links
-> 5. Return: file path modified, brief description of what changed
+> 1. Read the current file content first.
+> 2. Apply only the requested change; leave everything else as it is.
+> 3. Preserve all cross-links and relative paths.
+> 4. If the change splits a file, create the new files and update the README.md links.
+> 5. Return: the file path modified and a brief description of what changed.
 
-Apply changes **sequentially** if they affect the same file, **in parallel** if different files.
+Run changes to the same file sequentially and changes to different files in
+parallel. Fix only what the user asked; add no new sections on your own. Any
+split, rename or restructure updates every affected link in the README.md files.
 
 ### 3D. Update review.md
 
-After all changes are applied, append to `{FEATURE_DIR}/review.md`:
+1. Append a **Revision record** (template in
+   [revalidate-review.md](../docs/templates/revalidate-review.md)) under
+   `## Revision History`, with the user's feedback verbatim.
+2. Append to `## Change History`: `v1.{N-1} → v1.{N}: {1-line summary of the most important changes}`.
+3. Move every open question the revision resolved from `product-spec.md` to the
+   `## Open Questions Resolution` table.
+4. Record every significant scope or design decision in `## Decision Log`.
 
-1. **Append to `## Revision History`:**
+### 3E. Show the result and ask again
 
-```markdown
-## Revision #{N} — {date}
-
-**User feedback:**
-> {user's original feedback verbatim}
-
-**Changes applied:**
-| File | Change Type | Description |
-|------|-------------|-------------|
-| {file} | Modify/Add/Remove/Restructure | {description} |
-
-**Agent notes:**
-{Any clarifications or edge cases the agent noted during revision}
-
----
-```
-
-2. **Append to `## Change History`:**
-   `v1.{N-1} → v1.{N}: {1-line summary of the most important changes in this revision}`
-
-3. **If any open questions from product-spec.md were resolved**, move them from the spec to `## Open Questions Resolution` table.
-
-4. **If a significant scope or design decision was made**, record it in `## Decision Log`.
-
-### 3E. Show Updated Summary
-
-After all changes applied, show:
-```
-✅ Revision #{N} applied — {N} changes made
-
-Changed files:
-• {file1} — {what changed}
-• {file2} — {what changed}
-
-Key changes summary:
-{bullet list of the most important modifications}
-```
-
-Then present a **Gate** prompt scoped to the in-loop decision (review the updated
-documents in `{FEATURE_DIR}/product-spec/` first). Mid-loop, only Approve / Revise /
-Abort are meaningful — Skip/Rollback apply at the phase gate (Step 2), not between
-revision iterations:
+Show: *Revision #{N} applied — {N} changes made*, each changed file with what
+changed, and the key changes. Review the updated documents in
+`{FEATURE_DIR}/product-spec/`, then ask:
 
 ```
 [Gate] Revision #{N} applied — {N} changes. How do you want to proceed?
@@ -297,121 +187,85 @@ revision iterations:
   (or type your own answer)
 ```
 
-**Revise** loops back (Step 3F); **Approve** routes to Step 4; **Abort** is handled
-as in the Step 2 table. To roll back from mid-loop, type it — it is handled as in
-Step 2.
+Approve → Step 4; Revise → 3F; Abort, or a typed rollback, is handled as in the
+Step 2 table.
 
-### 3F. Loop Back
+### 3F. Loop back
 
-Go to Step 3A and wait for the next response.
+Return to 3A and wait for the next reply.
 
----
+## Step 4: Final approval
 
-## Step 4: Final Approval
+Runs when the user approves ("APPROVED", "LGTM", "looks good", "approve", "ready").
 
-When the user approves (keywords: "APPROVED", "LGTM", "looks good", "approve", "ready"):
+### 4A. Final consistency check
 
-### 4A. Final Consistency Check
+1. Every cross-link in `product-spec/README.md` resolves.
+2. Every referenced wireframe file exists.
+3. Open questions in `product-spec.md` that should be answered before proceeding
+   are listed.
+4. Every user story in `product-spec.md` maps to ≥1 journey in
+   `journeys/journeys.yml`.
+5. **Determinism lens.** For each acceptance criterion under each Must-Have story,
+   ask: *"Would two competent implementers build materially different things from
+   this criterion?"* Flag it as ambiguous when it has no observable / measurable
+   outcome, relies on a subjective term (`fast`, `intuitive`, `secure`, …) with no
+   threshold, or leaves a branch (error path, empty / limit state, permission
+   case) unspecified. List each failing criterion with its US/AC and the
+   divergence it allows.
 
-Before locking, run a quick consistency pass:
-1. Are all cross-links in product-spec/README.md still valid?
-2. Do all wireframe files exist that are referenced?
-3. Are there any open questions in product-spec.md that should be answered before proceeding?
-4. Do user stories in product-spec.md align with journeys in `journeys/journeys.yml` (each US maps to ≥1 JRN)?
-5. **Determinism lens (v1.6, W5-E1).** For *each acceptance criterion* under each
-   Must-Have user story in `product-spec.md`, ask the literal adversarial question:
-   **"Would two competent implementers build materially different things from this
-   criterion?"** Flag the criterion as ambiguous if any of: it has no observable/
-   measurable outcome; it relies on a subjective term (`fast`, `intuitive`, `secure`,
-   etc.) with no defined threshold; or it leaves a branch (error path, empty/limit
-   state, permission case) unspecified. Produce a short list of the criteria that
-   failed the lens, naming the US/AC and the divergence each one allows.
+Handle the issues found:
 
-If consistency issues found:
-- Minor (broken link, typo) → fix silently and note in review.md
-- Moderate (story/journey mismatch, ambiguous acceptance criterion) → flag to user,
-  ask if should fix now or proceed anyway; record any criterion sharpened or
-  deferred in the `## Open Questions Resolution` table in review.md
+- Minor (broken link, typo) → fix it and note the fix in `review.md`.
+- Moderate (story/journey mismatch, ambiguous criterion) → show it and ask
+  whether to fix now or proceed; record every criterion sharpened or deferred in
+  the `## Open Questions Resolution` table.
 
-### 4B. Lock the Spec
+### 4B. Lock the spec
 
-Update `{FEATURE_DIR}/review.md` final status:
+1. Append the **Approval block** from
+   [revalidate-review.md](../docs/templates/revalidate-review.md) to `review.md`.
+2. Set status (standalone):
 
-```markdown
-## ✅ APPROVED — {date}
+   ```yaml
+   phases:
+     revalidation:
+       status: completed   # readers still accept the legacy literal `approved`
+   ```
 
-**Approved by user after {N} revision(s)**
+3. In `{FEATURE_DIR}/README.md`, set the phase table row Phase 3 Revalidation → ✅ Approved.
 
-**Final document inventory:**
-| Document | Lines | Last Modified |
-|----------|-------|---------------|
-| product-spec.md | {N} | {date} |
-| journeys/journeys.yml + JRN-*.md | {N} | {date} |
-| wireframes* | {N} | {date} |
-| metrics.md | {N} | {date} |
-| mockups/ | {N} files | {date} |
+### 4C. Drift check
 
-**Status: LOCKED — Ready for SpecKit Bridge (Phase 4)**
-```
+When `{FEATURE_DIR}/spec.md` exists (a previous bridge run), compare
+`product-spec.md` against it: Must Have user stories added or removed, scope
+changes in the out-of-scope list, open questions newly resolved or added. On
+divergence, append the **Drift warning** from
+[revalidate-review.md](../docs/templates/revalidate-review.md) to `review.md`.
+When `spec.md` does not exist, skip this check without comment.
 
-Update `{FEATURE_DIR}/.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-```yaml
-phases:
-  revalidation:
-    status: completed   # readers still accept the legacy literal `approved`
-```
+### 4D. Completion message
 
-Update `{FEATURE_DIR}/README.md` phase status table:
-- Phase 3 Revalidation → ✅ Approved
+Report: *Product spec approved and locked*; the finalized documents
+(`product-spec.md` with {N} user stories and {N} requirements,
+`journeys/journeys.yml` with {N} journeys, {N} wireframe screens, `metrics.md` /
+mockups if present); {N} revision rounds captured in `review.md`; and
+`Next step: /speckit.product-forge.bridge`.
 
-### 4B-post. Drift Check (Automatic)
+## Done when
 
-If `spec.md` already exists in `{FEATURE_DIR}/` (i.e., a previous bridge run created it):
-
-1. Compare key sections of `product-spec.md` against `spec.md`:
-   - User stories (Must Have): check for any added or removed stories during revalidation
-   - Out-of-scope list: check for scope changes
-   - Open Questions: check for newly resolved or added questions
-2. If divergence found, append a warning to `review.md`:
-
-```markdown
-## ⚠️ Drift Warning — {date}
-
-Product-spec was updated after spec.md was last generated.
-The following sections diverged:
-- {section}: {description of divergence}
-
-Action required: re-run `/speckit.product-forge.bridge` to regenerate spec.md.
-```
-
-> If `spec.md` does not yet exist, skip this check silently.
-
-### 4C. Completion Message
-
-```
-🔒 Product Spec APPROVED and locked.
-
-{N} documents finalized:
-  • product-spec.md — {N} user stories, {N} requirements
-  • journeys/journeys.yml — {N} structured journeys (JRN/STEP/EDGE)
-  • wireframes — {N} screens
-  • {metrics.md if exists}
-  • {mockups if exist}
-
-Revision history: {N} rounds of revisions captured in review.md
-
-Ready for Phase 4: SpecKit Bridge
-Run: /speckit.product-forge.bridge
-```
-
----
-
-## Revalidation Operating Principles
-
-1. **Never lose context.** Every change is logged in review.md with the user's exact words.
-2. **Small changes, fast loops.** Better to apply 2-3 small changes and confirm than batch 10 at once.
-3. **Never auto-approve.** The user MUST explicitly say some form of "approved" to proceed.
-4. **Preserve user intent.** When in doubt about a change, ask for clarification — do not interpret freely.
-5. **No scope creep.** During revalidation, only fix what the user asks. Do not add new sections spontaneously.
-6. **Cross-link integrity.** Any file split, rename, or restructure must update all links in README.md files.
-7. **Revision count.** If the loop exceeds 5 revisions, suggest: *"We've gone through {N} rounds of revisions. Would it help to step back and restructure the approach?"*
+- Every product-spec document was read and `review.md` exists.
+- The user explicitly approved the spec — through a Gate prompt or an approval
+  phrase — with no auto-approval.
+- Every revision round has a Revision record with the user's exact words, a
+  Change History line, resolved questions moved to the resolution table, and
+  significant decisions in the Decision Log.
+- The 4A check ran: links and wireframes resolve, every story maps to a journey,
+  and every Must-Have AC passed the determinism lens or was sharpened / deferred
+  in `review.md`.
+- `review.md` carries the Approval block; the README phase table shows Phase 3
+  ✅ Approved; a Drift warning is appended when `spec.md` diverged.
+- Standalone: the decision is recorded in `gates[]` and `phases.revalidation.status`
+  is set from it (`completed` on approval). `--from-forge`: the outcome is
+  returned to forge, with no gate entry and no `phases.revalidation.status` write.
+- On Rollback or Abort the run stopped with statuses set per the Step 2 table.

@@ -65,19 +65,20 @@ first).
 | 5B. Tasks | `speckit.product-forge.tasks` | `tasks.md` exists | User approves tasks |
 | 5.5. Migration Plan *(opt, conditional)* | `speckit.product-forge.migration-plan` | `migrations/migration-plan.md` + `forward.sql` + `rollback.sql` | User approves strategy and scripts |
 | 5C. Pre-Impl Review *(opt)* | `speckit.product-forge.pre-impl-review` | `pre-impl-review.md` exists | User approves review |
-| 6. Implement | `speckit.product-forge.implement` | All tasks `[x]` in tasks.md | Implementation complete |
+| 6. Implement | `speckit.product-forge.implement` | All tasks `[x]` in tasks.md (the plan's inline `## Tasks` list in express / lite) | Implementation complete |
 | 6B. Code Review *(opt)* | `speckit.product-forge.code-review` | `code-review.md` exists | User approves review |
-| 7. Verify Full | `speckit.product-forge.verify-full` | `verify-report.md` with no CRITICAL | User acknowledges report |
+| 7. Verify Full | `speckit.product-forge.verify-full` | `verify-report.md` exists (open CRITICALs are decided at the gate) | User acknowledges report |
 | 8A. Test Plan *(opt)* | `speckit.product-forge.test-plan` | `testing/test-plan.md` + `testing/playwright-tests/` | User approves test plan |
 | 8B. Test Run *(opt)* | `speckit.product-forge.test-run` | `test-report.md` + `bugs/README.md` | Pass rate ≥80% + zero P0/P1 open |
 | 9. Release Readiness *(opt)* | `speckit.product-forge.release-readiness` | `release-readiness.md` + `monitoring/dashboard.json` + `flags/registry.yml` | User confirms readiness |
 | 9.5. Monitoring Setup *(opt)* | `speckit.product-forge.monitoring-setup` | `monitoring/slo.md` + `alerts.yml` | User confirms monitoring artifacts |
 | 9B. Experiment Design *(opt, conditional)* | `speckit.product-forge.experiment-design` | `experiment/experiment-design.md` + `experiment.yml` | User pre-registers plan |
-| 10. Spec Merge *(living spec; after release-readiness)* | `speckit.product-forge.spec-merge` | canonical `specs/` updated; change archived | User confirms merge of delta specs |
+| 10. Spec Merge *(living spec; after release-readiness)* | `speckit.product-forge.spec-merge` | canonical `specs/` updated (the archive move follows an approved gate) | User confirms merge of delta specs |
 
 - **Conditional triggers.** 4.5 runs when the project has multiple locales (config
   or an `i18n/` folder); 5.5 when `plan.md` has a non-empty Data Model section or
-  schema changes; 9B when `flags/registry.yml` has a flag with `experiment: true`;
+  schema changes (a Prisma schema diff, a Mongoose `Schema(...)` addition, a new SQL
+  migration file); 9B when `flags/registry.yml` has a flag with `experiment: true`;
   10 when the project keeps canonical `specs/`. An untriggered conditional phase is
   set to `not_applicable` with no gate and no skip reason
   ([policy.md §3](../docs/policy.md#3-skip-reason-policy-e2)).
@@ -164,7 +165,7 @@ become v-model (lite never produced the artifacts) — suggest a new v-model fea
 | 6B. Code Review | — | — | opt | opt |
 | 7. Verify Full | ✅ | ✅ | ✅ | ✅ |
 | 8A. Test Plan | — | — | opt | opt |
-| 8B. Test Run | — | — | opt | opt |
+| 8B. Test Run | No offer — 8A's offer covered 8A + 8B; runs right after the 8A gate | — | opt | opt |
 | 9. Release Readiness | — | — | opt | opt |
 | 9.5. Monitoring Setup | — | — | opt | opt |
 | 9B. Experiment Design | — | — | opt (conditional on experiment flag) | opt |
@@ -189,7 +190,9 @@ each level pair), V12 after Phase 8B, and V13 must be `COMPLIANT` (or waived) be
 Phase 9 ([v-model-integration.md §4](../docs/v-model-integration.md#4-phase-map-in-v-model-mode)).
 
 Express runs product-spec (one journey + acceptance criteria) → plan (inline tasks)
-→ implement → verify. Express and lite escalate append-only.
+→ implement → verify. Express escalates to lite or standard when the change gains
+UI, a second module, or a schema / contract change; lite escalates as below. Both
+are append-only.
 
 ### Escalation (lite → standard)
 
@@ -214,13 +217,17 @@ the missing standard phases on the next loop.
 ## Phase loop
 
 Repeat for the current phase `P` (the next `pending` in-scope phase for the
-feature's mode, or the override) until no in-scope phase is left:
+feature's mode, or the override) until no in-scope phase is left. 2H is never `P`:
+it runs inside Phase 2 for UI features, and its status comes from product-spec's
+returned outcome (`not_applicable` for backend-only work). Under `--dry-run`,
+steps 5–8 record nothing — quick sync writes no `sync_runs`, the phase's
+`DRY-RUN-REPORT.md` replaces the gate, and no status or gate entry is written.
 
 1. **Scope.** `P` is `no` for the mode → already `not_applicable`; move on. `P` is
    conditional and its trigger is not met → set `not_applicable`, no gate; move on.
 2. **Offer (optional phases).** When `P` is `opt`, show a Run / Skip prompt with the
-   offer line from the Phase transitions table — unless the previous gate already
-   decided `P`. When config makes `P` required, run it without the prompt. Declining
+   offer line from the Phase transitions table (Run recommended / Skip with the
+   stated consequence) — unless the previous gate already decided `P`. When config makes `P` required, run it without the prompt. Declining
    is the `skipped` decision for `P` (status `skipped` + `skip_reason` per
    `require_skip_reason`).
 3. **Delegate.** Call `P`'s command with the suppress-handoff preamble
@@ -231,9 +238,9 @@ feature's mode, or the override) until no in-scope phase is left:
 4. **Confirm.** Check the Artifact Signal from the Phase Map and show the
    **Show** items. A missing signal → the phase is not complete; report it and
    offer Revise.
-5. **Quick sync.** When `auto_sync_between_phases` is true, run the layers for this
-   transition ([runtime.md §5.1](../docs/runtime.md#51-automatic-quick-sync)); a
-   CRITICAL pauses the transition for the user.
+5. **Quick sync.** When `auto_sync_between_phases` is true, run the layers for the
+   phase just finished ([runtime.md §5.1](../docs/runtime.md#51-automatic-quick-sync));
+   a CRITICAL pauses the transition for the user.
 6. **Gate surface.** Run
    `node "$PLUGIN_ROOT/scripts/gate-risk.js" --feature-dir {FEATURE_DIR} --json`
    (WARN and use the documented heuristic when the script is missing) and route:
@@ -245,7 +252,8 @@ feature's mode, or the override) until no in-scope phase is left:
    since `gates[].reviewed_sha` plus stale prior findings.
 7. **Gate.** Ask the [Gate template](../docs/templates/interaction-prompts.md#gate-after-every-phase)
    with `{Phase}`, the outcome line, and `{next phase}` = the next in-scope phase
-   for the mode. Options follow [runtime.md §6.3](../docs/runtime.md#63-gate-prompt):
+   for the mode, skipping 2H and any conditional phase whose trigger is not met
+   (set that one `not_applicable` now). Options follow [runtime.md §6.3](../docs/runtime.md#63-gate-prompt):
    Skip only when `{next phase}` is `opt` for the mode and not required by
    `require_problem_discovery`, `require_pre_impl_review`, `require_code_review`,
    `require_testing` or `release_readiness: required`; Rollback lists completed
@@ -255,32 +263,32 @@ feature's mode, or the override) until no in-scope phase is left:
    ([runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision)): Skip
    approves `P` and skips the next phase (two entries); Revise re-runs `P`;
    Rollback rewinds; Abort stops the lifecycle.
-9. **Hand off.** Gated → Next step prompt; fluid → runnable set. In `--dry-run`,
-   show the phase's `DRY-RUN-REPORT.md` in place of the gate and record nothing.
+9. **Hand off.** Gated → Next step prompt; fluid → runnable set. Where the table
+   marks an extension point, ask first: *"Want to insert a custom step here?"*
 
 ## Phase transitions
 
 | Phase | Offer (opt phases) | Provide | Show | Gate specifics |
 |-------|--------------------|---------|------|----------------|
-| 0. Problem Discovery | Validate the problem (JTBD, forces, go/no-go) before research — recommended for new ideas | FEATURE_DESCRIPTION, FEATURE_DIR | go/no-go, confidence, key hypotheses | No-go → stop the lifecycle (Abort is the recommended option); Go / Investigate → forward hypotheses. Offered before Phase 1 (Phase 2 in lite). |
+| 0. Problem Discovery | Validate the problem (JTBD, forces, go/no-go) before research — recommended for new ideas. Skip: the problem is already validated | FEATURE_DESCRIPTION, FEATURE_DIR | go/no-go, confidence, key hypotheses | Options read **Approve / Go** and **Abort / No-go**. No-go → stop the lifecycle; Go / Investigate further → forward hypotheses. Offered before Phase 1 (Phase 2 in lite). |
 | 1. Research | — | FEATURE_DESCRIPTION, FEATURE_DIR, project_name, project_domain, project_tech_stack, codebase_path | key findings per dimension (`research/README.md`) | Revise = request more dimensions. |
 | 2. Product Spec | — | FEATURE_DESCRIPTION, FEATURE_DIR, research summary (standard / v-model) or optional `problem-discovery/` (express / lite), project settings | documents created (`product-spec/README.md`) | 2H runs inside this phase for UI features. |
 | 3. Revalidation | — | FEATURE_DIR, product-spec document list | approval recorded in `review.md` | revalidate runs its own review loop and returns once the spec is approved. |
 | 4. Bridge → SpecKit | — | FEATURE_DIR, product-spec artifacts, `default_speckit_mode` | goals, story count, acceptance criteria of `spec.md` | v-model forces `speckit_mode: v-model`. |
-| 4.5. i18n Harvest | Extract user-facing strings into locale key stubs before planning | FEATURE_DIR (bridge output), project locale list | `i18n/keys.yml` | English-only project → `not_applicable`. |
-| 5. Plan | — | FEATURE_DIR with `spec.md` (standard / v-model) or `product-spec/README.md` (express / lite; plan ends with an inline `## Tasks` list), product-spec summary, codebase_path | `plan.md` (with inline tasks in express / lite) | Extension point after this phase. |
+| 4.5. i18n Harvest | Extract user-facing strings into locale key stubs before planning. Skip: i18n handled manually | FEATURE_DIR (bridge output), project locale list | `i18n/keys.yml` | English-only project → `not_applicable`. |
+| 5. Plan | — | FEATURE_DIR with `spec.md` (standard / v-model) or `product-spec/README.md` (express / lite; plan ends with an inline `## Tasks` list), product-spec summary, codebase_path | `plan.md` (with inline tasks in express / lite) | Extension point (e.g. architecture review, cost estimation). |
 | 5B. Tasks | — | FEATURE_DIR with `plan.md` | task count, groups, story coverage | — |
-| 5.5. Migration Plan | Zero-downtime migration plan with forward / rollback scripts before implementation — strongly recommended for production schema changes | FEATURE_DIR with `plan.md`, codebase_path, detected DB kind | `migration-plan.md`, `forward.sql`, `rollback.sql`, `validation.sql` | — |
-| 5C. Pre-Impl Review | Review design completeness, architecture and risk before code — recommended for > 5 tasks or UI | FEATURE_DIR, all artifacts | design / architecture findings, risk count | Record `risks_accepted` and conditions. Extension point after this phase. |
-| 6. Implement | — | FEATURE_DIR with `tasks.md`, `plan.md`, `spec.md`, `product-spec/` (standard / v-model) or `plan.md` with inline tasks + `product-spec/` (express / lite) | implemented files, progressive-verify results (every `progressive_verify_interval` tasks), `phases.implement.red_gate` | Complete only when `red_gate.status` is `confirmed_failing`, or `skipped` with a `skip_reason` (implement owns `red_gate`; forge reads it). Offer a WIP commit after the gate. |
-| 6B. Code Review | Multi-agent review of quality, security, patterns and test coverage | FEATURE_DIR, all artifacts | findings by dimension and severity | Record `findings` (+ `reviewed_by_model` / `cross_model_findings` when present) and acknowledged items. |
-| 7. Verify Full | — | FEATURE_DIR, `spec.md` + code (standard / v-model) or `product-spec/README.md` + code (express / lite), codebase_path | CRITICAL / WARNING / PASSED counts from `verify-report.md` | Option 1 is **Acknowledge** → `approved` with 0 CRITICAL (recommended; offer a commit). With CRITICAL > 0 option 1 is **Accept with conditions** → `approved_with_conditions` listing every open CRITICAL, and Revise is recommended. Skipping Test Plan also sets `test_run` to `skipped` with the same reason. |
-| 8A. Test Plan | Generate test cases, run them, auto-fix bugs and report (8A + 8B). Lead with "Verification passed" when the report has 0 CRITICAL, else "Verification accepted with conditions ({N} CRITICAL open)" | FEATURE_DIR, codebase_path, project_tech_stack | test-case counts per type | Not offered again when the Phase 7 gate decided it. Declining the offer skips 8A and 8B with the same reason (8B's input never exists). |
+| 5.5. Migration Plan | Zero-downtime migration plan with forward / rollback scripts before implementation — strongly recommended for production schema changes. Skip: migrations planned during implement | FEATURE_DIR with `plan.md`, codebase_path, detected DB kind | `migration-plan.md`, `forward.sql`, `rollback.sql`, `validation.sql` | — |
+| 5C. Pre-Impl Review | Review design completeness, architecture and risk before code — recommended for > 5 tasks or UI. Skip: go straight to implementation | FEATURE_DIR, all artifacts | design / architecture findings, risk count | Record `risks_accepted` and conditions. Extension point (e.g. sprint estimation). |
+| 6. Implement | — | FEATURE_DIR with `tasks.md`, `plan.md`, `spec.md`, `product-spec/` (standard / v-model) or `plan.md` with inline tasks + `product-spec/` (express / lite) | implemented files, progressive-verify results (every `progressive_verify_interval` tasks), `phases.implement.red_gate` | Read `phases.implement.red_gate` (implement owns it): unless `status` is `confirmed_failing`, or `skipped` with a `skip_reason`, the phase is not complete and the Implement gate is blocked. Offer a WIP commit after the gate. |
+| 6B. Code Review | Multi-agent review of quality, security, patterns and test coverage. Skip: go to verification | FEATURE_DIR, all artifacts | findings by dimension and severity | Record `findings` (+ `reviewed_by_model` / `cross_model_findings` when present) and acknowledged items. |
+| 7. Verify Full | — | FEATURE_DIR, `spec.md` + code (standard / v-model) or `product-spec/README.md` + code (express / lite), codebase_path | CRITICAL / WARNING / PASSED counts from `verify-report.md` | Option 1 is **Acknowledge** → `approved` with 0 CRITICAL (recommended; offer a commit). With CRITICAL > 0 option 1 is **Accept with conditions** → `approved_with_conditions` listing every open CRITICAL, and Revise is recommended. The Skip option reads **Skip Test Plan (and Test Run)**; it also sets `test_run` to `skipped` with the same reason. |
+| 8A. Test Plan | Generate test cases, run them, auto-fix bugs and report (8A + 8B). Lead with "Verification passed" when the report has 0 CRITICAL, else "Verification accepted with conditions ({N} CRITICAL open)". Skip: no automated testing — move to Release Readiness (or finish) | FEATURE_DIR, codebase_path, project_tech_stack | test-case counts per type | Not offered again when the Phase 7 gate decided it. Declining the offer skips 8A and 8B with the same reason (8B's input never exists). |
 | 8B. Test Run | — | FEATURE_DIR, codebase_path | pass rate, bugs found / fixed / deferred (`test-report.md`) | test-run runs its own loop to its exit criteria. Option 1 is **Acknowledge** → `approved`; approval with deferred bugs → `completed_with_known_issues`. Offer a commit of the test artifacts. |
-| 9. Release Readiness | Monitoring dashboard, flag registry, rollback playbook and pre-ship checklist — recommended for user-facing features | FEATURE_DIR, all artifacts | readiness verdict, action items; `release-readiness.md`, `monitoring/dashboard.json`, `flags/registry.yml` | Record `action_items`. Runs after 8B, or after 7 when testing was skipped. |
-| 9.5. Monitoring Setup | SLI / SLO doc, alert policy and extended dashboard from plan NFRs and tracking events (`telemetry.dashboards` backend) | FEATURE_DIR | `monitoring/slo.md`, `alerts.yml`, extended `dashboard.json` | — |
-| 9B. Experiment Design | Pre-register the A/B plan (hypothesis, MDE, sample size, guardrails, decision rule) | FEATURE_DIR | `experiment/experiment-design.md`, `experiment.yml` | — |
-| 10. Spec Merge | Fold the delta specs into canonical `specs/` and archive the change — recommended once shipped | FEATURE_DIR | domains touched, `FR-*` added / modified / removed, `ARCHIVE_DIR` | spec-merge with `--from-forge` applies the deltas and returns the summary + `ARCHIVE_DIR` only. Record the gate **at `FEATURE_DIR`**; on `approved` write `phases.spec_merge.archived_to` in the same write, then move the folder to `ARCHIVE_DIR` (spec-merge Step 5) — the last write. Always human, also under `--ci`. |
+| 9. Release Readiness | Monitoring dashboard, flag registry, rollback playbook and pre-ship checklist — recommended for user-facing features. Skip: feature is ready to ship | FEATURE_DIR, all artifacts | readiness verdict, action items; `release-readiness.md`, `monitoring/dashboard.json`, `flags/registry.yml` | Record `action_items`. Runs after 8B, or after 7 when testing was skipped. |
+| 9.5. Monitoring Setup | SLI / SLO doc, alert policy and extended dashboard from plan NFRs and tracking events (`telemetry.dashboards` backend) — recommended before deploy. Skip: no extra monitoring | FEATURE_DIR | `monitoring/slo.md`, `alerts.yml`, extended `dashboard.json` | — |
+| 9B. Experiment Design | Pre-register the A/B plan (hypothesis, MDE, sample size, guardrails, decision rule). Skip: ship to 100% without experimentation | FEATURE_DIR | `experiment/experiment-design.md`, `experiment.yml` | — |
+| 10. Spec Merge | Fold the delta specs into canonical `specs/` and archive the change — recommended once shipped. Skip: merge later | FEATURE_DIR | domains touched, `FR-*` added / modified / removed, `ARCHIVE_DIR` | spec-merge with `--from-forge` applies the deltas and returns the summary + `ARCHIVE_DIR` only. Record the gate **at `FEATURE_DIR`**; on `approved` write `phases.spec_merge.archived_to` in the same write, then move the folder to `ARCHIVE_DIR` (spec-merge Step 5) — the last write. Always human, also under `--ci`. |
 
 ---
 
@@ -367,6 +375,7 @@ Artifacts
   spec.md               SpecKit specification           (standard / v-model)
   plan.md               technical plan
   tasks.md              {N} tasks, all done              (standard / v-model)
+  implementation-log.md progressive-verify log           (if run)
   pre-impl-review.md    design / architecture / risk     (if run)
   code-review.md        code review                      (if run)
   verify-report.md      {N} CRITICAL open

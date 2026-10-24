@@ -1,687 +1,304 @@
 ---
 name: speckit.product-forge.verify-full
 description: >
-  Phase 7: Full traceability verification across the entire Product Forge chain.
-  Consumes the live traceability.yml matrix and checks: code ↔ tasks ↔ plan ↔
-  spec.md ↔ product-spec ↔ research, plus journey↔E2E coverage, UI↔design-system,
-  FE↔BE contract drift, and doc↔code reconciliation.
-  Produces a structured verify-report.md with CRITICAL/WARNING/PASSED findings.
-  Use with: "verify full", "check traceability", "/speckit.product-forge.verify-full"
+  Verifies the full traceability chain after implementation (Phase 7): the live
+  traceability.yml matrix from research to code, journey test coverage, design-system
+  use, FE/BE contracts, doc/code and constitution drift. Writes verify-report.md
+  with CRITICAL, WARNING and PASSED findings.
 ---
 
 # Product Forge — Phase 7: Full Verification
 
-You are the **Full Traceability Verifier** for Product Forge Phase 7.
-Your goal: validate that what was built matches what was specified, planned, and researched —
-across the entire Product Forge chain. This is the final quality gate before the feature is
-considered done.
+You are the **Full Traceability Verifier**. You check that what was built matches
+what was researched, specified and planned, across the whole Product Forge chain,
+and write `verify-report.md`. This is the final quality gate before the feature
+counts as done. You are read-only with respect to source code and traceability
+`status`: your only writes are the report, its `gate-review.md` entries, the
+digest and the phase status.
 
-**STRICTLY READ-ONLY.** Do not modify any source files. Output a structured report only.
-
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-write `verify-report.md` and any `gate-review.md` additions under
-`{FEATURE_DIR}/.forge-dry-run/verify/`, record no status change, emit a
-`DRY-RUN-REPORT.md`, and make no external side-effect.
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
-Keys used: `codebase_path` / `codebase.paths`, `verify.ac_judge`,
-`sync_verify.contract_differ` + `sync_verify.contract_regen`, `constitution_path`,
-`require_testing`, `require_skip_reason` (Step 5 gate).
+- **Phase key:** `verify` (Phase 7)
+- **Config keys:** `codebase_path` / `codebase.paths`, `verify.ac_judge`,
+  `sync_verify.contract_differ`, `sync_verify.contract_regen`, `constitution_path`,
+  `require_testing`, `require_skip_reason`
+- **Writes:** `{FEATURE_DIR}/verify-report.md`, `F-NNN` entries and the
+  "Suggested canonical-spec updates" rows in `{FEATURE_DIR}/gate-review.md`,
+  `{FEATURE_DIR}/verify/digest.md`, `phases.verify.status`,
+  `phases.verify.digest_path`
+- **Contract deltas:** with `--from-forge`, return the outcome plus the
+  CRITICAL / WARNING / PASSED counts.
 
----
+## Step 1: Deterministic pre-gate
 
-## Step 0: Deterministic pre-gate (W5-A1)
-
-Before the LLM layers run, execute the deterministic structural validator (it is
-fast, reproducible, and CI-friendly — it catches the "callout-deep" linkage gaps
-that prose review misses):
+Run the structural validator before the LLM layers:
 
 ```bash
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(specify extension path product-forge 2>/dev/null || echo .)}"
-node "$PLUGIN_ROOT/scripts/validate-traceability.js" --feature-dir {FEATURE_DIR} --json
+node "${PLUGIN_ROOT}/scripts/validate-traceability.js" --feature-dir {FEATURE_DIR} --json
 ```
-
-> `$PLUGIN_ROOT` is resolved per [docs/runtime.md §1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root).
-> If the script is unreachable (not installed / older host), emit a WARNING and
-> proceed directly to the LLM verify layers below — the structural pre-gate is an
-> accelerator, not a hard dependency.
 
 It traverses `traceability.yml` (+ `journeys.yml` / `spec.md` / `tasks.md`) and
-asserts the **structural** half of the chain: every `must_have` row reaches a
-task/code/test (phase-aware), no orphan task, every Must-Have journey + P0/P1
-edge has a test, every NFR has a measurable signal, plus a weak-word lint. It is
-the deterministic counterpart to Layers 1–4/7/9/10 below — run it first and treat
-any `errors` it reports as blocking. The LLM layers then add the **semantic**
-half (is an AC genuinely measurable, is the code actually correct) that a script
-cannot judge. If the script is absent or the feature has no `traceability.yml`
-yet, skip silently and proceed to the LLM layers.
+asserts the structural half of the chain: every `must_have` row reaches a
+task / code / test (phase-aware), no orphan task, every Must-Have journey and
+P0/P1 edge has a test, every NFR has a measurable signal, plus a weak-word lint.
+Treat every `errors` entry it reports as blocking (CRITICAL). The LLM layers then
+add the semantic half (is an AC genuinely measurable, is the code correct).
 
----
+When the script is missing, warn and continue with the LLM layers. When the
+feature has no `traceability.yml` yet, skip this step silently. Result: the
+validator's errors recorded, or the skip noted.
 
-## Step 1: Load All Artifacts
+## Step 2: Load artifacts and build the verification context
 
-Read every artifact in the feature directory:
+Read:
 
-```
-{FEATURE_DIR}/
-├── research/
-│   ├── README.md
-│   ├── competitors.md
-│   ├── ux-patterns.md
-│   ├── codebase-analysis.md
-│   └── [tech-stack.md, metrics-roi.md if exist]
-├── product-spec/
-│   ├── README.md
-│   ├── product-spec.md
-│   ├── journeys/journeys.yml + JRN-*.md
-│   ├── mockups/component-map.yml
-│   ├── wireframes* / wireframes/
-│   ├── metrics.md [if exists]
-│   └── mockups/ [if exists]
-├── spec.md
-├── plan.md
-├── tasks.md
-├── review.md
-└── .forge-status.yml
-```
+- `research/` — `README.md`, `competitors.md`, `ux-patterns.md`,
+  `codebase-analysis.md`, plus `tech-stack.md` / `metrics-roi.md` if present.
+- `product-spec/` — `README.md`, `product-spec.md`, `journeys/journeys.yml` +
+  `JRN-*.md`, `mockups/component-map.yml`, `wireframes*` / `wireframes/`,
+  `metrics.md` and `mockups/` if present.
+- `spec.md`, `plan.md`, `tasks.md`, `review.md`, `.forge-status.yml`.
+- The implementation: files created / modified, found via `codebase_path` and the
+  file paths in `tasks.md`.
+- When present: `traceability.yml` (the live matrix — see
+  [traceability-matrix.md](../docs/templates/traceability-matrix.md)),
+  `design-system/manifest.yml`, and the API / event contracts (OpenAPI + AsyncAPI
+  from bridge / plan).
 
-Also read the implementation: use codebase_path from config to find all files
-created/modified during implementation. Reference `tasks.md` for file paths if listed.
+**Consume the matrix.** When `traceability.yml` exists, the report is computed
+from its rows. For each row in `rows[]`, read the links by field name:
 
-**Also load (v1.6) the live traceability + UX/contract artifacts when present:**
-- `traceability.yml` — the **live matrix** (consume it; do not re-derive the chain
-  from scratch). See [docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md).
-- `product-spec/journeys/journeys.yml` — journeys (`JRN/STEP/EDGE`) for coverage.
-- `design-system/manifest.yml` + `product-spec/mockups/component-map.yml` — for the
-  UI-uses-real-components check.
-- API/event contracts (OpenAPI + AsyncAPI from bridge/plan) — for FE↔BE drift.
+| Field | Meaning |
+|-------|---------|
+| `req` | canonical requirement id (V-Model / backfill rows only; null in the standard forward flow) |
+| `story` | user story (`US-*`) |
+| `journeys` | `JRN-*`; `STEP-*` / `EDGE-*` nested under the `journeys:` detail block |
+| `frs` | functional requirements (`FR-*`) |
+| `must_have` | boolean; drives the Layer 3 assertion |
+| `components` / `contracts` | `CMP-*` / `API-*` |
+| `tasks` / `code` / `tests` / `events` | `TASK-*` / code paths (from `implement`) / `TC-*` (from `test-plan` / `test-run`) / `EVT-*` |
+| `status` | `planned \| implemented \| tested \| verified` |
 
-> **Consume the matrix (Theme C):** when `traceability.yml` exists, Layers 1–4 read
-> the matrix rows instead of recomputing links, and the report is computed FROM the
-> matrix. Re-derive from raw artifacts only for rows the matrix leaves null.
+Re-derive a link from raw artifacts only when its field is null: `story` / `frs`
+/ `must_have` → `spec.md` / `product-spec.md`; `tasks` → `tasks.md`; `code` /
+`tests` → the implementation under `codebase_path`. A null field that cannot be
+back-filled is itself a gap to report. Result: one verification record per row.
 
----
+## Step 3: Run verification checks
 
-## Step 2: Build Verification Context
-
-**Iterate `traceability.yml` rows — do not re-derive the chain.** The matrix is the
-source the report is computed from. For each row in `rows[]`, read the links by
-**field name** directly:
-
-- `req` — canonical requirement id (V-Model / backfill rows only; null in the
-  standard forward flow)
-- `story` — user story (`US-*`)
-- `journeys` — journeys (`JRN-*`; `STEP-*`/`EDGE-*` nested under the `journeys:`
-  detail block)
-- `frs` — functional requirements (`FR-*`)
-- `must_have` — boolean (drives the Layer 3 must-have assertion)
-- `components` — design-system components (`CMP-*`)
-- `contracts` — FE↔BE contracts (`API-*`)
-- `tasks` — implementation tasks (`TASK-*`)
-- `code` — implementing code paths (filled by `implement`)
-- `tests` — test cases (`TC-*`; filled by `test-plan`/`test-run`)
-- `events` — telemetry events (`EVT-*`)
-- `status` — `planned | implemented | tested | verified`
-
-**Fall back to raw artifacts ONLY for null fields.** If a row leaves a field null,
-re-derive that single link from the source artifact:
-- null `story`/`frs`/`must_have` → re-read `spec.md` / `product-spec.md`
-- null `tasks` → re-read `tasks.md`
-- null `code`/`tests` → re-scan the implementation (`codebase_path`)
-
-Do **not** re-read raw artifacts for fields the matrix already populates. A null
-field that cannot be back-filled is itself a gap the report flags.
-
----
-
-## Step 3: Run Verification Checks
-
-> **Layers 1–4 iterate `traceability.yml` rows by field** (CF-6). Read `tasks`,
-> `code`, `tests`, `frs`, `story`, `components`, `contracts`, `events` from each row
-> directly; fall back to raw `spec.md`/`tasks.md` only for null fields (Step 2).
+Every finding cites specific files, lines or sections. Severity is proportional:
+CRITICAL for genuine implementation gaps or scope violations, WARNING for
+deviations that may be intentional. A check you cannot evaluate for lack of
+context is SKIPPED with the reason — never PASSED. Prioritise checks of the
+research-to-code chain over generic code quality.
 
 ### Layer 1: Code ↔ Tasks
 
-For each row in `rows[]`, cross-check its `tasks` against its `code`:
-- Every `TASK-*` in `row.tasks` has ≥1 implementing `code` path in `row.code`.
-- Every `code` path is reachable from a task (no `code` entry with an empty
-  `tasks` list on the same row).
-- Confirm each referenced `TASK-*` is marked `[x]` in `tasks.md`; if `[ ]` but
-  `code` exists → likely forgotten to mark.
+Per row: every `TASK-*` in `row.tasks` has ≥1 path in `row.code`; every `code`
+path is reachable from a task; every referenced task is `[x]` in `tasks.md` (a
+`[ ]` task with code was likely not marked). Null `tasks` → map via `tasks.md`.
 
-For any row with a null `tasks` field, fall back to `tasks.md` to map the
-requirement to its task(s).
+- `TASK-*` with no implementing code → ❌ CRITICAL
+- Task marked `[x]` with no code found → ❌ CRITICAL
 
-Flags:
-- `TASK-*` with no implementing `code` path → ❌ CRITICAL
-- Task marked `[x]` with no corresponding code found → ❌ CRITICAL
-
-Output: `CODE_TASKS_COVERAGE` — ratio of rows whose `tasks` all have `code`.
-
----
+Output `CODE_TASKS_COVERAGE`: the ratio of rows whose tasks all have code.
 
 ### Layer 2: Code ↔ Plan
 
-For each row, treat `frs` + `components` + `contracts` as the planned units of
-behavior and assert each is realized in `code`:
-- Every `FR-*` in `row.frs` is covered by ≥1 `code` path on the row.
-- Every `CMP-*`/`API-*` the row references has a corresponding `code` entry
-  (deeper conformance is Layers 8–9).
-- Any `code` path that maps to no row → candidate unplanned component (Layer 10).
+Per row, `frs` + `components` + `contracts` are the planned units: every `FR-*`
+is covered by ≥1 `code` path; every `CMP-*` / `API-*` has a code entry (deeper
+conformance is Layers 8–9); a code path mapping to no row is a candidate
+unplanned component (Layer 10). Null `frs` → the component list in `plan.md`.
 
-For a row with null `frs`, fall back to `plan.md` for the planned component list.
-
-Flags:
-- `FR-*` (or planned component) with no implementing `code` → ❌ CRITICAL
-- `code` not traceable to any `frs`/`row` → ⚠️ WARNING (scope creep — see Layer 10)
-- Structure differs from plan significantly → ⚠️ WARNING
-
----
+- `FR-*` or planned component with no code → ❌ CRITICAL
+- Code not traceable to any row / `frs` → ⚠️ WARNING (scope creep)
+- Structure differs significantly from the plan → ⚠️ WARNING
 
 ### Layer 3: Code/Tasks ↔ Stories (Must-Have assertion)
 
-For each `must_have: true` row, assert the full chain is present **by field**:
-- ≥1 `TASK-*` in `row.tasks`
-- ≥1 implementing `code` path in `row.code`
-- ≥1 `TC-*` in `row.tests` (when testing has run)
+Each `must_have: true` row has ≥1 `TASK-*`, ≥1 `code` path, and ≥1 `TC-*` (once
+testing has run). Each other row is implemented or explicitly deferred. Null
+`story` / `must_have` → priority and ACs from `spec.md`.
 
-For each non-must-have row: implemented (`code` present) or explicitly deferred.
+- Must-have row with no `tasks` → ❌ CRITICAL
+- Must-have row with no `code` → ❌ CRITICAL
+- Must-have row with no `tests` → ⚠️ WARNING
 
-For a row with a null `story`/`must_have`, fall back to `spec.md` to recover the
-story priority and acceptance criteria.
+**AC measurability.** Classify each acceptance criterion on a row's `story` /
+`frs` into exactly one bucket:
 
-Flags:
-- `must_have: true` row with no `tasks` → ❌ CRITICAL
-- `must_have: true` row with no `code` → ❌ CRITICAL
-- `must_have: true` row with no `tests` → ⚠️ WARNING
+- **executable** — a deterministic test / assertion decides it (a `TC-*` in
+  `row.tests`, an assertion in `row.code`, a numeric NFR signal); passes when
+  that artifact exists.
+- **judgeable** — subjective wording a deterministic test cannot reach ("error
+  message is descriptive", "empty state is friendly").
+- **unmeasurable** — neither ("fast enough" with no number, "users will like it").
 
-#### Every AC maps to a measurable criterion (v1.6, W5-E2)
+- Executable AC whose test / assertion is missing → ⚠️ WARNING
+- Unmeasurable AC → ❌ CRITICAL, plus a spec-tightening delta in the
+  "Suggested canonical-spec updates" carrier so `spec-merge` can sharpen it.
 
-Replace the old passive "AC not verifiable from code → WARNING" with an
-**explicit measurability classification**. For each acceptance criterion on a
-row's `story`/`frs`, classify it into exactly one bucket:
-
-- **executable** — a deterministic test/assertion can decide it (a `TC-*` in
-  `row.tests`, an assertion in `row.code`, a numeric NFR signal). PASS if that
-  artifact exists.
-- **judgeable** — subjective wording a deterministic test cannot reach (e.g.
-  "error message is descriptive", "empty state is friendly", "copy is concise").
-  Route these — and only these — to the OPTIONAL LLM-judge tier below.
-- **unmeasurable** — neither: the AC has no test, no assertion, AND is not
-  judgeable from the observable code/output (e.g. "fast enough" with no number,
-  "users will like it"). This is now a first-class **flag**, not a silent pass.
-
-Flags:
-- AC classified **executable** but its test/assertion is missing → ⚠️ WARNING
-- AC classified **unmeasurable** (no executable-or-judgeable criterion) →
-  ❌ CRITICAL (the spec is untestable as written — record it as a suggested
-  spec-tightening delta in the Layer-10 "Suggested canonical-spec updates"
-  carrier so `spec-merge` can sharpen the AC).
-
-#### OPTIONAL LLM-judge tier — subjective ACs only (v1.6, W5-E2)
-
-Gated, lowest-priority, and **off by default**. Run this tier ONLY when the
-config opts in:
-
-```yaml
-# config.yml
-verify:
-  ac_judge: false        # default off; set true to enable the subjective-AC LLM judge
-```
-
-When `verify.ac_judge: true`, for each AC bucketed **judgeable** above (and for
-NO other AC — never re-judge an `executable` AC a test already covers), evaluate
-the rendered/observed behavior against the AC wording and emit a verdict:
-
-- For UI-text ACs ("error message is descriptive"): read the actual string the
-  `code` path emits (the literal in the handler/component, or the message the
-  E2E test captured) and judge it against the criterion.
-- Verdict is advisory: `judge: pass | weak | fail` with a one-line rationale and
-  the exact evidence string cited.
-
-Flags (judge tier):
-- `judge: fail` on a `must_have` AC → ⚠️ WARNING (advisory — a human gate, not a
-  blocker; the LLM judge is non-deterministic by nature).
-- `judge: weak` → note only.
-
-> **Read-only & honesty:** the judge reads emitted strings/observed output; it
-> never edits code or promotes `status`. Its verdicts are advisory WARNING/notes,
-> never CRITICAL — only the deterministic **unmeasurable** classification above is
-> CRITICAL. Keep `verify.ac_judge` off in CI unless a reviewer wants it.
-
----
+When `verify.ac_judge: true` (default `false`), judge the **judgeable** ACs only,
+per [docs/reference/verify-full-layers.md](../docs/reference/verify-full-layers.md#layer-3--llm-judge-for-subjective-acs-verifyac_judge):
+`judge: fail` on a must-have AC → ⚠️ WARNING; `judge: weak` → note. Judge
+verdicts are never CRITICAL.
 
 ### Layer 4: spec.md ↔ product-spec.md
 
-Using the rows' `story`/`frs` plus the source specs, check the SpecKit spec
-against the approved product spec:
-- Every `must_have: true` row's `story` (`US-*`) appears in `spec.md`.
-- Every `FR-*` referenced by a row is present in `spec.md`.
-- Non-goals from product-spec are not implemented (no row/`code` for them).
-- Success criteria from product-spec are reflected in `spec.md`.
+From the rows' `story` / `frs` and the source specs: every must-have `US-*` and
+every referenced `FR-*` appears in `spec.md`; product-spec success criteria are
+reflected in `spec.md`; product-spec non-goals have no row or code. Re-read the
+specs only for null `story` / `frs` or to confirm a non-goal has no row.
 
-Re-read `spec.md`/`product-spec.md` only to resolve rows where `story`/`frs` is
-null or to confirm a non-goal has no row.
-
-Flags:
 - `US-*` in product-spec missing from spec.md → ⚠️ WARNING (spec drift)
-- NFR from product-spec missing from spec.md → ⚠️ WARNING
-- Scope creep: code implements something explicitly in product-spec "out of scope" → ❌ CRITICAL
-
----
+- NFR in product-spec missing from spec.md → ⚠️ WARNING
+- Code implements something the product-spec marks out of scope → ❌ CRITICAL
 
 ### Layer 5: Implementation ↔ Research Recommendations
 
-Spot-check key research recommendations against implementation:
-- Did implementation follow the UX pattern recommendation from ux-patterns.md?
-- Did integration approach match codebase-analysis.md recommendations?
-- Were anti-patterns from research avoided?
-
-This is advisory — ⚠️ WARNING only (user may have consciously deviated).
-
----
+Spot-check: the UX pattern recommended in `ux-patterns.md` was followed, the
+integration approach matches `codebase-analysis.md`, research anti-patterns were
+avoided. Advisory — ⚠️ WARNING only (the user may have deviated deliberately).
 
 ### Layer 6: Cross-link Integrity
 
-Check all document links are valid:
-- product-spec/README.md links all exist
-- feature README.md links all exist
-- spec.md references to product-spec/ are valid
-- No broken relative paths
-- Skip the transient / archived trees `.forge-dry-run/` and `_rewound/`
+Check the links in `product-spec/README.md`, the feature `README.md`, and
+`spec.md` → `product-spec/`, and every relative path; skip the transient /
+archived trees `.forge-dry-run/` and `_rewound/`.
 
-Flags:
 - Broken link → ⚠️ WARNING
-- Missing document referenced in README → ⚠️ WARNING
+- Document referenced in a README but missing → ⚠️ WARNING
 
----
+### Layer 7: Journey ↔ E2E Coverage
 
-### Layer 7: Journey ↔ E2E Coverage (v1.6, Theme H)
+From `journeys.yml` + `traceability.yml`:
 
-Using `journeys.yml` + `traceability.yml`:
-- Every Must-Have `JRN` has ≥1 `TC-E2E`/`TC-SMK`.
-- Every P0/P1 `EDGE` has a test case.
+- Must-Have `JRN` with no `TC-E2E` / `TC-SMK` → ❌ CRITICAL
+- P0/P1 `EDGE` with no test case → ❌ CRITICAL; P2/P3 without one → ⚠️ WARNING
 
-Flags:
-- Must-Have journey with no E2E test → ❌ CRITICAL
-- P0/P1 edge case with no test → ❌ CRITICAL; P2/P3 without test → ⚠️ WARNING
+### Layer 8: UI ↔ Design System
 
----
+From `component-map.yml` + `design-system/manifest.yml` + code:
 
-### Layer 8: UI ↔ Design System (v1.6, Theme E)
-
-Using `component-map.yml` + `design-system/manifest.yml` + code:
-- Every mapped region's component (`CMP-*`) is actually used at its `target_path`.
-- The built UI uses real design-system components (not ad-hoc re-implementations of
-  components that exist in the manifest).
-
-Flags:
-- Mapped component not found at its target path → ❌ CRITICAL
+- Mapped component (`CMP-*`) not used at its `target_path` → ❌ CRITICAL
 - UI re-implements a component that exists in the manifest → ⚠️ WARNING
 
----
+### Layer 9: FE ↔ BE Contract Drift
 
-### Layer 9: FE ↔ BE Contract Drift (v1.6, Theme F)
+Scope is **FE → contract → BE**; the handler → DB/model leg is out of scope.
+From the OpenAPI / AsyncAPI contracts and each row's `contracts`: every `API-*`
+referenced by a journey/row has a backend route/handler and a frontend client
+call, and both match the contract shape (path, method, payload).
 
-**Scope: FE → contract → BE only.** Assert the contract is honored from the
-frontend call to the backend handler. Do **not** assert a handler→DB/model leg —
-persistence is out of this contract's scope (CF-28).
+When `sync_verify.contract_differ: oasdiff`, diff the working-tree
+`contracts/openapi.yaml` against the last-approved baseline (the
+`gates[].reviewed_sha` of the last contract-touching gate, else `HEAD`) per
+[docs/reference/verify-full-layers.md](../docs/reference/verify-full-layers.md#layer-9--deterministic-contract-drift-diff-contract_differ-oasdiff);
+when `oasdiff` is not installed, write a SKIPPED row with the install hint. Use
+the prose checks only when `contract_differ` is unset.
 
-Using the API/event contracts (OpenAPI + AsyncAPI), and the `contracts` field on
-each row:
-- Every `API-*` contract referenced by a journey/row is implemented on the backend
-  (route/handler exists) AND called by the frontend (client call exists).
-- FE client calls and BE handlers match the contract shape (path, method, payload).
-
-#### Deterministic contract-drift diff (v1.6, W5-B4)
-
-When the config opts in with `contract_differ: oasdiff`, do not eyeball the
-contract — shell out to a real differ. `contracts/openapi.yaml` is the approved
-contract authored by `bridge`/`plan`; diff the **working-tree** copy against the
-**last-approved baseline** (the SHA the last contract-touching gate was reviewed
-against, else `HEAD`) to surface drift since approval. This is read-only and
-reproducible:
-
-```bash
-# config.yml → contract_differ: oasdiff   (default: unset → prose fallback below)
-SPEC={FEATURE_DIR}/contracts/openapi.yaml
-BASE_SHA=$(git -C {FEATURE_DIR} rev-parse HEAD)   # or gates[].reviewed_sha of the last contract gate
-
-# Breaking-change gate (non-zero exit ⇒ breaking drift since baseline):
-git -C {FEATURE_DIR} show "$BASE_SHA:contracts/openapi.yaml" > /tmp/openapi.base.yaml 2>/dev/null \
-  && oasdiff breaking /tmp/openapi.base.yaml "$SPEC" --fail-on ERR
-
-# Full structured diff (machine-readable, for the report rows):
-oasdiff diff /tmp/openapi.base.yaml "$SPEC" -f json
-```
-
-Map the output into the Layer-9 flags: each `oasdiff breaking` finding (removed
-endpoint, narrowed type, new required param) → ❌ CRITICAL; each non-breaking
-`oasdiff diff` change (added optional field, new endpoint) → ⚠️ WARNING noting
-the contract evolved since approval. If `oasdiff` is not installed, emit a
-SKIPPED row with the install hint (`go install github.com/oasdiff/oasdiff@latest`)
-rather than silently passing. **Fall back to the prose checks above ONLY when
-`contract_differ` is unset.**
-
-Flags:
-- Contract with no backend implementation, or FE call to an undefined contract →
-  ❌ CRITICAL
-- Shape mismatch (param/payload differs from contract) → ❌ CRITICAL
-- `oasdiff breaking` finding (when `contract_differ: oasdiff`) → ❌ CRITICAL
+- Contract with no backend implementation, or FE call to an undefined contract → ❌ CRITICAL
+- Shape mismatch (param / payload differs from the contract) → ❌ CRITICAL
+- `oasdiff breaking` finding → ❌ CRITICAL
 - Contract defined but unused → ⚠️ WARNING
 - `oasdiff diff` non-breaking change since approval → ⚠️ WARNING
 
----
-
-### Layer 10: Doc ↔ Code Reconciliation (v1.6, Theme G)
-
-Both directions, using the matrix + canonical `specs/` (if present):
-- Every documented requirement/endpoint/component maps to code (**unimplemented
-  docs**).
-- Every significant code path maps to a documented requirement/task
-  (**undocumented code** / orphan).
-
-#### Out-of-band commit provenance on orphans (v1.6, W5-C1)
-
-An undocumented code path is most actionable with *who/when* attached. For each
-orphan path, attach commit provenance and reverse-index it against the task log:
-
-```bash
-# 1. Commit provenance for the orphan path (read-only):
-git -C {FEATURE_DIR} log -1 --format=%h,%an -- <orphan/path>
-
-# 2. Reverse-index: is that SHA already accounted for by a task?
-#    Match the %h against task_log[].commit_sha on .forge-status.yml.
-```
-
-- If the path's last-commit SHA matches a `task_log[].commit_sha`, the code is
-  **task-traceable but doc-orphaned** (the task exists, the matrix/spec row does
-  not) — enrich the WARNING with `committed by {%an} in {%h}, task {T-id}`.
-- If no `task_log` entry claims that SHA, the path is a true **out-of-band**
-  change — enrich the WARNING with `committed by {%an} in {%h}, no task` and
-  **route it to the "Suggested canonical-spec updates" carrier (CF-5)** below so
-  `spec-merge` can decide whether to adopt or revert it.
-
-Flags:
-- Documented behavior with no implementing code → ❌ CRITICAL
-- Significant undocumented code path (no matrix row, no task) → ⚠️ WARNING,
-  enriched with `git log -1 --format=%h,%an` provenance + the `task_log`
-  reverse-index verdict above.
-- On drift, note the suggested canonical-spec update for `spec-merge` (Theme B) in
-  the report's "Suggested canonical-spec updates" subsection (below); every
-  out-of-band orphan (no matching `task_log` SHA) MUST appear there as an
-  `ADD FR-NNN` candidate with its `{%h},{%an}` provenance.
-
-> **Severity escalation (intentional, CF-35):** Layer 10 escalates the same doc↔code
-> drift conditions that `code-review` Dimension 5 flags up to CRITICAL/WARNING here.
-> This is the final gate — the phase-appropriate mapping is deliberate, not a
-> duplicate finding.
-
----
-
-### Layer 11: Constitution ↔ Code (v1.7, P1-C)
-
-The final standing-pattern check: does the implemented code honor the project
-**architecture constitution** (resilience, EDA, layering, security posture)? This
-is the verification-time counterpart of `sync-verify` Layer 10 and the standing
-re-assertion of `plan`'s one-shot compliance check.
-
-Read `constitution_path` from config (default `.specify/memory/constitution.md`).
-**If absent, skip** (`Layer 11: N/A — no constitution configured`) — not a finding.
-When present, check the feature's `code` paths against each mandated pattern
-(deterministic probe where the pattern allows — grep/AST for the wrapper symbol,
-the event-name convention, forbidden cross-layer imports — else an LLM read):
-
-- **CRITICAL** when code breaches a pattern the constitution marks MUST/mandatory.
-- **WARNING** for a SHOULD-level deviation or an uncertain non-deterministic read.
-- Reconcile with Layer 10 / `code-review` security so a single violation is not
-  triple-counted; cite the constitution section in the finding.
-
----
-
-## Step 4: Generate verify-report.md
-
-> **Emit into the unified gate surface (W5-A3).** In addition to `verify-report.md`,
-> append each CRITICAL/WARNING finding to `{FEATURE_DIR}/gate-review.md` under the
-> single `F-NNN` namespace with `source: verify-full` + `layer: <N>` and
-> `raised@{git-sha}` (read the current max `F-NNN` first). The Layer-10
-> "Suggested canonical-spec updates" rows are written to that section of
-> `gate-review.md` so `spec-merge` can consume them (CF-5). The `CRITICAL-/WARNING-NNN`
-> ids stay as in-document local labels. verify-full remains **read-only** w.r.t.
-> source code and traceability `status`. See
-> [docs/templates/gate-review.md](../docs/templates/gate-review.md).
-
-Write `{FEATURE_DIR}/verify-report.md`:
-
-```markdown
-# Verification Report: {Feature Name}
-
-> Generated: {date} | Product Forge Phase 7
-> Feature: `{feature-slug}`
-
-## Summary
-
-| Status | Count |
-|--------|-------|
-| ❌ CRITICAL | {N} |
-| ⚠️ WARNING  | {N} |
-| ✅ PASSED   | {N} |
-| ⏭️ SKIPPED  | {N} |
-
-**Overall verdict:** {PASS / PASS WITH WARNINGS / FAIL}
-
----
-
-## Layer 1: Code ↔ Tasks
-
-| Check | Status | Finding |
-|-------|--------|---------|
-| All tasks have verifiable code | ✅/⚠️/❌ | {detail} |
-| No unchecked tasks | ✅/⚠️/❌ | {detail} |
-| Task count matches implementation scope | ✅/⚠️/❌ | {detail} |
-
----
-
-## Layer 2: Code ↔ Plan
-
-| Planned Component | Implemented | Notes |
-|------------------|-------------|-------|
-| {component} | ✅/❌ | {path or note} |
-
----
-
-## Layer 3: User Stories ↔ Implementation
-
-| Story | Priority | Task Coverage | Test Coverage | AC Measurability | Judge (if on) | Status |
-|-------|----------|---------------|---------------|------------------|---------------|--------|
-| US-001: {title} | Must | ✅ | ✅/⚠️ | executable | — | ✅ PASS |
-| US-002: {title} | Must | ✅ | ❌ | judgeable | pass/weak/fail | ⚠️ WARN |
-| US-003: {title} | Must | ✅ | ✅ | unmeasurable | — | ❌ CRIT |
-
-> **AC Measurability** (W5-E2): `executable` (a test/assertion decides it),
-> `judgeable` (subjective — judged only when `verify.ac_judge: true`), or
-> `unmeasurable` (neither → CRITICAL, routed to spec-tightening delta).
-
----
-
-## Layer 4: spec.md ↔ product-spec.md Drift
-
-| Item | In Product Spec | In spec.md | Status |
-|------|----------------|------------|--------|
-| US-001 | ✅ | ✅ | ✅ Aligned |
-| FR-003 | ✅ | ⚠️ Partial | ⚠️ Drift |
-
----
-
-## Layer 5: Research Alignment
-
-| Recommendation | Followed | Notes |
-|---------------|----------|-------|
-| {UX pattern from ux-patterns.md} | ✅/⚠️ | {how it was applied or why deviated} |
-| {Integration approach from codebase-analysis.md} | ✅/⚠️ | |
-
----
-
-## Layer 6: Document Integrity
-
-| Check | Status |
-|-------|--------|
-| All README links valid | ✅/⚠️/❌ |
-| product-spec/README.md complete | ✅/⚠️/❌ |
-| research/README.md complete | ✅/⚠️/❌ |
-
----
-
-## Layer 7: Journey ↔ E2E Coverage
-
-| Journey / Edge | Test Case | Status |
-|----------------|-----------|--------|
-| JRN-001 (Must) | TC-E2E-001 | ✅ |
-| EDGE-001 (P1) | TC-E2E-002 | ✅/❌ |
-
-## Layer 8: UI ↔ Design System
-
-| Region | Component (CMP-) | Target path | Used? |
-|--------|------------------|-------------|-------|
-| save bar | CMP-Button | frontend:…/SaveBar.tsx | ✅/❌ |
-
-## Layer 9: FE ↔ BE Contract Drift
-
-| Contract (API-) | BE impl | FE call | Shape match | oasdiff (if on) | Status |
-|-----------------|---------|---------|-------------|-----------------|--------|
-| API-savePrefs | ✅ | ✅ | ✅ | no breaking | ✅ |
-
-> **oasdiff** column populated only when `contract_differ: oasdiff` (W5-B4):
-> `no breaking` / `BREAKING: {change}` / `non-breaking: {change}` / `SKIPPED (oasdiff not installed)`.
-
-## Layer 10: Doc ↔ Code Reconciliation
-
-| Item | Documented | In code | Provenance (%h,%an) | Task match | Status |
-|------|-----------|---------|---------------------|------------|--------|
-| FR-003 | ✅ | ✅ | — | — | ✅ |
-| {orphan code path} | ❌ | ✅ | `a1b2c3d,Jane Dev` | T014 | ⚠️ doc-orphan |
-| {orphan code path} | ❌ | ✅ | `e4f5g6h,Sam Eng` | none | ⚠️ out-of-band → delta |
-
-> **Provenance** from `git log -1 --format=%h,%an` (W5-C1); **Task match**
-> reverse-indexes the SHA against `task_log[].commit_sha`. Rows with `none` are
-> routed to the carrier below as `ADD FR-NNN` candidates.
-
-## Layer 11: Constitution ↔ Code
-
-| Mandated pattern (constitution §) | Probe | Status |
-|-----------------------------------|-------|--------|
-| {e.g. circuit-breaker on external calls (§3.2)} | grep wrapper symbol in new code | ✅ / ❌ CRITICAL |
-| {e.g. event naming convention (§4.1)} | grep emitted event names | ⚠️ WARNING |
-
-> N/A when no `constitution_path` file exists. Reconcile with Layer 10 / security
-> so one violation isn't double-counted; cite the constitution section.
-
-### Suggested canonical-spec updates (Theme G)
-
-> Drift between the canonical spec and observed code that `spec-merge` should
-> reconcile. One row per proposed delta; `spec-merge` consumes this section.
-
-| FR / domain | Current canonical text | Observed-from-code behavior | Proposed delta |
-|-------------|------------------------|-----------------------------|----------------|
-| FR-003 | {what the spec says} | {what the code actually does} | MODIFY FR-003: {proposed change} |
-| {domain} | {none — undocumented} | {observed behavior} | ADD FR-NNN: {proposed addition} |
-
----
-
-## Critical Issues (Must Fix Before Done)
-
-{if any ❌:}
-### CRITICAL-001
-- **Layer:** {layer name}
-- **Finding:** {what's wrong}
-- **Impact:** {why it matters}
-- **Suggested fix:** {how to resolve}
-
----
-
-## Warnings (Should Review)
-
-{if any ⚠️:}
-### WARNING-001
-- **Layer:** {layer name}
-- **Finding:** {what's different}
-- **Suggested action:** {optional fix or acknowledge}
-
----
-
-## Traceability Matrix
-
-Rendered directly from `traceability.yml` rows (live-schema columns):
-
-| req | story | journeys | frs | tasks | code | tests | events | status |
-|-----|-------|----------|-----|-------|------|-------|--------|--------|
-| REQ-001 | US-001 | JRN-001 | FR-001, FR-002 | T012, T013 | ✅ | TC-E2E-003 | EVT-prefs_saved | verified |
-| — | US-002 | JRN-002 | FR-003 | T014 | ✅ | ⚠️ none | — | implemented |
-
-> `req` is populated only for V-Model/backfill rows; the standard forward flow
-> keys on `frs` and leaves `req` null (`—`).
-
----
-
-## Conclusion
-
-{PASS}: All critical checks passed. Feature is fully traced from research through to code.
-{OR}
-{PASS WITH WARNINGS}: {N} warnings found. Review recommended but no blockers.
-{OR}
-{FAIL}: {N} critical issues must be resolved. Run `/speckit.product-forge.verify-full` again after fixes.
-
-```
-
----
-
-## Step 5: Present Report
-
-Show the user:
-```
-📊 Verification Complete: {Feature Name}
-
-Results:
-  ❌ CRITICAL: {N}   ← Must fix before done
-  ⚠️ WARNING:  {N}   ← Review recommended
-  ✅ PASSED:   {N}
-  ⏭️ SKIPPED:  {N}
-
-Verdict: {PASS / PASS WITH WARNINGS / FAIL}
-
-Full report: {FEATURE_DIR}/verify-report.md
-```
-
-Write the Phase Digest (section below) now — before any status write.
-
-Then present the **Gate** prompt from
-[interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)
-(`{Phase}` = Verify Full, `{next phase}` = Test Plan). The approve option is
-labelled **Acknowledge** when warnings remain, and is **not offered** while
-CRITICAL > 0 — then **Revise** (fix the CRITICALs, re-run verify-full) is the
-recommended first option. Skip Test Plan is offered only when CRITICAL = 0, Test
-Plan is `opt` for the feature's mode, and `require_testing` is not `true`
-([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)); in `express`/`lite` the
-next phase is not in scope, so the option is dropped.
-
-Map the answer per [runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+### Layer 10: Doc ↔ Code Reconciliation
+
+Both directions, from the matrix + canonical `specs/` when present: every
+documented requirement / endpoint / component maps to code (unimplemented docs),
+and every significant code path maps to a documented requirement or task
+(undocumented code, an orphan).
+
+For each orphan, attach provenance and reverse-index it against the task log:
+
+1. `git -C {FEATURE_DIR} log -1 --format=%h,%an -- <orphan/path>`
+2. Match the `%h` against `task_log[].commit_sha` in `.forge-status.yml`:
+   - match → task-traceable but doc-orphaned: enrich the WARNING with
+     `committed by {%an} in {%h}, task {T-id}`;
+   - no match → out-of-band change: enrich the WARNING with
+     `committed by {%an} in {%h}, no task`, and add it to the
+     "Suggested canonical-spec updates" carrier as an `ADD FR-NNN` candidate with
+     its `{%h},{%an}` provenance, so `spec-merge` decides to adopt or revert it.
+
+- Documented behaviour with no implementing code → ❌ CRITICAL
+- Significant undocumented code path (no matrix row, no task) → ⚠️ WARNING with
+  the provenance and reverse-index verdict
+- Every doc ↔ code drift gets a suggested canonical-spec update row; every
+  out-of-band orphan appears there.
+
+This layer deliberately escalates the doc ↔ code drift that `code-review`
+Dimension 5 flags; at the final gate the CRITICAL / WARNING mapping is
+intentional, not a duplicate.
+
+### Layer 11: Constitution ↔ Code
+
+The verification-time counterpart of `sync-verify` Layer 10: does
+the code honour the project architecture constitution (resilience, EDA,
+layering, security posture)? When no file exists at `constitution_path` (default
+`.specify/memory/constitution.md`), report `Layer 11: N/A — no constitution
+configured` (not a finding). Otherwise check the feature's `code` paths against
+each mandated pattern — a deterministic probe where possible (grep / AST for the
+wrapper symbol, the event-name convention, forbidden cross-layer imports), else
+an LLM read.
+
+- Code breaches a pattern the constitution marks MUST / mandatory → ❌ CRITICAL
+- SHOULD-level deviation, or an uncertain LLM read → ⚠️ WARNING
+- Cite the constitution section; reconcile with Layer 10 and `code-review`
+  security so one violation counts once.
+
+Result of Step 3: every layer has a status (PASSED / findings / SKIPPED / N/A).
+
+## Step 4: Write the report and gate-review entries
+
+Write `{FEATURE_DIR}/verify-report.md` from
+[docs/templates/verify-full-report.md](../docs/templates/verify-full-report.md):
+summary counts, per-layer tables for Layers 1–11, the
+"Suggested canonical-spec updates" table, critical issues, warnings, the
+traceability matrix rendered from `traceability.yml`, and the conclusion.
+Verdict: **FAIL** when CRITICAL > 0, **PASS WITH WARNINGS** when only warnings
+remain, else **PASS**.
+
+Then append each CRITICAL / WARNING finding to `{FEATURE_DIR}/gate-review.md`
+under the single `F-NNN` namespace (read the current max `F-NNN` first) with
+`source: verify-full`, `layer: <N>` and `raised@{git-sha}`, and write the
+"Suggested canonical-spec updates" rows to that section of `gate-review.md` for
+`spec-merge` (see [gate-review.md](../docs/templates/gate-review.md)).
+`CRITICAL-NNN` / `WARNING-NNN` stay as local labels inside `verify-report.md`.
+
+## Step 5: Present, digest and gate
+
+1. Show the counts (❌ CRITICAL, ⚠️ WARNING, ✅ PASSED, ⏭ SKIPPED), the verdict
+   and the report path `{FEATURE_DIR}/verify-report.md`.
+2. Write `{FEATURE_DIR}/verify/digest.md` from
+   [phase-digest.md](../docs/templates/phase-digest.md):
+   - **Key decisions** — the verdict (clean / blocked) and the CRITICAL findings
+     that drove it.
+   - **Artifacts produced** — `verify-report.md`.
+   - **Open risks** — WARNING findings acknowledged but not fixed, with reason.
+   - **Handoff notes** — what test-plan and release-readiness should watch for.
+3. Gate: `{Phase}` = Verify Full, `{next phase}` = Test Plan. The approve option
+   is labelled **Acknowledge** when warnings remain and is **not offered** while
+   CRITICAL > 0 — then **Revise** (fix the CRITICALs, re-run verify-full) is the
+   recommended first option. Offer Skip Test Plan only when CRITICAL = 0, Test
+   Plan is `opt` for the mode, and `require_testing` is not `true`
+   ([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)); in `express` / `lite`
+   the next phase is out of scope, so the option is dropped.
 
 | Option | Decision | Status |
 |--------|----------|--------|
 | Approve (all passed) | `approved` | `phases.verify.status: completed` |
 | Acknowledge (warnings only) | `approved_with_conditions` (`conditions` = the acknowledged `WARNING-*` ids) | `phases.verify.status: completed` |
-| Skip Test Plan | `skipped` + `skip_reason` (ask when `require_skip_reason: true`) | `phases.verify.status: completed`; `phases.test_plan.status: skipped` + `skip_reason` |
+| Skip Test Plan | `skipped` + `skip_reason` (asked when `require_skip_reason: true`) | `phases.verify.status: completed`; `phases.test_plan.status: skipped` + `skip_reason` |
 | Revise | `revised` | `phases.verify.status: in_progress` |
 | Rollback | `rolled_back` + `rolled_back_to` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
 | Abort | `aborted` | unchanged |
-
-Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
 
 ```yaml
 phases:
@@ -690,51 +307,28 @@ phases:
     digest_path: "verify/digest.md"
 ```
 
-Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
-run only**: append one `gates[]` entry (`phase: verify`, the decision, plus
-`conditions` / `skip_reason` / `rolled_back_to` as applicable). When `$ARGUMENTS`
-contains `--from-forge`, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return the outcome and the
-CRITICAL / WARNING / PASSED counts to the orchestrator, which writes the entry.
+The `gates[]` entry has `phase: verify`, the decision, and `conditions` /
+`skip_reason` / `rolled_back_to` as applicable.
 
-On `approved`, show the completion summary:
-```
-🎉 Feature Complete: {Feature Name}
+On `approved`, show the completion summary: *Feature complete: {Feature Name}*,
+the verified chain Research ✅ → Product Spec ✅ → spec.md ✅ → Plan ✅ → Tasks ✅
+→ Code ✅, *All {N} checks passed*, and the report path.
 
-Full traceability chain verified:
-  Research    ✅  →  Product Spec  ✅  →  spec.md  ✅
-  Plan        ✅  →  Tasks         ✅  →  Code     ✅
+## Done when
 
-All {N} checks passed.
-Report saved: verify-report.md
-```
-
----
-
-## Phase Digest (required)
-
-On every run, write `{FEATURE_DIR}/verify/digest.md` using the template at
-[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) **before** the
-Step 5 status write, and record its path as `phases.verify.digest_path` in that
-same write.
-
-The digest must include:
-- **Key decisions** — overall verdict (clean / blocked), which CRITICAL findings drove the verdict.
-- **Artifacts produced** — `verify-report.md`.
-- **Open risks** — WARNING-level findings that were acknowledged but not fixed, with reason.
-- **Handoff notes** — what test-plan and release-readiness should watch for.
-
-The orchestrator refuses to mark Phase 7 complete until `digest.md` exists.
-See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
-
----
-
-## Verification Principles
-
-1. **Read-only.** Never modify source files. Only write `verify-report.md`.
-   In particular, verify-full does **not** promote a traceability row's `status`
-   (CF-18): `test-run` sets `status: tested`; `release-readiness`/`spec-merge` set
-   `status: verified`. verify-full reads `status` but never writes it.
-2. **Evidence-based.** Every finding must cite specific lines, files, or sections.
-3. **Proportional severity.** CRITICAL only for genuine implementation gaps or scope violations. Warnings for deviations that may be intentional.
-4. **Honest about gaps.** If you cannot verify a check due to missing context, mark as SKIPPED with reason — not PASSED.
-5. **Traceability focus.** The unique value of Product Forge is the research-to-code chain. Prioritize checks that verify this chain over generic code quality.
+- The pre-gate ran (or its skip / WARN is noted) and its `errors` count as CRITICAL.
+- Every one of Layers 1–11 has a status in `verify-report.md`: PASSED, findings
+  with cited evidence, SKIPPED with a reason, or N/A (Layer 11 without a
+  constitution).
+- Every unmeasurable AC and every out-of-band orphan has a row in
+  "Suggested canonical-spec updates", in both the report and `gate-review.md`.
+- Every CRITICAL / WARNING finding is in `gate-review.md` as an `F-NNN` with
+  `source: verify-full` and its layer.
+- No source file and no traceability `status` was changed (`test-run` sets
+  `tested`; `release-readiness` / `spec-merge` set `verified`).
+- `verify/digest.md` is written before the status write.
+- Standalone: the gate was shown (no approve option while CRITICAL > 0), the
+  decision recorded in `gates[]`, and `phases.verify` set from the table.
+  `--from-forge`: the verdict and CRITICAL / WARNING / PASSED counts are returned
+  to forge, with no gate prompt, no `phases.verify.status` and no `gates[]` entry
+  (`verify/digest.md` and `digest_path` are still written).

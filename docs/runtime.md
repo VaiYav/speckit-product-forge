@@ -61,9 +61,13 @@ this section disagree, this section wins (runtime precedence).
    [Gate template](./templates/interaction-prompts.md#gate-after-every-phase) and
    records the decision ([§6.1](#61-gate-ownership)), setting status from it
    ([§6.2](#62-status-follows-the-decision)). With `--from-forge`, the command
-   does its work and writes its own data fields, then **returns** the outcome
-   summary and any gate extras to forge — forge shows the single gate and writes
-   status and the `gates[]` entry.
+   writes its artifacts, its digest (`digest_path`) and its own data fields, sets
+   no `phases.<key>.status`, appends no `gates[]` entry, shows no gate prompt,
+   and **returns** the outcome summary and any gate extras to forge — forge shows
+   the single gate and writes status and the entry. Commands that own no gated
+   phase (cross-cutting and supporting commands such as `change-request`,
+   `api-docs`, `security-check`, `retrospective`) skip this rule; their steps say
+   what they record.
 9. **Questions.** Every question to the user is a structured prompt
    ([interaction.md](./interaction.md)): 2–4 labelled options, the recommended one
    first, free text allowed, one decision per prompt.
@@ -71,10 +75,12 @@ this section disagree, this section wins (runtime precedence).
     ([§1A](#1a-locating-bundled-scripts-plugin_root)); when the script is missing,
     print a one-line WARN and continue with the documented manual fallback.
 11. **Hand-off.** The final message names the next command for the feature's
-    mode (from [phase-map.yml](./schema/phase-map.yml)) as a `Next step:` line.
+    mode (from [phase-map.yml](./schema/phase-map.yml)) as a `Next step:` line
+    when the command has one.
 
-Read-only commands (`status`, `retrieve`, `portfolio`, `catalog --check`,
-`sync-verify` without `--fix`) apply rules 1–3 and 9–11 only.
+Read-only commands (`status`, `retrieve`, `portfolio`, `catalog --check`) apply
+rules 1–3 and 9–11 only. `sync-verify` without `--fix` changes no artifact; its only
+status write is the `sync_runs` block (rule 6).
 
 ---
 
@@ -428,21 +434,23 @@ Before starting any delegation:
 ### 5.1 Automatic quick sync
 
 If `auto_sync_between_phases: true` (default), the orchestrator runs a
-lightweight sync-verify between every phase transition. No separate command
-delegation is needed — the orchestrator handles it internally.
+lightweight sync-verify after each phase it finishes, before that phase's gate,
+with the layers below (keyed by the phase just finished, in every mode; a layer
+whose artifacts the mode never produces is N/A). No separate command delegation
+is needed.
 
-| Transition | Sync Layers |
-|------------|-------------|
-| Phase 1 → Phase 2 | (none — research is input) |
-| Phase 2 → Phase 3 | Layer 1 (research ↔ product-spec) |
-| Phase 3 → Phase 4 | Layer 1 |
-| Phase 4 → Phase 5 | Layer 2 (product-spec ↔ spec.md) |
-| Phase 5 → Phase 5B | Layer 3 (spec.md ↔ plan.md) |
-| Phase 5B → Phase 5C | Layer 4 (plan.md ↔ tasks.md) |
-| Phase 5C → Phase 6 | Layers 3, 4 |
-| Phase 6 → Phase 6B | Layers 5, 6, 8, 9, 10 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code, constitution ↔ code) |
-| Phase 6B → Phase 7 | Full (all 10 layers) |
-| Phase 7 → Phase 8A | Layer 7 (cross-links only) |
+| Phase just finished | Sync Layers |
+|---------------------|-------------|
+| Research | (none — research is input) |
+| Product Spec | Layer 1 (research ↔ product-spec) |
+| Revalidation | Layer 1 |
+| Bridge | Layer 2 (product-spec ↔ spec.md) |
+| Plan | Layer 3 (spec.md ↔ plan.md) |
+| Tasks | Layer 4 (plan.md ↔ tasks.md) |
+| Pre-Impl Review | Layers 3, 4 |
+| Implement | Layers 5, 6, 8, 9, 10 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code, constitution ↔ code) |
+| Code Review | Full (all 10 layers) |
+| Verify Full | Layer 7 (cross-links only) |
 
 ### 5.2 Quick-sync behavior
 

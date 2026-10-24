@@ -1,549 +1,299 @@
 ---
 name: speckit.product-forge.sync-verify
 description: >
-  Cross-cutting artifact consistency checker. Verifies alignment across ALL lifecycle
-  layers — research ↔ product-spec ↔ spec.md ↔ plan.md ↔ tasks.md ↔ code.
-  Detects forward drift (earlier artifacts not reflected in later) and backward drift
-  (later decisions that should update earlier artifacts). Runnable between ANY phases.
-  Human-in-the-loop for every CRITICAL/WARNING resolution.
-  Use: "sync-verify", "check consistency", "/speckit.product-forge.sync-verify"
+  Checks cross-artifact drift across ten layers, from research through spec, plan,
+  tasks and code to contracts and the constitution, then resolves each CRITICAL or
+  WARNING with human approval. Run between any phases; forge calls it with `--quick`.
 ---
 
 # Product Forge — Sync & Verify
 
-You are the **Artifact Consistency Analyst** for Product Forge.
-Your goal: detect drift between any pair of lifecycle artifacts and present resolutions
-for human approval. You are strictly **read-only** until the user approves a resolution.
+You are the **Artifact Consistency Analyst**. You detect drift between pairs of
+lifecycle artifacts, write `sync-report.md`, and present each resolution for
+approval. You modify nothing until the user approves that item.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Parse the input:
-1. **Feature slug** (e.g., "push-notifications") → target that feature (resolved to `FEATURE_DIR` via the contract's `resolve(slug)`, [docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract))
-2. **`--quick`** → run only layers relevant to the current phase transition (used by forge orchestrator)
-3. **`--layer N`** → run only layer N (1–10)
-4. **`--fix`** → after reporting, apply approved resolutions (default: report only)
-5. **Empty** → enumerate features (contract `enumerate()`, [docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) and ask which to check, then run full 10-layer scan
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-`sync-report.md` / `.json` go under `{FEATURE_DIR}/.forge-dry-run/sync_verify/`,
-`--fix` applies nothing (resolutions are listed as `would-modify`), and
-`sync_runs` is not written.
+- **Phase key:** none — records no phase status and no gate entry; owns only the
+  `sync_runs` block.
+- **Config keys:** `constitution_path`, `sync_verify.contract_differ`,
+  `sync_verify.contract_regen`, `sync_verify.drift_budget`,
+  `sync_verify.auto_resolve` (`cosmetic`).
+- **Writes:** `{FEATURE_DIR}/sync-report.md`, `{FEATURE_DIR}/sync-report.json`,
+  `sync_runs`; with `--fix`, the approved edits to the target artifacts.
+- **Contract deltas:**
+  - Flags: `--quick` (forge transitions, see [Quick mode](#quick-mode---quick)),
+    `--layer N` (run only layer N, 1–10), `--fix` (apply approved resolutions;
+    default is report only). With no slug, ask which feature, then run the full
+    10-layer scan.
+  - `sync_runs` is written on every run (also without `--fix`), through the
+    status-write procedure.
+  - `--dry-run`: the reports go under `{FEATURE_DIR}/.forge-dry-run/sync_verify/`,
+    `--fix` applies nothing (resolutions are listed as `would-modify`), and
+    `sync_runs` is not written.
 
----
+## Step 1: Inventory artifacts
 
-## Step 0: Load Context
+Read `{FEATURE_DIR}/.forge-status.yml` for the current phase, then check which
+artifacts exist:
 
-1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
-   Keys used: `features_dir`, `storage_strategy`, `constitution_path`,
-   `sync_verify.*` (`contract_differ`, `contract_regen`, `drift_budget`, `auto_resolve`).
-2. Read `{FEATURE_DIR}/.forge-status.yml` for current phase state
-3. Determine which artifacts exist (only check layers where both sides are present)
+| Artifact | Path | Layers |
+|----------|------|--------|
+| research/ | `{FEATURE_DIR}/research/README.md` | 1 |
+| product-spec/ | `{FEATURE_DIR}/product-spec/README.md` | 1, 2 |
+| spec.md | `{FEATURE_DIR}/spec.md` | 2, 3, 6 |
+| plan.md | `{FEATURE_DIR}/plan.md` | 3, 4 |
+| tasks.md | `{FEATURE_DIR}/tasks.md` | 4, 5 |
+| Code files | file paths of completed tasks in tasks.md | 5, 6 |
+| pre-impl-review.md, code-review.md | `{FEATURE_DIR}/…` | supplementary |
+| All .md files | cross-link targets | 7 |
+| contracts/ | `{FEATURE_DIR}/contracts/openapi.yaml`, `{FEATURE_DIR}/contracts/asyncapi.yaml` | 8 |
+| traceability.yml | `{FEATURE_DIR}/traceability.yml` | 8, 9 |
+| specs/ (canonical) | `{FEATURE_DIR}/specs/` | 9 |
+| constitution | `constitution_path` (default `.specify/memory/constitution.md`) | 10 |
 
----
+Run a layer only when both of its sides exist; list every skipped layer with
+the reason. Result: the set of layers to run (all applicable, the `--layer N`
+layer, or the `--quick` set).
 
-## Step 1: Inventory Available Artifacts
+## Step 2: Run layer checks
 
-Check existence and load metadata for each artifact:
-
-| Artifact | Path | Required for Layers |
-|----------|------|-------------------|
-| research/ | `{FEATURE_DIR}/research/README.md` | Layer 1 |
-| product-spec/ | `{FEATURE_DIR}/product-spec/README.md` | Layers 1, 2 |
-| spec.md | `{FEATURE_DIR}/spec.md` | Layers 2, 3, 6 |
-| plan.md | `{FEATURE_DIR}/plan.md` | Layers 3, 4 |
-| tasks.md | `{FEATURE_DIR}/tasks.md` | Layers 4, 5 |
-| Code files | From tasks.md completed task file paths | Layers 5, 6 |
-| pre-impl-review.md | `{FEATURE_DIR}/pre-impl-review.md` | Supplementary |
-| code-review.md | `{FEATURE_DIR}/code-review.md` | Supplementary |
-| All .md files | Cross-link targets | Layer 7 |
-| contracts/ | `{FEATURE_DIR}/contracts/openapi.yaml`, `{FEATURE_DIR}/contracts/asyncapi.yaml` | Layer 8 |
-| traceability.yml | `{FEATURE_DIR}/traceability.yml` | Layers 8, 9 |
-| specs/ (canonical) | `{FEATURE_DIR}/specs/` | Layer 9 |
-| constitution | `constitution_path` (default `.specify/memory/constitution.md`) | Layer 10 |
-
-Skip layers where either side doesn't exist yet. Report skipped layers.
-
----
-
-## Step 2: Run Layer Checks
+Each layer has a **forward** check (earlier artifact reflected in the later one)
+and a **backward** check (later decisions consistent with, or missing from, the
+earlier one); keep the direction on each finding, since the fix strategy
+differs. Every finding cites the text from both source and target.
 
 ### Layer 1: research/ ↔ product-spec/
 
-**Forward check — Research findings reflected in spec?**
-- Extract key findings from `research/competitors.md` (top patterns, gaps identified)
-- Extract key findings from `research/ux-patterns.md` (recommended interactions, anti-patterns)
-- Extract findings from `research/codebase-analysis.md` (integration points, reusable components)
-- For each finding: search `product-spec/product-spec.md` for corresponding section or reference
-- **DRIFTED** if a major research finding has no trace in product spec
-
-**Backward check — Spec decisions consistent with research?**
-- Extract feature decisions from `product-spec/product-spec.md` (chosen approach, rejected alternatives)
-- Check against research recommendations
-- **DRIFTED** if spec contradicts a research recommendation without documented rationale
+- Forward: key findings from `research/competitors.md` (top patterns, gaps),
+  `research/ux-patterns.md` (recommended interactions, anti-patterns) and
+  `research/codebase-analysis.md` (integration points, reusable components) each
+  trace to a section of `product-spec/product-spec.md` → **DRIFTED** when a major
+  finding has no trace.
+- Backward: product-spec decisions (chosen approach, rejected alternatives) agree
+  with research recommendations → **DRIFTED** when the spec contradicts one
+  without documented rationale.
 
 ### Layer 2: product-spec/ ↔ spec.md
 
-**Forward check — Product spec fully captured?**
-- Extract all Must Have user stories from `product-spec/product-spec.md`
-- Extract all journeys (JRN/STEP/EDGE) from `product-spec/journeys/journeys.yml`
-- For each: verify corresponding US-NNN exists in `spec.md` with matching acceptance criteria
-- **CRITICAL** if a Must Have story is missing from spec.md
-- **WARNING** if acceptance criteria differ between product-spec and spec.md
-
-**Backward check — spec.md scope creep?**
-- Extract all US-NNN from `spec.md`
-- For each: verify it traces back to a product-spec user story
-- **WARNING** if spec.md contains stories not present in product-spec (scope added during bridge)
+- Forward: every Must Have user story in `product-spec/product-spec.md` and every
+  journey (JRN/STEP/EDGE) in `product-spec/journeys/journeys.yml` has a matching
+  `US-NNN` in `spec.md` → **CRITICAL** when a Must Have story is missing;
+  **WARNING** when acceptance criteria differ.
+- Backward: every `US-NNN` in `spec.md` traces to a product-spec story →
+  **WARNING** for stories added during bridge (scope creep).
 
 ### Layer 3: spec.md ↔ plan.md
 
-**Forward check — All requirements have a plan section?**
-- Extract FR-NNN and US-NNN (Must Have) from `spec.md`
-- For each: search `plan.md` for corresponding section, architecture decision, or implementation note
-- **WARNING** if a Must Have requirement has no plan coverage
-
-**Backward check — Plan doesn't exceed spec scope?**
-- Extract all implementation components from `plan.md`
-- For each: verify it maps to a spec.md requirement
-- **WARNING** if plan.md includes work not traceable to spec.md
+- Forward: every `FR-NNN` and Must Have `US-NNN` has a plan section, architecture
+  decision or implementation note → **WARNING** when uncovered.
+- Backward: every plan component maps to a spec requirement → **WARNING** for
+  untraceable plan work.
 
 ### Layer 4: plan.md ↔ tasks.md
 
-**Forward check — All plan items have tasks?**
-- Extract plan sections and components from `plan.md`
-- For each: verify at least one task in `tasks.md` covers it
-- **WARNING** if a plan section has zero corresponding tasks
-
-**Backward check — No orphan tasks?**
-- Extract all tasks from `tasks.md`
-- For each: verify it references a plan.md section or spec.md requirement
-- **WARNING** if a task has no traceability to plan or spec
+- Forward: every plan section / component has ≥1 task → **WARNING** for a section
+  with zero tasks.
+- Backward: every task references a plan section or spec requirement →
+  **WARNING** for an orphan task.
 
 ### Layer 5: tasks.md ↔ Code
 
-**Forward check — Completed tasks have code?**
-- Extract all `[x]` completed tasks from `tasks.md`
-- For each completed task with file paths: verify those files exist and contain relevant changes
-- **CRITICAL** if a completed task's target files don't exist
-
-**Backward check — Code doesn't implement unplanned work?**
-- List all files modified during implementation (from `implementation-log.md` or git diff if available)
-- For each modified file: verify it's referenced by at least one task
-- **WARNING** if code changes exist with no corresponding task
+- Forward: every `[x]` task's target files exist and contain relevant changes →
+  **CRITICAL** when a completed task's files are missing.
+- Backward: every file modified during implementation (from
+  `implementation-log.md`, or git diff when available) is referenced by ≥1 task →
+  **WARNING** for code changes with no task.
 
 ### Layer 6: spec.md ↔ Code (end-to-end)
 
-**Forward check — All Must Have stories implemented?**
-- Extract Must Have US-NNN with acceptance criteria from `spec.md`
-- For each: search implementation for evidence of implementation (file references, function names, test coverage)
-- **CRITICAL** if a Must Have story has no implementation evidence
-
-**Backward check — No unrequired features?**
-- Identify major code modules/features implemented
-- For each: verify it traces to a spec.md requirement
-- **WARNING** if implemented features have no spec backing
+- Forward: every Must Have `US-NNN` shows implementation evidence (file
+  references, function names, test coverage) → **CRITICAL** when none.
+- Backward: every major implemented module traces to a spec requirement →
+  **WARNING** for features with no spec backing.
 
 ### Layer 7: Cross-link Integrity
 
-- Scan all `.md` files in FEATURE_DIR for markdown links `[text](path)` — skip the
-  transient / archived trees `.forge-dry-run/` and `_rewound/`
-- Verify each link target exists
-- **WARNING** for each broken link
-- Check all document navigation headers (`> Related:`) are consistent
+Scan every `.md` file in `FEATURE_DIR` for `[text](path)` links, skipping the
+transient / archived trees `.forge-dry-run/` and `_rewound/`. **WARNING** for
+each broken link target; check that the `> Related:` navigation headers are
+consistent.
 
-### Layer 8: FE ↔ BE Contract Drift (v1.6, Theme F)
+### Layer 8: FE ↔ BE Contract Drift
 
-Load the API/event contracts (`contracts/openapi.yaml` + `contracts/asyncapi.yaml`)
-and cross-check against the FE and BE implementation. The contract is the single
-source of truth: **FE → contract → BE** (no DB leg).
+The contracts (`contracts/openapi.yaml` + `contracts/asyncapi.yaml`) are the
+single source of truth: **FE → contract → BE**, no DB leg.
 
-**Forward check — every contract is implemented and consumed?**
-- For each `API-*` contract referenced by a journey/row (use `traceability.yml`
-  when present; fall back to the contract files directly):
-  - Verify a backend route/handler implements it (BE impl exists).
-  - Verify a frontend client call invokes it (FE call exists).
-  - Verify the FE call and BE handler match the contract shape (path, method,
-    payload/params, status codes).
-- **CRITICAL** if a contract has no backend implementation, or a FE call targets
-  an undefined contract.
-- **CRITICAL** if the FE call or BE handler shape differs from the contract
-  (path/method/payload mismatch).
+- Forward: for each `API-*` referenced by a journey/row (from `traceability.yml`,
+  else the contract files), a backend route/handler implements it, a frontend
+  client call invokes it, and both match the contract shape (path, method,
+  payload/params, status codes) → **CRITICAL** for a contract with no backend
+  implementation, a FE call to an undefined contract, or a shape mismatch.
+- Backward: every defined `API-*` is referenced by ≥1 journey/row and reached
+  FE→BE → **WARNING** for a dead contract.
 
-**Backward check — contract defined but unused?**
-- For each `API-*` defined in the contracts: verify it is referenced by at least
-  one journey/row and reached by FE→BE.
-- **WARNING** if a contract is defined but never used (dead contract).
+**Executable differ (OpenAPI only).** When `sync_verify.contract_differ: oasdiff`,
+a regen source is configured, and `oasdiff` is on `PATH`, replace the prose
+shape check with the deterministic differ in
+[docs/reference/sync-verify-contract-differ.md](../docs/reference/sync-verify-contract-differ.md):
+breaking changes → CRITICAL, non-breaking divergence → WARNING, both as
+evidence for Step 5 (the differ never fails a gate on its own). Otherwise use
+the prose check and record the fallback reason in the Evidence.
 
-#### Executable contract differ (v1.6, W5-B4)
+### Layer 9: Doc ↔ Code Reconciliation
 
-The forward/backward shape checks above are an LLM read. When the project
-opts in, run a **deterministic OpenAPI differ** instead, so contract drift is
-a tool exit code, not a prose judgement. Read `sync_verify.contract_differ`
-from the effective config (Step 0):
+Use `traceability.yml` + the canonical `specs/` when present; read raw artifacts
+only where the matrix has no row.
 
-```yaml
-sync_verify:
-  contract_differ: none          # none (default) | oasdiff
-  contract_regen:                # only used when contract_differ != none
-    cmd: ""                      # command that emits the code-derived OpenAPI spec to stdout
-    out: ".forge-tmp/openapi.from-code.yaml"   # temp path the cmd writes to (NEVER inside contracts/)
-```
+- Forward: every documented requirement / endpoint / component (matrix row,
+  `FR-*`, `API-*`, `CMP-*`) maps to implementing code → **CRITICAL** for
+  documented behaviour with no code.
+- Backward: every significant code path maps to a matrix row or a task in
+  `tasks.md` → **WARNING** for an orphan.
+- On drift, note the suggested canonical-spec update for `spec-merge`.
 
-**Decision rule (OpenAPI only — `asyncapi.yaml`/events stay on the prose path):**
+**Attribute every orphan** with the commit and author that introduced it:
 
-- `contract_differ: oasdiff` **AND** a regen source is configured (`contract_regen.cmd`
-  is set, or `contract_regen.out` already exists from the build) **AND** `oasdiff`
-  is on `PATH` → run the differ.
-- Otherwise (default `none`, no regen source, or `oasdiff` missing) → fall back
-  to the LLM prose check above. Note the fallback reason in the finding evidence.
+1. Normalise the path: strip a `workspace:` or `workspace/` prefix from
+   `task_log[].paths` entries (e.g. `back/src/…`, `backend:src/…`) to a
+   repo-relative path before any git call — git returns nothing for prefixed paths.
+2. When a `task_log[]` entry's `paths` contains the orphan, take its `commit_sha`
+   and resolve the author: `git show -s --format=%h,%an "$TASK_SHA"` (a task
+   touched the file but it has no doc/matrix trace).
+3. Otherwise ask git for the last touch: `git log -1 --format=%h,%an -- "$REPO_PATH"`.
+4. When git returns nothing (uncommitted edit), attribute it as
+   `uncommitted / working-tree`.
 
-When the differ runs, regenerate the code-derived spec to the temp path, then
-diff it against the committed contract (the committed contract is the base/truth):
+Carry `commit: {sha}` and `author: {name}` into the DRIFT Evidence, e.g.
+*"orphan `src/lib/rate-limit.ts` — no matrix row, no task — introduced by
+`a1b2c3d` (J. Doe)"*, so the suggested canonical-spec update names a real author.
 
-```bash
-# 1. Regenerate the OpenAPI spec FROM the running code to a temp path (read-only w.r.t. the repo).
-#    contract_regen.cmd is provided by the project (e.g. a framework's openapi export);
-#    it MUST write to contract_regen.out, never into contracts/.
-mkdir -p "$(dirname "$REGEN_OUT")"
-eval "$REGEN_CMD" > "$REGEN_OUT"          # skip this step if contract_regen.out already exists
+### Layer 10: Constitution ↔ Code
 
-# 2. Breaking-change detection → CRITICAL evidence (exit 1 == ERR-level breaking change found).
-oasdiff breaking "$FEATURE_DIR/contracts/openapi.yaml" "$REGEN_OUT" --fail-on ERR
-BREAKING_EXIT=$?
+The standing check that the code still honours the project architecture
+constitution (resilience, EDA rules, layering, security posture); `plan` checks
+it once at planning time.
 
-# 3. Full structured drift surface → WARNING evidence (any non-breaking divergence).
-oasdiff diff "$FEATURE_DIR/contracts/openapi.yaml" "$REGEN_OUT" -f text
-oasdiff diff "$FEATURE_DIR/contracts/openapi.yaml" "$REGEN_OUT" -f json   # machine-readable for the report
-```
+When no file exists at `constitution_path`, report `Layer 10: N/A — no
+constitution configured` (not a finding). Otherwise extract the mandated
+patterns and check the feature's code (`task_log[].paths` + `traceability.yml`
+`code` paths) against each, with a deterministic probe where the pattern allows
+one, else an LLM read:
 
-Translate the tool output into DRIFT items — **the exit code is evidence, not a
-verdict**:
-
-- `oasdiff breaking … --fail-on ERR` exits **non-zero** → emit a **CRITICAL**
-  `DRIFT-NNN` (Layer 8, structural) per breaking change, with the oasdiff line as
-  Evidence. This **does not** short-circuit the human loop: it flows through
-  Step 5 like every other finding (interactive-first; never auto-fail a gate —
-  policy §9.3).
-- `oasdiff diff` shows non-breaking divergence → emit **WARNING** `DRIFT-NNN`
-  items (contract ↔ code shape drift) carrying the diff hunks as Evidence.
-- Clean (`breaking` exit 0, empty `diff`) → Layer 8 contract-shape check is ✅.
-
-> Defaults to the prose path **by design** (`contract_differ: none`); the
-> executable differ is opt-in. Both keys are documented in `config-template.yml`
-> and [docs/config.md](../docs/config.md).
-
-### Layer 9: Doc ↔ Code Reconciliation (v1.6, Theme G)
-
-Reconcile documented intent against code in both directions, using
-`traceability.yml` + the canonical `specs/` (when present); fall back to raw
-artifacts only where the matrix has no row.
-
-**Forward check — unimplemented docs?**
-- Every documented requirement/endpoint/component (matrix row, `FR-*`,
-  `API-*`, `CMP-*`) maps to implementing code.
-- **CRITICAL** if a documented behavior has no implementing code.
-
-**Backward check — undocumented code?**
-- Every significant code path maps back to a documented requirement/task
-  (a matrix row or a task in `tasks.md`).
-- **WARNING** for a significant undocumented code path (no matrix row, no task) —
-  an orphan.
-- On drift, note the suggested canonical-spec update for `spec-merge` (Theme B)
-  so the reconciliation loop can feed back into the living spec.
-
-#### Attribute every orphan (v1.6, W5-C1)
-
-An orphan is an **attributed event**, not an anonymous warning. For each orphan
-path, resolve the commit SHA + author with real git/index lookups so the
-WARNING names who introduced the out-of-band edit:
-
-```bash
-# A) Path normalisation. task_log[].paths are workspace-prefixed
-#    (e.g. "back/src/...", "backend:src/..."). Strip the prefix to a
-#    repo-relative path before any git call, or git silently returns nothing.
-REPO_PATH="${ORPHAN_PATH#*:}"      # drop a "workspace:" prefix if present
-REPO_PATH="${REPO_PATH#*/}"        # ...or a "workspace/" dir prefix (per the configured layout)
-
-# B) Tasked file — reverse-index task_log[].commit_sha, then resolve the author
-#    from that exact commit (commit_sha carries the SHA but not the author).
-#    (Pick the task_log entry whose .paths contains ORPHAN_PATH → $TASK_SHA.)
-git show -s --format=%h,%an "$TASK_SHA"
-
-# C) Un-tasked file — no task_log row → ask git directly for the last touch.
-git log -1 --format=%h,%an -- "$REPO_PATH"
-```
-
-Attribution rules:
-
-- If a `task_log[]` entry's `paths` contains the orphan path → use its
-  `commit_sha` and resolve the author via `git show -s --format=%h,%an <sha>`
-  (B). This means a task DID touch the file but it has no doc/matrix trace — an
-  attributed orphan.
-- Else fall back to `git log -1 --format=%h,%an -- <repo-path>` (C).
-- If git returns **empty** (uncommitted working-tree edit) → attribute as
-  `uncommitted / working-tree` rather than leaving it blank.
-
-Carry `commit: {sha}` and `author: {name}` into the orphan `DRIFT-NNN`
-Evidence so the finding reads, e.g., *"orphan `src/lib/rate-limit.ts` — no
-matrix row, no task — introduced by `a1b2c3d` (J. Doe)"*. The suggested
-canonical-spec update for `spec-merge` then names a real author, not an
-anonymous drift.
-
----
-
-### Layer 10: Constitution ↔ Code (v1.7, P1-C)
-
-Reconcile the implemented code against the project **architecture constitution**
-— the standing patterns the team committed to (resilience, EDA rules, layering,
-security posture), not just this feature's spec. `plan` runs a one-shot
-constitution-compliance check at planning time; this is the **standing** guard
-that re-asserts those patterns against the code as it exists now.
-
-Read `constitution_path` from the merged config
-([docs/config.md](../docs/config.md) — default `.specify/memory/constitution.md`).
-**If no constitution file exists, skip this layer** (emit `Layer 10: N/A — no
-constitution configured`) — it is not a finding.
-
-When present, extract the constitution's **mandated patterns** and check the
-feature's code (the `task_log[].paths` + `traceability.yml` `code` paths) against
-each. Prefer a deterministic probe where the pattern allows one, fall back to an
-LLM read otherwise:
-
-| Mandated pattern (examples) | Deterministic probe where possible |
+| Mandated pattern (examples) | Probe |
 |---|---|
-| External calls wrapped in a circuit-breaker / retry policy | grep the new code's outbound-call sites for the mandated wrapper symbol |
-| Domain events follow the EDA naming/▸publish contract | grep emitted event names against the constitution's convention |
-| Layering (e.g. controllers never touch the repo directly) | AST/grep for forbidden cross-layer imports in the new files |
-| Required security posture (authz on mutations, input validation) | overlaps Layer 9 / code-review security — reconcile, don't double-count |
+| External calls wrapped in a circuit-breaker / retry policy | grep outbound-call sites for the mandated wrapper symbol |
+| Domain events follow the EDA naming / publish contract | grep emitted event names against the convention |
+| Layering (e.g. controllers never touch the repo directly) | AST / grep for forbidden cross-layer imports in the new files |
+| Security posture (authz on mutations, input validation) | reconcile with Layer 9 / code-review security; count once |
 
-- **CRITICAL** when code violates a constitution pattern the document marks
-  **mandatory/MUST**.
-- **WARNING** for a SHOULD-level deviation or a pattern that can't be checked
-  deterministically and the LLM read is uncertain.
-- Carry each violation as a `DRIFT-NNN` (Layer 10) with the constitution section
-  it breaches in the Evidence. Where a fix implies a spec/plan change, note the
-  suggested canonical-spec update for `spec-merge` (Theme G), same as Layer 9.
+- **CRITICAL** when code violates a pattern the constitution marks mandatory / MUST.
+- **WARNING** for a SHOULD-level deviation, or an uncertain LLM read.
+- Each violation is a `DRIFT-NNN` (Layer 10) citing the breached constitution
+  section; when the fix implies a spec/plan change, note the suggested
+  canonical-spec update for `spec-merge`.
 
-This makes the constitution a *continuous* contract (the
-`architecture-guard`-style standing check) rather than a one-time planning gate.
+Result of Step 2: every finding recorded with layer, direction, severity and
+evidence.
 
----
+## Step 3: Compile drift items
 
-## Step 3: Compile Drift Report
+Turn each finding into a `DRIFT-{NNN}` item using the **DRIFT item** block in
+[docs/templates/sync-verify-report.md](../docs/templates/sync-verify-report.md):
+layer, direction, severity (CRITICAL / WARNING / INFO), category (Step 3A),
+source and target artifact, evidence, expected, actual, proposed resolution,
+auto-resolvable flag, approval checkboxes. Severity is proportional: a missing
+Must Have story is CRITICAL; a minor wording difference is INFO.
 
-For each finding, create an entry:
+## Step 3A: Drift category & budget
 
-```markdown
-### DRIFT-{NNN}: {short title}
-
-| Field | Value |
-|-------|-------|
-| **Layer** | {1-10}: {layer name} |
-| **Direction** | Forward (earlier → later) / Backward (later → earlier) |
-| **Severity** | CRITICAL / WARNING / INFO |
-| **Category** | structural / cosmetic (see §3A) |
-| **Source artifact** | {file path} |
-| **Target artifact** | {file path} |
-| **Evidence** | {specific text or reference from source} |
-| **Expected** | {what should exist in target} |
-| **Actual** | {what actually exists (or "missing")} |
-
-**Proposed resolution:**
-{Specific change to make — which file, what to add/update/remove}
-
-**Auto-resolvable:** {true if category is cosmetic AND auto_resolve.cosmetic is enabled}
-
-**Approval:** [ ] Approve / [ ] Reject / [ ] Defer
-```
-
----
-
-## Step 3A: Drift Category & Budget (D11)
-
-Every DRIFT item is classified into one of two categories before severity
-assessment. Severity (CRITICAL/WARNING/INFO) and category are independent —
-category controls *auto-resolution eligibility*; severity controls *gate
-behavior*.
-
-### Categories
+Category and severity are independent: category decides auto-resolution
+eligibility; severity decides gate behaviour.
 
 | Category | Examples | Auto-resolve eligible? |
 |----------|----------|------------------------|
-| **structural** | Missing requirement, renamed field, different data shape, divergent API contract, removed user story, phase skip with no reason, **Markdown heading-level shift** (changes parsed tree and anchor identity), **renamed section heading** (breaks cross-links) | **Never.** Always human-in-the-loop. |
-| **cosmetic** | Trailing whitespace, bullet-list indentation drift, bullet style (`-` vs `*`), fenced-code language hint missing, stale `last_updated` timestamp, Windows vs Unix line endings, redundant blank lines | Only when `sync_verify.auto_resolve.cosmetic: true` in the effective config (default `false`). |
+| **structural** | Missing requirement, renamed field, different data shape, divergent API contract, removed user story, phase skip with no reason, Markdown heading-level shift (changes the parsed tree and anchor identity), renamed section heading (breaks cross-links) | **Never** — always per-item human approval. |
+| **cosmetic** | Trailing whitespace, bullet indentation or style (`-` vs `*`), missing fenced-code language hint, stale `last_updated` timestamp, line endings, redundant blank lines | Only when `sync_verify.auto_resolve.cosmetic: true` (default `false`). |
 
-Heuristic: if a drift item can change the *meaning* of what any artifact
-says — **including the parsed document structure, anchor identity, or
-cross-link resolution** — it is structural. If it only changes whitespace
-or inconsequential byte-level details that leave the parsed AST and all
-anchors intact — it is cosmetic.
+A drift item is structural when it can change what an artifact means —
+including the parsed document structure, anchor identity or cross-link
+resolution. Any change to a heading's generated slug (rename, level change, text
+beyond whitespace) is structural. It is cosmetic only when the parsed AST and
+all anchors stay intact.
 
-**Link anchors are structural.** Any change that modifies the auto-generated
-slug of a heading (renaming a heading, changing its level, altering its
-text beyond whitespace) is structural because other files may cross-link
-to that slug.
+**Budget** (`sync_verify.drift_budget`, defaults `cosmetic: 20`, `structural: 0`):
 
-### Budget
+- structural count > `drift_budget.structural` → verdict **CRITICAL DRIFT**
+  regardless of severity; the gate fails.
+- cosmetic count > `drift_budget.cosmetic` → WARNING only, with the note
+  *"cosmetic budget exceeded ({count}/{budget}) — consider cleanup pass or raise
+  the budget."* The gate still passes.
+- cosmetic count ≤ budget → reported; the verdict is unaffected.
 
-Read `sync_verify.drift_budget` from the effective config (Step 0):
+The budget surfaces neglect; exceeding it warns and never silently accepts drift.
 
-```yaml
-sync_verify:
-  drift_budget:
-    cosmetic: 20    # default
-    structural: 0   # default — structural drift always gates
-```
+**Auto-resolve** — only when `sync_verify.auto_resolve.cosmetic: true` **and**
+the run has `--fix`:
 
-Apply:
+1. Apply the cosmetic resolutions in one atomic, lock-protected write.
+2. Print: ⚠️ *Applied {N} cosmetic auto-resolutions. Review diff before next gate.*
+3. List every changed path in the report under `## Auto-resolutions applied`.
 
-- **structural count > drift_budget.structural** → verdict is **CRITICAL
-  DRIFT** regardless of severity. The command fails the gate.
-- **cosmetic count > drift_budget.cosmetic** → WARNING only. Reporter
-  notes *"cosmetic budget exceeded ({count}/{budget}) — consider cleanup
-  pass or raise the budget."* The gate still passes.
-- **cosmetic count ≤ budget** → reported but does not affect verdict.
+Structural resolutions always go through per-item approval in Step 5, also with
+`--fix`.
 
-### Auto-resolve opt-in
+## Step 4: Write the report
 
-If `sync_verify.auto_resolve.cosmetic: true` AND the run was invoked
-with `--fix`:
+Write `{FEATURE_DIR}/sync-report.md` from
+[docs/templates/sync-verify-report.md](../docs/templates/sync-verify-report.md)
+— layer results for 1–10 (skipped and N/A layers named), all drift items,
+proposed actions, and this run's row appended to the existing Sync History table — and the same content as
+machine-readable `{FEATURE_DIR}/sync-report.json`. Verdict: **CONSISTENT** (no
+drift), **DRIFT DETECTED**, or **CRITICAL DRIFT** (any CRITICAL item or the
+structural budget exceeded). Running twice on unchanged artifacts produces the
+same report.
 
-1. Apply cosmetic resolutions in a dedicated commit-equivalent write
-   (atomic, lock-protected).
-2. Print a bordered warning:
-   > ⚠️ Applied {N} cosmetic auto-resolutions. Review diff before next gate.
-3. List every changed path in the report under
-   `## Auto-resolutions applied`.
+## Step 5: Review with the user
 
-Structural resolutions are **never** auto-applied, even with `--fix`.
-They always require per-item approval in Step 5.
+Show a short summary: feature, layers checked `{N}/{applicable}`, verdict, and
+the counts of ❌ CRITICAL, ⚠️ WARNING, INFO and ✅ clean layers.
 
----
-
-## Step 4: Generate sync-report.md
-
-Write `{FEATURE_DIR}/sync-report.md`:
-
-```markdown
-# Sync & Verify Report: {Feature Name}
-
-> Feature: {slug} | Date: {today}
-> Layers checked: {N}/{applicable} | Skipped: {list of skipped layers and why}
-> Phase: {current phase from .forge-status.yml}
-
-## Summary
-
-| Severity | Count |
-|----------|-------|
-| ❌ CRITICAL | {N} |
-| ⚠️ WARNING | {N} |
-| ℹ️ INFO | {N} |
-| ✅ CLEAN | {N} layers with no drift |
-
-**Verdict:** {CONSISTENT / DRIFT DETECTED / CRITICAL DRIFT}
-
-## Layer Results
-
-### Layer 1: research/ ↔ product-spec/ — {✅ CLEAN / ⚠️ {N} findings / ❌ {N} findings}
-{findings or "No drift detected"}
-
-### Layer 2: product-spec/ ↔ spec.md — {status}
-{findings or "No drift detected"}
-
-... (Layers 3–7 as above)
-
-### Layer 8: FE ↔ BE Contract Drift — {✅ CLEAN / ⚠️ {N} findings / ❌ {N} findings}
-{findings or "No drift detected"}
-
-### Layer 9: Doc ↔ Code Reconciliation — {✅ CLEAN / ⚠️ {N} findings / ❌ {N} findings}
-{findings or "No drift detected"}
-
-### Layer 10: Constitution ↔ Code — {✅ CLEAN / ⚠️ {N} findings / ❌ {N} findings / N/A — no constitution}
-{findings or "No drift detected"}
-
-## All Drift Items
-
-{DRIFT-001 through DRIFT-NNN with approval checkboxes}
-
-## Proposed Actions
-
-1. {Action for DRIFT-001}
-2. {Action for DRIFT-002}
-...
-
-## Sync History
-
-| Run | Date | Layers | CRITICAL | WARNING | Verdict |
-|-----|------|--------|----------|---------|---------|
-| #{N} | {date} | {N}/{applicable} | {N} | {N} | {verdict} |
-```
-
-Also write `{FEATURE_DIR}/sync-report.json` with machine-readable format.
-
----
-
-## Step 5: Present to User (Human-in-the-Loop)
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🔄 Sync & Verify: {Feature Name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  Layers checked: {N}/{applicable}
-  Verdict: {CONSISTENT / DRIFT DETECTED / CRITICAL DRIFT}
-
-  ❌ CRITICAL:  {N}
-  ⚠️ WARNING:   {N}
-  ℹ️ INFO:      {N}
-  ✅ CLEAN:     {N} layers
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-If CRITICAL or WARNING items exist, present each one individually:
+Then present each CRITICAL and WARNING item on its own, e.g.:
 
 ```
 DRIFT-001 [CRITICAL] Layer 2: Must Have story US-003 missing from spec.md
 
   Source: product-spec/product-spec.md
     "US-003: As a user, I want to set notification quiet hours"
-
   Target: spec.md
     NOT FOUND — no US-003 or equivalent acceptance criteria
-
   Proposed fix: Add US-003 to spec.md with acceptance criteria from product-spec
-
-  → [Approve] [Reject] [Defer to later] [Edit resolution]
 ```
 
-Process each decision:
-- **Approve**: Queue the resolution for application
-- **Reject**: Mark as acknowledged, no action
-- **Defer**: Mark as deferred, will surface again on next sync-verify run
-- **Edit**: User provides custom resolution text
+Ask one structured prompt per item with the options **Approve** (queue the
+resolution), **Reject** (mark acknowledged, no action), **Defer** (mark deferred;
+it surfaces again on the next run), **Edit resolution** (the user supplies the
+resolution text). Result: every CRITICAL / WARNING item has a decision.
 
----
+## Step 6: Apply approved resolutions
 
-## Step 6: Apply Approved Resolutions (if `--fix` or user confirms)
+Runs with `--fix`, or when the user confirms applying the approved items. For
+each approved resolution:
 
-For each approved resolution:
-1. Read the target artifact
-2. Apply the proposed change (add missing section, update text, fix link)
-3. Log the change: `Applied DRIFT-{NNN}: {description} in {file}`
-4. After all changes: run a quick re-check on affected layers to verify fix
+1. Read the target artifact and show the exact edit; apply it only after the user
+   confirms.
+2. Apply the change (add the missing section, update text, fix the link).
+3. Log `Applied DRIFT-{NNN}: {description} in {file}`.
 
-**Safety:** Before modifying any file, show the exact edit and confirm. Never silently modify.
+After all edits, re-check the affected layers and report the result.
 
----
-
-## Step 7: Update Status
-
-Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-sync-verify owns only the `sync_runs` block (it records no phase status and no gate entry):
+## Step 7: Update `sync_runs`
 
 ```yaml
 sync_runs:
@@ -554,41 +304,39 @@ sync_runs:
   last_verdict: "{CONSISTENT / DRIFT DETECTED / CRITICAL DRIFT}"
 ```
 
----
+## Quick mode (`--quick`)
 
-## Quick Mode (`--quick`)
+Forge runs sync-verify with `--quick` between phase transitions and checks only
+the layers for that transition. [runtime.md §5.1](../docs/runtime.md#51-automatic-quick-sync)
+is authoritative; this copy mirrors it:
 
-When called with `--quick` by the forge orchestrator between phase transitions, only run the layer(s) directly relevant to the transition.
-The authoritative transition table is [docs/runtime.md §5.1](../docs/runtime.md#51-automatic-quick-sync); this copy mirrors it — on any disagreement, §5.1 wins:
+| Transition | Layers |
+|------------|--------|
+| Phase 1 → Phase 2 | none (research is input, not a sync target) |
+| Phase 2 → Phase 3 | Layer 1 (research ↔ product-spec) |
+| Phase 3 → Phase 4 | Layer 1 |
+| Phase 4 → Phase 5 | Layer 2 (product-spec ↔ spec.md) |
+| Phase 5 → Phase 5B | Layer 3 (spec.md ↔ plan.md) |
+| Phase 5B → Phase 5C | Layer 4 (plan.md ↔ tasks.md) |
+| Phase 5C → Phase 6 | Layers 3, 4 |
+| Phase 6 → Phase 6B | Layers 5, 6, 8, 9, 10 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code, constitution ↔ code) |
+| Phase 6B → Phase 7 | Full (all 10 layers) |
+| Phase 7 → Phase 8A | Layer 7 (cross-links only) |
 
-| Transition | Layers to Check |
-|-----------|----------------|
-| After Phase 1 → Phase 2 | (none — research is input, not a sync target) |
-| After Phase 2 → Phase 3 | Layer 1 (research ↔ product-spec) |
-| After Phase 3 → Phase 4 | Layer 1 |
-| After Phase 4 → Phase 5 | Layer 2 (product-spec ↔ spec.md) |
-| After Phase 5 → Phase 5B | Layer 3 (spec.md ↔ plan.md) |
-| After Phase 5B → Phase 5C | Layer 4 (plan.md ↔ tasks.md) |
-| After Phase 5C → Phase 6 | Layers 3, 4 |
-| After Phase 6 → Phase 6B | Layers 5, 6, 8, 9, 10 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code, constitution ↔ code) |
-| After Phase 6B → Phase 7 | Full (all 10 layers) |
-| After Phase 7 → Phase 8A | Layer 7 (cross-links only) |
+In quick mode report only CRITICAL items (suppress WARNING / INFO). Zero
+CRITICAL → return and let the transition proceed (no prompt). CRITICAL found →
+pause and run Step 5 for those items before the transition continues.
 
-In quick mode:
-- Only report CRITICAL items (suppress WARNING/INFO)
-- If zero CRITICAL: auto-proceed (no gate)
-- If CRITICAL found: pause and present to user before allowing phase transition
+## Done when
 
----
-
-## Operating Principles
-
-1. **Read-only by default.** Never modify files without explicit user approval per item.
-2. **Evidence-based.** Every finding includes specific text from both source and target artifacts.
-3. **Proportional severity.** Missing Must Have story = CRITICAL. Minor wording difference = INFO.
-4. **Idempotent.** Running twice produces the same report (unless artifacts changed).
-5. **Layer-aware.** Only check layers where both sides exist. Don't report "drift" for artifacts that haven't been created yet.
-6. **Direction-aware.** Distinguish forward drift (spec not in code) from backward drift (code decisions not in spec). Both matter but have different fix strategies.
-7. **Cumulative history.** Each run appends to sync history in .forge-status.yml. Trends matter.
-8. **Category discipline.** Structural drift is never auto-resolved. Cosmetic drift is auto-resolved only when the user explicitly opts in via `sync_verify.auto_resolve.cosmetic: true`. Auto-fix is an advisor turned into an editor — require deliberation, never default it on.
-9. **Budget as advice, not automation.** The drift budget exists to surface neglect, not to approve sloppiness. Exceeding the budget produces a warning; it does not silently accept drift.
+- Every applicable layer in scope ran; each skipped layer is listed with its
+  reason (Layer 10 as `N/A — no constitution configured` when there is none).
+- Every finding is a `DRIFT-NNN` item with category, severity and evidence from
+  both artifacts; orphans carry commit and author.
+- `sync-report.md` and `sync-report.json` are written with the verdict, applying
+  the drift budget.
+- Every CRITICAL / WARNING item has a decision (quick mode: every CRITICAL item);
+  with `--fix`, every approved resolution is applied after confirmation and its
+  layers re-checked, and structural items were never auto-applied.
+- `sync_runs` is updated (except under `--dry-run`); no phase status or gate entry
+  is written.
