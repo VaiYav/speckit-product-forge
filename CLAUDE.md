@@ -121,8 +121,8 @@ win**, in this precedence:
 - `docs/policy.md` — gate decisions, feature modes (express/lite/standard/v-model),
   skip-reason & optional-phase governance.
 - `docs/schema.md` + `docs/schema/forge-status-v3.schema.yml` — **canonical**
-  `.forge-status.yml` v3 schema. The inline schema block in `file-structure.md`
-  is a readable overview; the canonical schema file wins.
+  `.forge-status.yml` v3 schema (the only copy — other docs link to it, never
+  restate it).
 - `docs/file-structure.md` — feature directory layout, storage strategies, and the
   naming-convention table (kebab-case feature dirs; `REQ-NNN` canonical reqs vs
   per-feature `FR-NNN`; `US-NNN`, `JRN-NNN`, `CMP-*`, `API-*`, `EVT-*`, `TC-*`).
