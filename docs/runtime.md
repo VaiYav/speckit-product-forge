@@ -513,7 +513,7 @@ The gate decision, not the fact that the phase ran, sets the phase status:
 |----------|---------------------------|--------------|
 | `approved` / `approved_with_conditions` | `completed` (or `completed_with_known_issues` where the phase defines it) | unchanged |
 | `revised` | `in_progress` (the phase re-runs) | unchanged |
-| `skipped` | the **skipped** phase (always the next, optional one) → `skipped` + `skip_reason` | — |
+| `skipped` | Skip at phase X's gate means "accept X, skip the next phase Y" (Y is always optional): X → `completed` and Y → `skipped` + `skip_reason`. Append **two** entries: `{phase: X, decision: approved}` then `{phase: Y, decision: skipped, skip_reason}` | Y's later phases unchanged |
 | `rolled_back` | the `rolled_back_to` phase and every phase after it → `pending`; rewound artifacts are archived per [policy.md §8](./policy.md#8-change-management) | `pending` |
 | `aborted` | unchanged (left as it was when the gate opened) | unchanged |
 
