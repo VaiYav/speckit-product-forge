@@ -3,13 +3,12 @@
 What each Product Forge phase does, what it writes, and what its gate checks — in
 `forge.md` phase order, plus the cross-cutting and supporting commands.
 
-**Which phases run** depends on the feature mode: the single source is
-[schema/phase-map.yml](./schema/phase-map.yml) (`yes` / `opt` / `no` per mode), and
-mode rules (triage, escalation) are in [policy.md §4](./policy.md#4-feature-modes-e1).
-Each phase below states its standard-mode role. In `express` / `lite` only Product
-Spec → Plan → Implement → Verify run (plus optional Phase 0 in lite); per-mode inputs
-are in [runtime.md §11.2](./runtime.md#112-per-phase-required-upstream-artifacts).
-All paths are relative to `FEATURE_DIR`.
+**Which phases run** per feature mode is [schema/phase-map.yml](./schema/phase-map.yml)
+(`yes` / `opt` / `no`); mode rules (triage, escalation, the express/lite inline
+`## Tasks` path) are [policy.md §4](./policy.md#4-feature-modes-e1); per-mode inputs
+are [runtime.md §11.2](./runtime.md#112-per-phase-required-upstream-artifacts). Each
+phase below states its standard-mode role. All paths are relative to `FEATURE_DIR`;
+the full file tree per phase is [file-structure.md](./file-structure.md#feature-directory-layout).
 
 ---
 
@@ -19,8 +18,6 @@ All paths are relative to `FEATURE_DIR`.
 **Output:** `problem-discovery/`
 **Gate:** Go / Investigate further / No-go decision
 
-### What happens
-
 Validates the problem before any research begins:
 1. **JTBD Analysis** — functional, emotional, and social job layers
 2. **Competing Forces Model** — Push + Pull vs Inertia + Anxiety
@@ -28,16 +25,8 @@ Validates the problem before any research begins:
 4. **Interview Script** — user interview guide with scoring rubric
 5. **Go/No-go Decision** — confidence score and recommendation
 
-### Output files
-
-| File | Description |
-|------|-------------|
-| `problem-discovery/problem-statement.md` | JTBD + Problem Canvas + Go/No-go decision |
-| `problem-discovery/interview-script.md` | User interview guide with scoring rubric |
-
-### What passes forward
-
-Hypotheses H1–HN are passed to Phase 1 research agents to guide investigation.
+Writes `problem-discovery/problem-statement.md` (JTBD + Problem Canvas + Go/No-go
+decision) and `problem-discovery/interview-script.md`. Hypotheses H1–HN pass to the Phase 1 research agents to guide investigation.
 
 ---
 
@@ -47,27 +36,18 @@ Hypotheses H1–HN are passed to Phase 1 research agents to guide investigation.
 **Output:** `research/`
 **Gate:** User approves research before Phase 2
 
-### What happens
-
 Three research agents run **in parallel**:
 1. **Competitor Research** — finds 5-8 competitors, analyzes their feature implementation, identifies gaps and best practices
 2. **UX/UI Patterns** — researches best interactions, flows, empty states, animations, accessibility requirements
 3. **Codebase Analysis** — explores your codebase, finds reusable components, identifies integration points
 
-Two additional agents run **if opted-in**:
+Two more run **if opted-in**:
 4. **Tech Stack** — compares libraries and APIs with download stats, license, and bundle size
 5. **Metrics/ROI** — estimates business impact, KPIs, measurement plan
 
-### Output files
-
-| File | Always? | Description |
-|------|---------|-------------|
-| `research/README.md` | Yes | Master index + executive summary + open questions |
-| `research/competitors.md` | Yes | Competitor table + patterns + top implementations |
-| `research/ux-patterns.md` | Yes | Flows + states + micro-interactions + anti-patterns |
-| `research/codebase-analysis.md` | Yes | Integration points + reusable components + complexity |
-| `research/tech-stack.md` | Optional | Library comparison table + recommendation |
-| `research/metrics-roi.md` | Optional | KPI benchmarks + ROI model + measurement plan |
+Writes `research/README.md` (index + executive summary + open questions),
+`competitors.md`, `ux-patterns.md`, `codebase-analysis.md`, and the opted-in
+`tech-stack.md` / `metrics-roi.md`.
 
 ---
 
@@ -77,12 +57,9 @@ Two additional agents run **if opted-in**:
 **Output:** `product-spec/`
 **Gate:** User approves document plan before writing, then approves output
 
-### What happens
-
-An interactive spec creation session. The agent asks about desired detail levels,
-conducts a brief interview, then generates all documents.
-
-### Output files
+An interactive session: the agent asks about desired detail levels, conducts a
+brief interview, then generates all documents. In express the product spec is
+minimal (1 journey + acceptance criteria); in lite it is light.
 
 | File | Always? |
 |------|---------|
@@ -94,9 +71,6 @@ conducts a brief interview, then generates all documents.
 | `design-system/manifest.yml` + `manifest.md` (harvested, read-only) | If UI |
 | `product-spec/mockups/index.html` + screens (clickable, design-system-grounded) | If UI |
 | `product-spec/mockups/component-map.yml` (region → `CMP-*` → code path) | If UI |
-
-In express the product spec is minimal (1 journey + acceptance criteria); in lite it
-is light.
 
 ---
 
@@ -117,15 +91,10 @@ stays in code as the single source of truth.
 
 **Command:** `/speckit.product-forge.revalidate`
 **Output:** `review.md`
-**Gate:** Explicit "APPROVED" / "LGTM" from user
+**Gate:** the structured Gate prompt (Approve / Revise / Rollback / Abort); approval is recorded in `review.md`
 
-### What happens
-
-The agent presents a structured summary of all product-spec documents.
-The user reviews and provides corrections in chat.
-The agent applies changes and loops until approval.
-
-### Consistency check before lock
+The agent presents a structured summary of all product-spec documents; the user
+gives corrections in chat; the agent applies them and loops until approval.
 
 Before locking, the agent automatically verifies:
 - All cross-links in README files are valid
@@ -140,15 +109,11 @@ Before locking, the agent automatically verifies:
 **Output:** `spec.md`
 **Gate:** User approves spec.md; then SpecKit mode is selected
 
-### What happens
+All research and product-spec artifacts are synthesized into a single `spec.md`
+that carries research context, competitive intelligence, UX recommendations, and
+technical integration notes.
 
-All research and product-spec artifacts are synthesized into a single `spec.md`.
-This spec is richer than a manually written spec: it includes research context,
-competitive intelligence, UX recommendations, and technical integration notes.
-
-### SpecKit sub-flow (`speckit_mode`)
-
-| Value | When to use | Sub-flow |
+| `speckit_mode` | When to use | Sub-flow |
 |------|-------------|-----------------|
 | `classic` | Well-scoped features, clear requirements | plan → tasks → implement → verify |
 | `v-model` | Complex / safety-critical features, full traceability | V-Model SpecKit commands (requirements → architecture → design) → implement |
@@ -172,18 +137,15 @@ How the two switches relate: [policy.md §4.1](./policy.md#41-phase-maps).
 **Output:** `plan.md`
 **Gate:** User approves plan
 
-### What happens
-
-Delegates to SpecKit `plan` with product-spec context, then cross-validates:
+Delegates to SpecKit `plan` with product-spec context, then cross-validates
+(express/lite: reads the product spec directly and ends with an inline `## Tasks`
+list):
 
 | Check | Severity if fails |
 |-------|------------------|
 | All Must Have stories addressed? | Warning |
 | Integration matches codebase analysis? | Warning |
 | NFR approach defined? | Warning |
-
-In express/lite there is no bridge or tasks phase: the plan reads the product spec
-directly and ends with an inline `## Tasks` list that implement executes.
 
 ---
 
@@ -192,8 +154,6 @@ directly and ends with an inline `## Tasks` list that implement executes.
 **Command:** `/speckit.product-forge.tasks`
 **Output:** `tasks.md`
 **Gate:** User approves tasks
-
-### What happens
 
 Delegates to SpecKit `tasks` with product-spec context, then cross-validates:
 
@@ -221,8 +181,6 @@ Delegates to SpecKit `tasks` with product-spec context, then cross-validates:
 **Output:** `pre-impl-review.md`
 **Gate:** User approves review (or skips)
 
-### What happens
-
 Combined gate before coding:
 
 1. **Design Review** (if feature has UI) — state completeness (empty/loading/error/partial/offline),
@@ -231,7 +189,7 @@ Combined gate before coding:
 3. **Risk Assessment** — technical/scope/integration/rollback risks with severity matrix,
    rollout strategy recommendation
 
-Optional for features with ≤5 tasks and no UI.
+Optional in every mode that runs it; recommended for features with more than 5 tasks or a UI.
 
 ---
 
@@ -241,18 +199,17 @@ Optional for features with ≤5 tasks and no UI.
 **Output:** Code files (per tasks.md, or the plan's inline `## Tasks` in express/lite) + `implementation-log.md`
 **Gate:** All tasks `[x]`
 
-### What happens
+Delegates to SpecKit `implement` with product-spec context (wireframes, user
+journeys, AC).
 
-Delegates to SpecKit `implement` with product-spec context (wireframes, user journeys, AC).
-
-**Progressive verification:** after every N completed tasks (`progressive_verify_interval`),
-a mini-verify checkpoint runs:
+**Progressive verification:** after every N completed tasks
+(`progressive_verify_interval`), a mini-verify checkpoint runs:
 - Task-code correspondence
 - Spec AC alignment
 - Unplanned changes detection
 - Plan alignment check
 
-Results logged in `implementation-log.md`. CRITICAL drift pauses implementation.
+Results are logged in `implementation-log.md`. CRITICAL drift pauses implementation.
 
 ---
 
@@ -262,20 +219,13 @@ Results logged in `implementation-log.md`. CRITICAL drift pauses implementation.
 **Output:** `code-review.md`
 **Gate:** User approves review (or skips)
 
-### What happens
+Multi-agent code review in 4 parallel dimensions: **Quality** (SOLID, DRY, error
+handling, naming, complexity, dead code), **Security** (OWASP surfaces from
+plan.md: input validation, injection, auth, secrets), **Patterns** (codebase-analysis.md conventions), **Tests** (coverage of
+spec.md requirements and acceptance criteria).
 
-Multi-agent code review with 4 parallel dimensions:
-
-| Dimension | What it checks |
-|-----------|---------------|
-| Quality | SOLID, DRY, error handling, naming, complexity, dead code |
-| Security | OWASP surfaces from plan.md — input validation, injection, auth, secrets |
-| Patterns | Consistency with codebase-analysis.md conventions |
-| Tests | Coverage against spec.md requirements and acceptance criteria |
-
-Findings are written to `gate-review.md` as `F-NNN` (one namespace with pre-impl-review
-and verify-full — [policy.md §9.1](./policy.md#91-unified-gate-review-artifact-a3)) with
-CRITICAL/HIGH/MEDIUM/LOW severity; `REV-NNN` is the legacy id.
+Findings go to `gate-review.md` as `F-NNN` ([policy.md §9.1](./policy.md#91-unified-gate-review-artifact-a3))
+with CRITICAL/HIGH/MEDIUM/LOW severity; `REV-NNN` is the legacy id.
 
 ---
 
@@ -285,27 +235,15 @@ CRITICAL/HIGH/MEDIUM/LOW severity; `REV-NNN` is the legacy id.
 **Output:** `verify-report.md`
 **Gate:** No CRITICAL findings (or user acknowledges)
 
-### Verification Layers
-
-Consumes the live `traceability.yml` (does not re-derive the chain). Layers:
-
-| Layer | What it checks |
-|-------|---------------|
-| 1: Code ↔ Tasks | Every task has verifiable code |
-| 2: Code ↔ Plan | All planned components implemented |
-| 3: Stories ↔ Code | Every Must Have story implemented + tested |
-| 4: spec.md ↔ product-spec | No spec drift from approved product spec |
-| 5: Research alignment | Key research recommendations followed |
-| 6: Document integrity | All cross-links valid, no broken references |
-| 7: Journey ↔ E2E *(v1.6)* | Every Must-Have `JRN` / P0-P1 `EDGE` has an E2E test (Theme H) |
-| 8: UI ↔ Design System *(v1.6)* | Built UI uses the mapped `CMP-*` components (Theme E) |
-| 9: FE ↔ BE contract drift *(v1.6)* | Contracts implemented + called on both sides (Theme F) |
-| 10: Doc ↔ Code *(v1.6)* | No unimplemented docs / undocumented code (Theme G) |
-| 11: Constitution ↔ Code *(v1.7)* | Code honours the project constitution (`constitution_path`); N/A without one |
-
-The layer definitions are owned by [verify-full](../commands/verify-full.md).
-
-### Severity levels
+Consumes the live `traceability.yml` (does not re-derive the chain) and checks 11
+layers, defined by [verify-full](../commands/verify-full.md): Code ↔ Tasks (every
+task's code exists), Code ↔ Plan (architecture followed), Stories ↔ Code (every Must
+Have story implemented + tested), spec.md ↔ product-spec (no scope drift), Research
+alignment (key recommendations followed), Document integrity (links and IDs
+resolve), Journey ↔ E2E (every Must-Have `JRN` / P0-P1 `EDGE` has an E2E test),
+UI ↔ Design System (mapped `CMP-*` components), FE ↔ BE contract drift (contracts
+implemented and called on both sides), Doc ↔ Code (no unimplemented docs or
+undocumented code), and Constitution ↔ Code (`constitution_path`; N/A without one).
 
 | Severity | Meaning | Blocks completion? |
 |----------|---------|-------------------|
@@ -322,15 +260,11 @@ The layer definitions are owned by [verify-full](../commands/verify-full.md).
 **Output:** `testing/`
 **Gate:** User approves test plan before execution
 
-### What happens
-
 Auto-detects test setup and generates test cases. E2E specs are generated
 **directly from `product-spec/journeys/journeys.yml`** (one Playwright spec per
 `JRN`; steps → actions, edges → assertions; selectors from
 `mockups/component-map.yml`). `playwright-cli` is the committed default runner
 (`e2e_runner: playwright-cli`). See [docs/journeys.md](./journeys.md).
-
-### Test types generated
 
 | Type | ID Format | Source |
 |------|-----------|--------|
@@ -349,15 +283,11 @@ Auto-detects test setup and generates test cases. E2E specs are generated
 **Output:** `bugs/`, `test-report.md`
 **Gate:** ≥80% pass rate AND zero P0/P1 open bugs
 
-### What happens
+Tests run via `playwright-cli` in priority order: Smoke → E2E → API → Regression.
+Each bug gets `bugs/BUG-NNN.md` with evidence, gap analysis and fix log; P0/P1 bugs
+go through an auto-fix loop with retest and smoke regression check.
 
-Tests executed via `playwright-cli` in priority order: Smoke → E2E → API → Regression.
-
-Per bug: `bugs/BUG-NNN.md` with evidence, gap analysis, fix log.
-Auto-fix loop for P0/P1 bugs with retest and smoke regression check.
-
-### Exit criteria
-
+Exit criteria:
 - All P0 smoke tests PASS
 - All E2E happy paths PASS
 - ≥80% of all tests PASS
@@ -372,21 +302,12 @@ Auto-fix loop for P0/P1 bugs with retest and smoke regression check.
 **Output:** `release-readiness.md`
 **Gate:** User confirms readiness verdict
 
-### What happens
-
-Pre-ship checklist:
-
-| Section | What it checks |
-|---------|---------------|
-| Feature Flags & Rollout | Flag configured, rollout strategy, rollback plan |
-| Documentation | User docs, API docs, changelog, migration guide |
-| Monitoring | Metrics, alerts, dashboard, runbook |
-| Analytics | Tracking plan status, event instrumentation |
-| Dependencies | Env vars, migrations, external services, CI/CD |
-| Security | Security check status, secrets, permissions |
-
-Consolidates status of api-docs, security-check, and tracking-plan commands.
-Verdict: READY TO SHIP / CONDITIONALLY READY / NOT READY.
+Pre-ship checklist — feature flags & rollout (flag, rollout strategy, rollback
+plan), documentation (changelog, migration guide), monitoring (alerts, runbook),
+analytics (event instrumentation), dependencies (env vars, migrations, external
+services, CI/CD), security (secrets, permissions) — consolidating the status of the api-docs,
+security-check, and tracking-plan commands. Verdict: READY TO SHIP /
+CONDITIONALLY READY / NOT READY.
 
 ---
 
@@ -413,10 +334,10 @@ Verdict: READY TO SHIP / CONDITIONALLY READY / NOT READY.
 **Output:** updates canonical `specs/<domain>/spec.md`; archives the feature to `{features_dir}/_archived/<date>-<slug>/`
 **Gate:** user approves the merge diff
 
-Merges a completed feature's delta specs into the canonical `specs/` source of truth
-(upsert by `FR-*`, idempotent) and archives the change with audit history (OpenSpec
-model), so the spec stays a living source of truth across the feature's lifetime.
-Consumes verify-full's "Suggested canonical-spec updates".
+Folds a completed feature's delta specs into the canonical `specs/` (upsert by
+`FR-*`, idempotent) and archives the change with audit history, so the canonical
+spec stays current across the feature's lifetime. Consumes verify-full's
+"Suggested canonical-spec updates".
 
 ---
 
@@ -426,11 +347,9 @@ Consumes verify-full's "Suggested canonical-spec updates".
 **Output:** `retrospective.md`
 **Recommended:** Run ≥14 days after shipping
 
-### What happens
-
-Compares predicted KPIs (from research/metrics-roi.md) against real data.
-Queries the connected MCPs (PostHog/Amplitude, Sentry; NewRelic optional), collects analytics data, audits research accuracy.
-Produces lessons learned and next-step recommendations.
+Compares predicted KPIs (from research/metrics-roi.md) against real data from the
+connected MCPs (PostHog/Amplitude, Sentry; NewRelic optional), audits research
+accuracy, and produces lessons learned and next-step recommendations.
 
 ---
 
@@ -442,18 +361,18 @@ Produces lessons learned and next-step recommendations.
 **Output:** `sync-report.md` + `sync-report.json`
 
 Runnable between ANY phases. Checks 10 artifact layers (incl. contract-drift + doc↔code) for forward and backward drift.
-`--quick` mode runs automatically between forge phase transitions.
-Human-in-the-loop for each CRITICAL/WARNING resolution.
+`--quick` mode runs automatically between forge phase transitions. Human-in-the-loop
+for each CRITICAL/WARNING resolution.
 
 ### Change Request
 
 **Command:** `/speckit.product-forge.change-request`
 **Output:** `change-log.md`
 
-Formal scope change management: capture → impact analysis → effort delta → propagate.
-Traces changes with `CR-NNN` markers across all affected artifacts. Emits **delta
-specs** (`## ADDED / ## MODIFIED / ## REMOVED`) against canonical `specs/` (v1.6).
-Runs sync-verify after application.
+Formal scope change management: capture → impact analysis → effort delta →
+propagate. Traces changes with `CR-NNN` markers across all affected artifacts,
+emits **delta specs** (`## ADDED / ## MODIFIED / ## REMOVED`) against canonical
+`specs/`, and runs sync-verify after application.
 
 ### Portfolio
 
@@ -485,5 +404,3 @@ Runs sync-verify after application.
 | `/speckit.product-forge.api-docs` | Generate OpenAPI 3.1 + Postman collection from plan.md |
 | `/speckit.product-forge.security-check` | OWASP audit scoped to detected surfaces |
 | `/speckit.product-forge.tracking-plan` | Analytics events, funnels, SDK snippets |
-
----

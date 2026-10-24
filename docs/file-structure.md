@@ -1,15 +1,14 @@
 # Product Forge — File Structure Reference
 
-Every Product Forge feature lives in a self-contained directory, `FEATURE_DIR`,
-under the project's `features_dir` (default `features/`). Where `FEATURE_DIR` sits
-is decided by the storage strategy ([below](#storage-strategies-feature-root-placement));
-the tree **inside** it is the same for every strategy. All documents within a
+Every feature lives in a self-contained `FEATURE_DIR` under the project's
+`features_dir` (default `features/`). The storage strategy
+([below](#storage-strategies-feature-root-placement)) decides where `FEATURE_DIR`
+sits; the tree **inside** it is the same for every strategy. Documents within a
 feature are cross-linked via README.md index files.
 
 This document owns the **layout**. The `.forge-status.yml` field shape is canonical
 in [schema/forge-status-v3.schema.yml](./schema/forge-status-v3.schema.yml) (narrative:
-[schema.md](./schema.md)); the cross-artifact ID system is canonical in
-[schema.md §8](./schema.md#8-cross-artifact-id-system).
+[schema.md](./schema.md)).
 
 ---
 
@@ -22,8 +21,8 @@ Which files exist depends on the feature mode and on which optional phases ran
 {features_dir}/
 └── {feature-slug}/                          ← FEATURE_DIR (kebab-case)
     │
-    ├── README.md                            ← 🗂️ Feature root index (all phases + links)
-    ├── .forge-status.yml                    ← 📊 Phase tracker (read by all commands)
+    ├── README.md                            ← Feature root index (all phases + links)
+    ├── .forge-status.yml                    ← Phase tracker (read by all commands)
     ├── .forge-status.yml.lock               ← transient state lock (runtime.md §2)
     ├── .forge-dry-run/<phase>/              ← transient --dry-run output (runtime.md §7; gitignore it)
     │
@@ -146,21 +145,18 @@ the installed plugin via `${PLUGIN_ROOT}` ([runtime.md §1A](./runtime.md#1a-loc
 
 ## Storage strategies (feature-root placement)
 
-The tree above shows the **internal artifact tree** of a feature. That tree is
-**invariant** — `research/`, `product-spec/journeys/`, `contracts/`,
-`.forge-status.yml`, `testing/`, and every other path inside a feature are
-byte-for-byte identical no matter where the feature root sits. The only thing a
-storage strategy changes is **how a single `FEATURE_DIR` is placed under
-`features_dir`**; everything below `FEATURE_DIR` is untouched.
-
-The strategy is selected by the `storage_strategy` config key. It is additive:
-the absent key resolves to `flat`, and no existing feature ever has to move.
+The `storage_strategy` config key decides only **how a single `FEATURE_DIR` is
+placed under `features_dir`**. The internal artifact tree above (`research/`,
+`product-spec/journeys/`, `contracts/`, `.forge-status.yml`, `testing/`, …) is
+**invariant** — byte-for-byte identical wherever the feature root sits. The key is
+additive: an absent key resolves to `flat`, and no existing feature ever has to
+move.
 
 | Strategy | Status | Feature root | Notes |
 |----------|--------|--------------|-------|
 | `flat` | **default** | `features/<slug>/` | Every feature is an immediate child of `features_dir`; the filesystem enforces global slug uniqueness. Resolve is a direct join with no scan. |
 | `domain-nested` | first-class (opt-in) | `features/<domain>/<slug>/` | One extra grouping level by area/team/surface. A single depth-tolerant discovery rule subsumes flat (depth 1) and `_archived/<date-slug>` (depth 2); mixed flat + nested layouts coexist. Same slug in two domains is referenced as `<domain>/<slug>`. |
-| `ddd` | active (opt-in) | `features/<context>/<slug>/` | Groups by bounded context mirroring `specs/<domain>/`, backed by a `features/domains.yml` registry (`slug: context`) for O(1) resolution. |
+| `ddd` | active (opt-in) | `features/<context>/<slug>/` | Groups by bounded context mirroring `specs/<domain>/`, backed by a `features/domains.yml` registry (`slug: context`, healed on resolve/create) for O(1) resolution. `_archived/` may be context-keyed: `_archived/<context>/<date>-<slug>/`. |
 | `workspace` | active (opt-in, monorepo) | `features/<workspace>/<slug>/` | Each feature lives under its primary monorepo workspace (`scope.primary`); requires a `codebase.paths` block. Same on-disk depth as `domain-nested`. |
 
 **`flat` layout** (default):
@@ -177,7 +173,9 @@ features/
     └── …
 ```
 
-**`domain-nested` layout** (`storage_strategy: domain-nested`):
+**`domain-nested` layout** (`ddd` and `workspace` have the same shape, with a
+bounded context or monorepo workspace as the grouping folder; `ddd` adds the
+top-level `domains.yml` registry file):
 
 ```
 features/
@@ -190,55 +188,25 @@ features/
 │   └── digest-emails/
 │       ├── .forge-status.yml
 │       └── …
-├── appearance/
-│   └── dark-mode-toggle/
-│       ├── .forge-status.yml
-│       └── …
 └── legacy-feature/             ← a pre-existing flat feature still resolves
     ├── .forge-status.yml          (legacy depth-1 fallback)
     └── …
 ```
 
-**`ddd` layout** (`storage_strategy: ddd`) — like `domain-nested`, but the grouping
-folder is a DDD **bounded context** (mirroring `specs/<domain>/`) and a
-`features/domains.yml` registry maps each slug → context for O(1) resolution:
-
-```
-features/
-├── _portfolio/                 ← reserved namespace
-├── _archived/                  ← reserved (may be context-keyed: _archived/<context>/<date>-<slug>/)
-├── domains.yml                 ← registry: `slug: context` (a FILE, skipped by enumerate)
-├── ordering/                   ← <context>
-│   ├── checkout-redesign/         ← FEATURE_DIR (depth 2)
-│   │   ├── .forge-status.yml
-│   │   └── …                      ← invariant internal tree
-│   └── apply-coupon/
-│       └── .forge-status.yml
-└── billing/
-    └── invoice-pdf/
-        └── .forge-status.yml
-```
-
-**`workspace` layout** (`storage_strategy: workspace`, monorepo only) is identical
-in shape, with the grouping folder being a monorepo workspace (`scope.primary`,
-from `codebase.paths`): `features/<workspace>/<slug>/`.
-
 The reserved `_`-prefixed namespaces (`_portfolio/`, `_archived/`) stay top-level
-under every strategy and are excluded from feature enumeration; the `domains.yml`
-registry file (ddd) is likewise skipped. See
-[runtime.md §12](./runtime.md#12-path-resolution-contract) for the normative
-Path-Resolution Contract. A starter registry template lives at
-[`docs/templates/domains.yml`](./templates/domains.yml).
+under every strategy and are excluded from feature enumeration, as is the
+`domains.yml` registry file (ddd). Normative resolution:
+[runtime.md §12](./runtime.md#12-path-resolution-contract) (Path-Resolution
+Contract). Starter registry: [`docs/templates/domains.yml`](./templates/domains.yml).
 
 ---
 
 ## Decomposition Rules
 
-Product Forge decomposes documents that would be too large. The threshold is
-`max_tokens_per_doc` in config (default: 4000 tokens ≈ 3000 words); the general
-procedure — which documents split, how parts are named, which stay single files —
-is [runtime.md §10.1](./runtime.md#101-document-size-budget-max_tokens_per_doc).
-The table below holds the fixed per-type layouts that apply first.
+The size budget (`max_tokens_per_doc`, default 4000 tokens ≈ 3000 words) and the
+general split-or-tighten procedure are
+[runtime.md §10.1](./runtime.md#101-document-size-budget-max_tokens_per_doc). These
+fixed per-type layouts apply first:
 
 | Document | When to Decompose | How |
 |----------|------------------|-----|
@@ -251,7 +219,7 @@ The table below holds the fixed per-type layouts that apply first.
 
 ## Cross-linking Convention
 
-All documents use **relative links**. Every generated document includes a navigation header:
+All documents use **relative links**, and every generated document starts with a navigation header:
 
 ```markdown
 > Related: [Product Spec](./product-spec.md) | [Journeys](./journeys/) | [Research →](../research/README.md)
@@ -263,144 +231,24 @@ HTML files include an in-page navigation bar linking sibling screens.
 
 ## Artifact schemas
 
-The `.forge-status.yml` shape — phases, status values, `gates[]`, `task_log[]` — is
-**not** restated here; read [schema/forge-status-v3.schema.yml](./schema/forge-status-v3.schema.yml).
-The shapes below are the markdown artifacts.
+Markdown artifact shapes live in the templates their writing command reads (the
+`.forge-status.yml` shape is the canonical schema linked above):
 
-### review.md
-
-```markdown
-# Review Log: {Feature Name}
-
-> Feature: {slug} | Status: OPEN | APPROVED
-> Started: {date}
-
-## Current Status: UNDER REVIEW | APPROVED
-
-## Revision History
-
-## Revision #1 — {date}
-**User feedback:** > {verbatim}
-**Changes applied:** | File | Type | Description |
-**Agent notes:** {notes}
-
----
-
-## ✅ APPROVED — {date}
-**Approved after {N} revision(s)**
-**Final document inventory:** | Document | Lines | Last Modified |
-**Status: LOCKED**
-```
-
-### verify-report.md
-
-```markdown
-# Verification Report: {Feature}
-
-## Summary
-| Status | Count |
-| ❌ CRITICAL | N |
-| ⚠️ WARNING  | N |
-| ✅ PASSED   | N |
-
-**Overall verdict:** PASS | PASS WITH WARNINGS | FAIL
-
-## Layer 1 … Layer 11          ← one section per layer defined in commands/verify-full.md
-## Critical Issues (if any)
-## Warnings (if any)
-## Suggested canonical-spec updates   ← consumed by spec-merge
-## Traceability Matrix
-## Conclusion
-```
-
-The layer list and order are owned by [verify-full](../commands/verify-full.md) (11 layers).
-
-### BUG-NNN.md
-
-```markdown
-# BUG-{NNN}: {short title}
-
-> Severity: P{0-4} | Status: 🔴 Open | ✅ Verified | ⚠️ Deferred
-> Test Run: #{N} | Date: {date}
-> Test Case: {TC-ID}
-> Journey: {JRN-NNN} | Step/Edge: {STEP-NNN|EDGE-NNN}
-
-## Description
-{Clear one-sentence description of what's wrong}
-
-## Steps to Reproduce
-1. {step}
-2. {step}
-
-## Expected Behavior
-{What should happen per acceptance criteria}
-> AC Reference: {US-NNN} — {AC text from spec.md}
-
-## Actual Behavior
-{What actually happened}
-
-## Evidence
-- Screenshot: `testing/playwright-results/{name}.png`
-- Trace: `testing/playwright-results/{name}.zip`
-- Error: `{error message / stack trace excerpt}`
-
-## Gap Analysis
-- [ ] Implementation bug (code doesn't match spec — fix code)
-- [ ] Spec gap (spec is ambiguous — needs clarification)
-- [ ] Test issue (test is wrong — fix test)
-- [ ] Environment issue (test env problem — not a product bug)
-
-## Fix Applied
-{Filled after fix — what was changed, which files}
-
-## Retest Result
-{PASS / FAIL / BLOCKED}
-```
-
-### test-report.md
-
-```markdown
-# Test Report: {Feature Name}
-
-> Test Run: #{N} | Date: {date}
-> Result: ✅ PASS | ⚠️ PASS WITH KNOWN ISSUES | ❌ FAIL
-
-## Executive Summary
-{2-3 sentences: what was tested, overall outcome, key stats}
-
-## Results Summary
-| Type | Pass | Fail | Skip | Total | Pass Rate |
-|------|------|------|------|-------|-----------|
-| Smoke | {N} | {N} | {N} | {N} | {%%} |
-| E2E | {N} | {N} | {N} | {N} | {%%} |
-| API | {N} | {N} | {N} | {N} | {%%} |
-| Regression | {N} | {N} | {N} | {N} | {%%} |
-| **Total** | **{N}** | **{N}** | **{N}** | **{N}** | **{%%}** |
-
-## Story Coverage
-| Story | Priority | Test Cases | Result |
-|-------|----------|-----------|--------|
-
-## Bugs Summary
-| ID | Title | Severity | Status |
-|----|-------|----------|--------|
-
-## Spec Changes Applied During Testing
-## Known Issues / Deferred Bugs
-## Conclusion
-## Traceability
-Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → Bugs → Fixes → Verified
-```
+| Artifact | Template | Writer |
+|----------|----------|--------|
+| `review.md` | [templates/revalidate-review.md](./templates/revalidate-review.md) | `revalidate` |
+| `verify-report.md` | [templates/verify-full-report.md](./templates/verify-full-report.md) — one section per layer (11 layers, owned by [verify-full](../commands/verify-full.md)) plus `## Suggested canonical-spec updates`, consumed by spec-merge | `verify-full` |
+| `bugs/BUG-NNN.md` | [templates/test-run-bug.md](./templates/test-run-bug.md) | `test-run` |
+| `test-report.md` | [templates/test-run-test-report.md](./templates/test-run-test-report.md) | `test-run` |
 
 ---
 
 ## Naming Conventions
 
-The IDs that flow along the traceability chain — `REQ`, `US`, `JRN`/`STEP`/`EDGE`,
-`FR`, `CMP`, `API`, `T0NN`, `TC-*`, `EVT`, `SEC`, `F` — are defined in
-[schema.md §8](./schema.md#8-cross-artifact-id-system), including which phase mints
-each and how `REQ` relates to `FR`. This table covers file names and the IDs that
-stay local to one artifact.
+Traceability-chain IDs (`REQ`, `US`, `JRN`/`STEP`/`EDGE`, `FR`, `CMP`, `API`,
+`T0NN`, `TC-*`, `EVT`, `SEC`, `F`) are defined in
+[schema.md §8](./schema.md#8-cross-artifact-id-system). This table covers file
+names and artifact-local IDs.
 
 | What | Convention | Example |
 |------|-----------|---------|

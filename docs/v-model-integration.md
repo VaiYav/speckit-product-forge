@@ -5,10 +5,9 @@
 > **External dependency:** [leocamello/spec-kit-v-model](https://github.com/leocamello/spec-kit-v-model) v0.5.0 or higher
 > **Companions:** [policy.md §4](./policy.md#4-feature-modes-e1), [runtime.md](./runtime.md)
 
-Product Forge does not implement the V-Model itself. Instead, it
-delegates the formal V-Model artifact progression to the external
-**V-Model Extension Pack** and orchestrates around it. This document
-describes how the two plugins cooperate.
+Product Forge delegates the formal V-Model artifact progression to the external
+**V-Model Extension Pack** and orchestrates around it. This document describes how
+the two plugins cooperate.
 
 ---
 
@@ -23,46 +22,42 @@ Pick `feature_mode: v-model` when any of these applies:
 - Formal test planning at every level (system / integration / unit) with
   named techniques per ISO 29119.
 
-If you do not need these, prefer `feature_mode: standard` — the
-V-Model adds significant per-feature overhead (documentation, review
-gates, compliance artifacts) that is wasted on unregulated work.
+Otherwise prefer `feature_mode: standard` — the V-Model's per-feature overhead
+(documentation, review gates, compliance artifacts) is wasted on unregulated work.
 
 ---
 
 ## 2. Installation
 
-The V-Model Extension Pack is an **optional dependency**. Product Forge
-does not bundle it; projects that need it install it explicitly:
+The V-Model Extension Pack is an **optional dependency**, not bundled; projects
+that need it install it explicitly:
 
 ```bash
 specify extension add v-model \
   --from https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.5.0.zip
 ```
 
-To verify the install, check that `speckit.v-model.requirements` is
-available in your slash-command list.
+Verify the install: `speckit.v-model.requirements` is in your slash-command list.
 
 ### Version pinning
 
-Product Forge tracks compatibility via the `optional_extensions` block
-in its own `extension.yml`. The currently supported V-Model version
-range is `>=0.5.0`. If the V-Model plugin publishes a breaking change,
-Product Forge's range is updated in a minor release and the new
-expected commands are wired into `forge.md`.
+Compatibility is tracked in the `optional_extensions` block of Product Forge's
+`extension.yml`; the supported V-Model range is `>=0.5.0`. A breaking V-Model
+change is absorbed in a Product Forge minor release (range updated, new commands
+wired into `forge.md`).
 
 ---
 
 ## 3. Detection and fallback
 
-At the start of a v-model feature, the orchestrator detects whether the
-plugin is installed by probing for the command
+At the start of a v-model feature, the orchestrator probes for the command
 `speckit.v-model.requirements`.
 
 | Detection result | Behaviour |
 |------------------|-----------|
 | Installed, version matches | Proceed with v-model phase map (§4 below). |
-| Installed, version below required | Abort with upgrade instructions. Do NOT fall back to standard — version mismatches cause silent artifact incompatibility. |
-| Not installed | Abort with install command. Do NOT fall back to standard — regulated work must not silently degrade to unregulated. |
+| Installed, version below required | Abort with upgrade instructions; stay in v-model (never fall back to standard) — version mismatches cause silent artifact incompatibility. |
+| Not installed | Abort with the install command; stay in v-model (never fall back to standard) — regulated work must not silently degrade to unregulated. |
 | User toggles `feature_mode: v-model` on a feature created with `standard` | Warn that a mid-feature mode change is unusual for formal work; require explicit confirmation; re-run the backfill of missing V-Model artifacts from existing product-spec / plan if any. |
 
 ### Domain configuration
@@ -74,19 +69,17 @@ The V-Model plugin accepts `v-model-config.yml` with domain selection:
 domain: "iec_62304"   # iec_62304 | iso_26262 | do_178c | generic
 ```
 
-Product Forge reads this file (if present) and passes the domain to
-every delegated V-Model command so their templates pick the right
-regulatory vocabulary.
+Product Forge reads this file (if present) and passes the domain to every
+delegated V-Model command so its templates use the right regulatory vocabulary.
 
 ---
 
 ## 4. Phase map in v-model mode
 
-The v-model lifecycle runs **every Product Forge phase it runs in `standard`**
-and inserts the formal V-Model progression around them — nothing is replaced.
-Per-mode applicability comes from
-[`schema/phase-map.yml`](./schema/phase-map.yml), the single source; this section
-only places the V-phases.
+The v-model lifecycle runs **every Product Forge phase `standard` runs** and
+inserts the formal V-Model progression around them — nothing is replaced.
+Per-mode applicability is [`schema/phase-map.yml`](./schema/phase-map.yml); this
+section only places the V-phases.
 
 - **Phases 0–4 run as in standard.** Phase 2 product-spec stays the product
   source (journeys, wireframes, acceptance criteria); Phase 3 revalidates it;
@@ -136,86 +129,18 @@ Phase 9 release-readines║                               ║  9   (opt)
 
 ### Phase detail
 
-#### V1 — Requirements (after Phase 4 bridge)
-
-- Command: `speckit.v-model.requirements`
-- Input: `spec.md` from the bridge, the approved `product-spec/`, research
-  outputs, hypotheses from Phase 0. V1 formalises the product spec into
-  traceable requirements; it does not replace it.
-- Output: `requirements.md` with `REQ-NNN` traceable IDs.
-- Gate: user approval; drift from research captured in gates[].
-
-#### V2 — Hazard analysis (optional, conditional)
-
-- Command: `speckit.v-model.hazard-analysis`
-- Trigger: domain is `iec_62304`, `iso_26262`, or user explicitly enables.
-- Output: FMEA with `HAZ-NNN` IDs per ISO 14971 / ISO 26262.
-- The gate is more formal: hazards classified as "unacceptable" block
-  progression until mitigations are wired back into the requirements.
-
-#### V3 — Acceptance test plan
-
-- Command: `speckit.v-model.acceptance`
-- Runs AFTER requirements. Forces test-first thinking at the system
-  boundary before any design begins.
-- Output: three-tier ATP (`ATP-NNN`) with 100% requirement coverage
-  validation + BDD scenarios.
-
-#### V4 / V5 — System design + test (paired)
-
-- `speckit.v-model.system-design` → IEEE 1016-compliant system components
-  (`SYS-NNN`) with four design views.
-- `speckit.v-model.system-test` → ISO 29119 system test plan
-  (`STP-NNN`) with named techniques per component.
-- Gate: pair must be approved together. Peer-review recommended.
-
-#### V6 / V7 — Architecture design + integration test (paired)
-
-- `speckit.v-model.architecture-design` → IEEE 42010 / Kruchten 4+1
-  architecture modules (`ARCH-NNN`).
-- `speckit.v-model.integration-test` → ISO 29119-4 integration tests
-  (`ITP-NNN`) with four named techniques per module.
-
-#### V8 / V9 — Module design + unit test (paired)
-
-- `speckit.v-model.module-design` → low-level designs (`MOD-NNN`)
-  compliant with DO-178C / ISO 26262.
-- `speckit.v-model.unit-test` → white-box unit tests (`UTP-NNN`) with
-  five named techniques per module.
-- The approved V4 / V6 / V8 designs are inputs for our Phase 5 plan, and the
-  output of V9 is the input for our Phase 5B tasks: every `MOD-NNN`
-  becomes one or more tasks, every `UTP-NNN` becomes one or more unit
-  tests in Phase 8B / test-plan §5E.
-
-#### V10 — Trace (checkpoint, runnable anytime)
-
-- Command: `speckit.v-model.trace`
-- Builds / updates the bidirectional traceability matrix
-  (`REQ → SYS → ARCH → MOD → Code`) plus the test chain
-  (`REQ → ATP`, `SYS → STP`, `ARCH → ITP`, `MOD → UTP`).
-- Run automatically by the orchestrator at each level-pair boundary
-  (after V4-V5, V6-V7, V8-V9). Re-run after any change request.
-
-#### V11 — Peer review (optional, runnable on any artifact)
-
-- Command: `speckit.v-model.peer-review`
-- Stateless linter against the relevant standard (IEEE 29148 for
-  requirements, IEEE 1016 for design, ISO 29119 for tests).
-- Emits `PRF-{ARTIFACT}-NNN` findings. Run for any artifact that goes
-  through external audit.
-
-#### V12 — Test results (after Phase 8B)
-
-- Command: `speckit.v-model.test-results`
-- Ingests JUnit XML + optional Cobertura XML from Phase 8B (or from CI)
-  and populates the traceability matrix with PASS / FAIL / coverage.
-
-#### V13 — Audit report (before Phase 9)
-
-- Command: `speckit.v-model.audit-report`
-- Monolithic release-audit-report cross-referenced against waivers and
-  compliance requirements. Gates Phase 9 — release-readiness cannot
-  approve until the audit report is `COMPLIANT` or has signed waivers.
+| V | Command | Output and rules |
+|---|---------|------------------|
+| V1 | `speckit.v-model.requirements` | After Phase 4. Input: `spec.md` from the bridge, the approved `product-spec/`, research outputs, Phase 0 hypotheses. Output: `requirements.md` with `REQ-NNN` traceable IDs — formalises the product spec, does not replace it. Gate: user approval; drift from research captured in `gates[]`. |
+| V2 | `speckit.v-model.hazard-analysis` | Optional; triggered when the domain is `iec_62304` or `iso_26262`, or the user enables it. FMEA with `HAZ-NNN` IDs per ISO 14971 / ISO 26262. Hazards classified "unacceptable" block progression until mitigations are wired back into the requirements. |
+| V3 | `speckit.v-model.acceptance` | Runs AFTER requirements, before any design (test-first at the system boundary). Three-tier ATP (`ATP-NNN`) with 100% requirement coverage validation + BDD scenarios. |
+| V4 / V5 | `speckit.v-model.system-design` / `speckit.v-model.system-test` | IEEE 1016 system components (`SYS-NNN`, four design views) paired with an ISO 29119 system test plan (`STP-NNN`, named techniques per component). The pair is approved together; peer review recommended. |
+| V6 / V7 | `speckit.v-model.architecture-design` / `speckit.v-model.integration-test` | IEEE 42010 / Kruchten 4+1 architecture modules (`ARCH-NNN`) paired with ISO 29119-4 integration tests (`ITP-NNN`, four named techniques per module). |
+| V8 / V9 | `speckit.v-model.module-design` / `speckit.v-model.unit-test` | Low-level designs (`MOD-NNN`, DO-178C / ISO 26262) paired with white-box unit tests (`UTP-NNN`, five named techniques per module). The approved V4 / V6 / V8 designs feed Phase 5 plan; V9 output feeds Phase 5B tasks — every `MOD-NNN` becomes ≥1 task, every `UTP-NNN` ≥1 unit test (test-plan `TC-UNIT-NNN`, run in Phase 8B). |
+| V10 | `speckit.v-model.trace` | Checkpoint, runnable anytime. Builds the bidirectional matrix `REQ → SYS → ARCH → MOD → Code` plus the test chain (`REQ → ATP`, `SYS → STP`, `ARCH → ITP`, `MOD → UTP`). Run automatically after V4-V5, V6-V7, V8-V9, and after any change request. |
+| V11 | `speckit.v-model.peer-review` | Optional, on any artifact. Stateless linter against the relevant standard (IEEE 29148 requirements, IEEE 1016 design, ISO 29119 tests); emits `PRF-{ARTIFACT}-NNN` findings. Run for any artifact that goes through external audit. |
+| V12 | `speckit.v-model.test-results` | After Phase 8B. Ingests JUnit XML + optional Cobertura XML (from Phase 8B or CI) into the traceability matrix as PASS / FAIL / coverage. |
+| V13 | `speckit.v-model.audit-report` | Before Phase 9. Release-audit report cross-referenced against waivers and compliance requirements; release-readiness approves only once it is `COMPLIANT` or has signed waivers. |
 
 ---
 
@@ -223,31 +148,29 @@ Phase 9 release-readines║                               ║  9   (opt)
 
 ### Impact analysis on change request
 
-When `/speckit.product-forge.change-request` runs for a v-model
-feature, it delegates the downward / upward impact walk to
-`speckit.v-model.impact-analysis`. The formal V-Model knows the exact
-artifact dependency graph and is strictly more precise than the
-generic product-forge change tracker.
+For a v-model feature, `/speckit.product-forge.change-request` delegates the
+downward / upward impact walk to `speckit.v-model.impact-analysis`, which knows the
+exact artifact dependency graph.
 
 ### Sync-verify + V-Model trace
 
-`/speckit.product-forge.sync-verify` in v-model mode adds V-Model
-trace completeness as an 8th check layer. Any orphan requirement or
+`/speckit.product-forge.sync-verify` in v-model mode adds a V-Model
+trace-completeness check on top of its 10 layers. Any orphan requirement or
 design element without a test pair is flagged CRITICAL.
 
 ### Peer-review integration
 
-Any phase gate in v-model mode CAN request peer-review before
-approval. The orchestrator offers: *"Run peer-review on this
-artifact?"* — delegates to `speckit.v-model.peer-review`, attaches
-findings to the gate entry.
+Any phase gate in v-model mode CAN request peer-review before approval: the
+orchestrator offers *"Run peer-review on this artifact?"*, delegates to
+`speckit.v-model.peer-review`, and attaches findings to the gate entry.
 
 ---
 
 ## 6. Status file changes
 
-In v-model mode, `.forge-status.yml` gains one v-model-specific block
-populated by the delegated commands (our plugin only reads it):
+In v-model mode, `.forge-status.yml` gains one `v_model` block, written by the
+V-Model plugin's commands and read by the Product Forge orchestrator (gate
+decisions, verify-full):
 
 ```yaml
 v_model:
@@ -274,19 +197,15 @@ v_model:
     waivers_open: 0
 ```
 
-Writers: the V-Model plugin's commands. Reader: Product Forge
-orchestrator (for gate decisions and verify-full).
-
 ---
 
 ## 7. Orchestrator contract in v-model mode
 
-- **Never bypass** a level-pair: V4 (system-design) cannot start before
-  V1 (requirements) is approved.
+- **Respect level order**: V4 (system-design) starts only after V1
+  (requirements) is approved; never bypass a level pair.
 - **Trace at every checkpoint**: V10 runs between each level pair, not
   only at the end.
-- **No silent fallbacks**: missing plugin → abort with install instruction,
-  not degradation to standard mode.
+- **No silent fallbacks**: missing or outdated plugin → abort (§3).
 - **Peer-review is opt-in at the gate, not configurable away**: even
   solo-mode users see the peer-review offer on formal artifacts.
 - **Audit is a gate, not a suggestion**: V13 audit-report must return
@@ -296,12 +215,11 @@ orchestrator (for gate decisions and verify-full).
 
 ## 8. Limits and non-goals
 
-- Product Forge does not duplicate V-Model functionality. If the plugin
-  is absent, v-model mode is unavailable — full stop.
-- The V-Model plugin owns the artifact formats and the regulatory
-  vocabulary. Product Forge should not second-guess or rewrite them.
-- Cross-feature concerns (portfolio view, flag cleanup, i18n harvest)
-  are agnostic to mode — they work identically in v-model mode.
-- Lite mode is incompatible with v-model (lite omits too many levels).
-  Requesting v-model from a lite feature is rejected; the user must
-  start a new feature in v-model mode.
+- Product Forge does not duplicate V-Model functionality; without the plugin,
+  v-model mode is unavailable.
+- The V-Model plugin owns the artifact formats and the regulatory vocabulary;
+  Product Forge uses them as delivered.
+- Cross-feature concerns (portfolio view, flag cleanup, i18n harvest) work
+  identically in v-model mode.
+- Lite mode is incompatible with v-model (lite omits too many levels). Requesting
+  v-model from a lite feature is rejected; start a new feature in v-model mode.

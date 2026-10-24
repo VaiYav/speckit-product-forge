@@ -7,11 +7,11 @@ Product Forge ships from a single repository in **two installable forms**:
 | SpecKit extension | `extension.yml` | `specify extension add product-forge --from <zip>` | `/speckit.product-forge.forge` |
 | Claude Code / Claude plugin | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | `/plugin install speckit-product-forge@vaiyav-plugins` | `/speckit-product-forge:forge` |
 
-Both forms reuse the **same 33 command files** in [`commands/`](../commands) and the same [`docs/`](.) and [`scripts/`](../scripts). Nothing was rewritten to add plugin support — only manifest files were added.
+Both forms reuse the **same 33 command files** in [`commands/`](../commands) and the same [`docs/`](.) and [`scripts/`](../scripts); plugin support adds only manifest files.
 
 ## What makes this a plugin
 
-Claude Code auto-discovers a plugin's `commands/` directory, so the existing command files become slash commands with no changes. Two manifests were added at the repo root:
+Claude Code auto-discovers a plugin's `commands/` directory, so the command files become slash commands unchanged. Two manifests sit at the repo root:
 
 ```
 .claude-plugin/
@@ -19,15 +19,15 @@ Claude Code auto-discovers a plugin's `commands/` directory, so the existing com
 └── marketplace.json   # a one-plugin marketplace catalog, source: "./"
 ```
 
-Because the plugin **is** the repository root (`"source": "./"`), `commands/`, `docs/`, `scripts/`, and `config-template.yml` are all copied together into the plugin cache, so every `../docs/...` reference inside a command still resolves after installation. Commands locate bundled scripts via `${PLUGIN_ROOT}` (see [docs/runtime.md §1A](./runtime.md#1a-locating-bundled-scripts-plugin_root)) rather than a bare relative path, so they resolve from the cache too.
+Because the plugin **is** the repository root (`"source": "./"`), `commands/`, `docs/`, `scripts/`, and `config-template.yml` are copied together into the plugin cache, so every `../docs/...` reference inside a command resolves after installation. Commands locate bundled scripts via `${PLUGIN_ROOT}` ([docs/runtime.md §1A](./runtime.md#1a-locating-bundled-scripts-plugin_root)), which resolves from the cache too.
 
 ### `marketplace.json`
 
-Defines the **`vaiyav-plugins`** marketplace and lists one plugin whose source is the repo root. The marketplace name is reusable — add more plugins to the `plugins` array later without changing the install flow.
+Defines the **`vaiyav-plugins`** marketplace with one plugin whose source is the repo root; more plugins can join the `plugins` array without changing the install flow.
 
 ### `plugin.json`
 
-Declares the plugin **`speckit-product-forge`**, version `1.8.0` (kept in sync with `extension.yml`), plus author, repository, license, and discovery keywords. Version lives **only** here (not duplicated in the marketplace entry) — `plugin.json` wins silently if both are set, so a single source of truth avoids version drift.
+Declares the plugin **`speckit-product-forge`**, version `1.8.0` (kept in sync with `extension.yml`), plus author, repository, license, and discovery keywords. The version lives **only** here, not in the marketplace entry (`plugin.json` wins silently if both are set).
 
 ## Command-name mapping
 
@@ -40,7 +40,7 @@ The command name comes from the file name, namespaced by the plugin name. As a p
 | `commands/research.md` | `/speckit.product-forge.research` | `/speckit-product-forge:research` |
 | …all 33 commands | `/speckit.product-forge.<name>` | `/speckit-product-forge:<name>` |
 
-The dotted `name:` field still present in each command's frontmatter is the SpecKit identifier; Claude Code ignores it and derives the slash command from the file name, so both forms coexist without conflict.
+The dotted `name:` in each command's frontmatter is the SpecKit identifier; Claude Code ignores it and derives the slash command from the file name, so both forms coexist.
 
 ## Install, validate, publish
 
@@ -66,12 +66,12 @@ claude plugin marketplace add VaiYav/speckit-product-forge@v1.8.0
 
 ### Versioning
 
-Bump `version` in `plugin.json` on every release (and match `extension.yml`). If `version` is unchanged, installed users keep the cached copy even after new commits. Omitting `version` would make every commit a new version — but here it is pinned intentionally to track the documented release.
+Bump `version` in `plugin.json` on every release (and match `extension.yml`); with an unchanged `version`, installed users keep the cached copy even after new commits. The version is pinned intentionally (omitting it would make every commit a new version).
 
 ## Caching caveat
 
-When installed, the plugin is copied to `~/.claude/plugins/cache`, so commands must never reference files **above** the plugin root (no `../../`). `node scripts/doctor.js` enforces this on every push: every intra-plugin reference (`../docs/`, `../scripts/`, `../config-template.yml`) must resolve and none may escape the plugin root (`lint-docs` XREF rule). The remaining relative paths in command prose (e.g. `./research/README.md`, `./spec.md`) point to **runtime artifacts the workflows generate inside a feature directory**, not to plugin files.
+When installed, the plugin is copied to `~/.claude/plugins/cache`, so commands reference only files inside the plugin root — never above it (no `../../`). `node scripts/doctor.js` enforces this on every push (`lint-docs` XREF rule): every intra-plugin reference (`../docs/`, `../scripts/`, `../config-template.yml`) must resolve inside the plugin root. Relative `./…` paths in command prose (e.g. `./research/README.md`, `./spec.md`) point to **runtime artifacts the workflows generate inside a feature directory**, not to plugin files.
 
 ## Runtime artifacts excluded from the plugin
 
-`.gitignore` already excludes local runtime artifacts so they never ship in the plugin: `.claude/`, `ruvector.db`, `agentdb.rvf`, `agentdb.rvf.lock`, `node_modules/`, and test output.
+`.gitignore` excludes local runtime artifacts so they never ship in the plugin: `.claude/`, `ruvector.db`, `agentdb.rvf`, `agentdb.rvf.lock`, `node_modules/`, and test output.

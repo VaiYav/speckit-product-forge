@@ -35,7 +35,7 @@ With `KNOWN_ISSUES = true`, every open bug (deferred or blocked) goes into
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
 | BUG-001 | {title} | P1 | ✅ Fixed & Verified |
-| BUG-002 | {title} | P2 | ⚠️ Deferred to next sprint |
+| BUG-002 | {title} | P2 | ⏸ Deferred to next sprint |
 
 ## Evidence
 All screenshots and traces saved in `testing/playwright-results/`:

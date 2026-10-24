@@ -25,5 +25,5 @@ below for every `BUG-NNN.md` status.
 |----|-------|----------|--------|-----------|---------|
 
 ## Status Legend
-🔴 Open · 🟡 In Progress · 🟢 Fixed · ✅ Verified · ⛔ Blocked (retry cap reached in test-run) · ❌ Won't Fix
+🔴 Open · 🟡 In Progress · 🟢 Fixed · ✅ Verified · ⛔ Blocked (retry cap reached in test-run) · ⏸ Deferred (accepted for a later release at the Step 11 Defer choice) · ❌ Won't Fix
 ```

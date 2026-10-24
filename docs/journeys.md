@@ -1,20 +1,17 @@
 # Product Forge — Structured Journeys (E2E source of truth)
 
-> **Status:** normative for v1.6.0+
+> **Status:** normative
 > **Consumers:** `commands/product-spec.md` (authors journeys),
 > `commands/test-plan.md` / `commands/test-run.md` (generate + run E2E),
 > `commands/verify-full.md` (coverage), the live
 > [traceability matrix](./templates/traceability-matrix.md).
 > **Template:** [templates/journey-spec.md](./templates/journey-spec.md).
 
-User journeys in Product Forge are **first-class structured artifacts**, not
-free-form prose. A journey fully describes how a feature behaves — stages,
-branches, and edge cases — in a shape that **deterministically drives end-to-end
-tests**. The committed E2E runner is **`playwright-cli`**; the schema is
-runner-agnostic so other MCP/CLI runners can consume it, but Playwright is the
-default implementation.
-
-This replaces the old free-form `user-journey.md`.
+User journeys are **first-class structured artifacts** (replacing the old
+free-form `user-journey.md`). A journey fully describes how a feature behaves —
+stages, branches, and edge cases — in a shape that **deterministically drives
+end-to-end tests**. The committed E2E runner is **`playwright-cli`**; the schema is
+runner-agnostic so other MCP/CLI runners can consume it.
 
 ---
 
@@ -28,8 +25,8 @@ product-spec/journeys/
 └── ...
 ```
 
-`journeys.yml` is authoritative for test generation; the per-journey markdown
-files are the human-readable narrative. They must stay in sync (sync-verify checks).
+`journeys.yml` is authoritative for test generation; the per-journey markdown files
+are the human-readable narrative, kept in sync (sync-verify checks).
 
 ---
 
@@ -69,13 +66,13 @@ journeys:
         action: "Open the Notifications settings screen"
         ui: "CMP-SettingsNav"        # CMP-* id; component-map.yml resolves it to design-system/manifest.yml (which owns the selector)
         expect: "Notification toggles render with current values"
-        contracts: ["API-getPrefs"]  # FE↔BE contract (Theme F)
+        contracts: ["API-getPrefs"]  # FE↔BE contract
       - id: "STEP-002"
         action: "Toggle 'Product updates' off and click Save"
         ui: "CMP-Toggle, CMP-Button"
         expect: "Success toast; toggle stays off after reload"
         contracts: ["API-savePrefs"]
-        events: ["EVT-prefs_saved"]  # telemetry (Theme D)
+        events: ["EVT-prefs_saved"]  # telemetry
     edges:
       - id: "EDGE-001"
         of: "STEP-002"
@@ -100,7 +97,7 @@ happy path, alternate flows, and error cases are all explicit — nothing implic
 2. **Generate** (Phase 8A, `test-plan`): emit one Playwright `.spec.ts` per
    journey — `STEP.action` → Playwright actions, `STEP.expect` / `EDGE.then` →
    assertions, selectors resolved via `mockups/component-map.yml` `CMP-*` ids
-   against `design-system/manifest.yml` (the manifest owns the selector) (Theme E).
+   against `design-system/manifest.yml` (the manifest owns the selector).
    Smoke journeys (`smoke: true`) also seed the `TC-SMK-*` suite.
 3. **Run** (Phase 8B, `test-run`): execute via `playwright-cli` in
    Smoke → E2E order; map any failure back to its `JRN/STEP/EDGE` ID in
@@ -113,13 +110,13 @@ happy path, alternate flows, and error cases are all explicit — nothing implic
 ## 5. Authoring rules
 
 1. **One goal per journey.** If a flow has two distinct goals, make two journeys.
-2. **Every branch is an `EDGE`.** Don't bury error handling in prose; give it an ID,
-   a priority (P0–P3), and GIVEN/WHEN/THEN.
+2. **Every branch is an `EDGE`** with an ID, a priority (P0–P3), and
+   GIVEN/WHEN/THEN — error handling lives in edges, not prose.
 3. **Reference components, not pixels.** Steps point at design-system components
-   (`CMP-*`) so tests get stable selectors and the UI maps to real code (Theme E).
+   (`CMP-*`) so tests get stable selectors and the UI maps to real code.
 4. **Reference contracts.** Steps that hit the backend list their `API-*` contract
-   (Theme F) so FE↔BE traceability is maintained.
-5. **Keep `journeys.yml` authoritative.** The markdown narrative must not introduce
-   steps that aren't in the YAML.
+   so FE↔BE traceability is maintained.
+5. **Keep `journeys.yml` authoritative.** Every step in the markdown narrative
+   exists in the YAML.
 6. **Actor and preconditions are journey-scoped.** They are declared once on the
-   journey; every `STEP`/`EDGE` inherits them and must not re-declare its own actor.
+   journey; a `STEP`/`EDGE` inherits them and MUST NOT re-declare its own actor.
