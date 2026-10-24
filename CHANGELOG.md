@@ -132,7 +132,7 @@ _Nothing yet._
 ---
 
 > Repo-hardening + tooling pass on top of v1.6.0 — addresses the 2026-06 deep
-> review ([docs/improvements/2026-06-deep-review.md](docs/improvements/2026-06-deep-review.md)).
+> review ([docs/improvements/archive/2026-06-deep-review.md](docs/improvements/archive/2026-06-deep-review.md)).
 > No behavioural change to the lifecycle; closes a runtime-portability bug, a
 > dead config switch, and residual doc drift, and adds a deterministic
 > consistency gate so the whole class can't silently return.
@@ -261,7 +261,7 @@ _Nothing yet._
 
 ### Fixed — repo-wide consistency/audit pass (56 findings)
 - Repo-wide consistency pass (56 verified findings; see
-  [`docs/improvements/2026-05-system-audit.md`](docs/improvements/2026-05-system-audit.md)):
+  [`docs/improvements/archive/2026-05-system-audit.md`](docs/improvements/archive/2026-05-system-audit.md)):
   command count `29 → 31`; version coherence at `1.6.0` across README / CHANGELOG /
   `extension.yml` / QA plan; `sync-verify` consistently described as **9-layer**;
   status-enum (`completed_with_known_issues`), gate-enum (`rolled_back`), and

@@ -12,7 +12,7 @@
 // has a test; every NFR has a measurable signal) so the LLM layers can focus on
 // the semantic half ("is this AC genuinely measurable / correct").
 //
-// Honesty boundary (matches docs/improvements/2026-05-wave5-roadmap.md A1):
+// Honesty boundary (matches docs/improvements/archive/2026-05-wave5-roadmap.md A1):
 //   - STRUCTURAL checks here are deterministic (presence / linkage / shape).
 //   - SEMANTIC checks (is an AC truly measurable, is coverage complete in
 //     meaning) stay in the LLM verify-full / code-review layers. This script

@@ -5,7 +5,7 @@
 > `docs/schema/phase-map.yml`) are both implemented and enforced by
 > `scripts/lint-docs.js` (ENUM + PHASEMAP rules). This note is retained as the
 > design rationale. Authored alongside the 2026-06 deep-review hardening
-> (see [2026-06-deep-review.md](./2026-06-deep-review.md)).
+> (see [2026-06-deep-review.md](./archive/2026-06-deep-review.md)).
 
 ## Problem
 
@@ -30,7 +30,7 @@ deriving/asserting the prose against it.
 
 Candidate single-sourced invariants and their home:
 
-| Invariant | Today (restated in…) | Proposed canonical home |
+| Invariant | Before (restated in…) | Canonical home |
 |-----------|----------------------|--------------------------|
 | `feature_mode` enum | schema.yml, schema.md, runtime, forge, config, migration, phases | a `enums.feature_mode` block in `forge-status-v3.schema.yml` |
 | gate-decision enum | policy, runtime, schema.yml, schema.md, file-structure | `enums.gate_decision` |

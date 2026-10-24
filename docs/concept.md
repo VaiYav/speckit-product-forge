@@ -200,4 +200,4 @@ providers; `i18n-harvest` writes stubs, not translations; `portfolio` and
 | [journeys.md](./journeys.md), [testing-strategy.md](./testing-strategy.md), [lessons-format.md](./lessons-format.md), [v-model-integration.md](./v-model-integration.md) | the topic each names |
 | [claude-plugin.md](./claude-plugin.md) | plugin packaging and command-name mapping |
 | [qa/plugin-test-plan.md](./qa/plugin-test-plan.md) | validating the plugin itself |
-| [improvements/](./improvements/) | design notes and their rationale (non-normative) |
+| [improvements/](./improvements/) | design notes and their rationale (non-normative); implemented notes move to `improvements/archive/` |

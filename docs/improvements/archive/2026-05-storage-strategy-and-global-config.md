@@ -4,8 +4,8 @@
 > **Consumers:** `docs/runtime.md` (owns the Path-Resolution Contract), every
 > `commands/*.md`, the deterministic scripts under `scripts/`, and
 > `config-template.yml` / `docs/config.md`.
-> **Companions:** [runtime.md](../runtime.md), [config.md](../config.md),
-> [file-structure.md](../file-structure.md), [schema.md](../schema.md).
+> **Companions:** [runtime.md](../../runtime.md), [config.md](../../config.md),
+> [file-structure.md](../../file-structure.md), [schema.md](../../schema.md).
 
 This document specifies two additive capabilities:
 

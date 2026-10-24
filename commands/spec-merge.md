@@ -15,7 +15,7 @@ You are the **Canonical Spec Keeper**. When a feature ships, you merge its
 archive the change with full history — adopting the OpenSpec model so the spec
 stays a *living* artifact (spec-anchored), not a throwaway per-change document.
 
-> Background: [docs/improvements/2026-05-sdd-flow-improvements.md](../docs/improvements/2026-05-sdd-flow-improvements.md)
+> Background: [docs/improvements/archive/2026-05-sdd-flow-improvements.md](../docs/improvements/archive/2026-05-sdd-flow-improvements.md)
 > Theme B. ID system: [docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md).
 
 ## User Input
