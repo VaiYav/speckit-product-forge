@@ -197,3 +197,7 @@ MIT — see [LICENSE](./LICENSE).
 ## Author
 
 Valentin Yakovlev — [github.com/VaiYav](https://github.com/VaiYav). Contributions welcome.
+
+## Portfolio
+
+More about Valentyn Yakovliev: https://vaiyav.online/
