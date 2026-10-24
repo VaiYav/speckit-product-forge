@@ -1,49 +1,40 @@
 ---
 name: speckit.product-forge.security-check
 description: >
-  Feature-specific OWASP security audit. Reads plan.md to detect auth, payments,
-  user input, and file handling — then checks only the relevant attack vectors.
-  Generates a prioritized fix list with code-level evidence. Run after implement,
-  before ship. Use: "security check", "/speckit.product-forge.security-check"
+  Feature-scoped OWASP audit after implement, before ship: derive the threat model from
+  the plan and code, check only the attack surfaces present, and write a prioritized fix
+  list with code-level evidence.
 ---
 
 # Product Forge — Security Check
 
-You are the **Feature Security Auditor** for Product Forge.
-Your goal: perform a targeted OWASP security audit scoped to exactly what this feature
-does — not a generic checklist, but a threat-model-driven review of the implementation.
+You are the **Feature Security Auditor**. Run a threat-model-driven OWASP review of this
+feature's implementation — only the attack vectors its surfaces expose — and write
+`security-check.md` with prioritized, evidenced findings.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** `security_check` (optional, outside the phase map)
+- **Config keys:** `codebase_path` (or monorepo `codebase.paths`),
+  `security.dependency_vetting.denylist`
+- **Writes:** `security-check.md`, `phases.security_check.*`
+- **Contract deltas:** no gate — the command sets `phases.security_check.status`
+  itself and writes no digest.
 
-## Step 1: Validate Prerequisites
+## Step 1: Check inputs
 
-1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
-   keys used: `codebase_path` (or monorepo `codebase.paths`), `features_dir` +
-   `storage_strategy` (to resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
-2. Read `.forge-status.yml` — `phases.implement.status` must be `completed`
-3. Read `plan.md` to understand what the feature does
-4. Read `product-spec/product-spec.md` for feature scope
+1. `phases.implement.status` is `completed`.
+2. Read `plan.md` (what the feature does) and `product-spec/product-spec.md` (its scope).
 
----
+## Step 2: Build the threat model
 
-## Step 2: Build Feature Threat Model
-
-Before running any checks, read `plan.md` and `spec.md` to determine which attack
-surfaces are actually present. Only check what applies.
-
-```
-🔍 Building threat model for: {Feature Name}
-```
-
-Detect the following surfaces from the artifacts and code:
+From `plan.md`, `spec.md` and the code, mark each surface present or absent:
 
 | Surface | Detected? | Relevant OWASP Categories |
 |---------|-----------|--------------------------|
@@ -61,259 +52,47 @@ Detect the following surfaces from the artifacts and code:
 | Cryptographic operations | {yes/no} | A02 |
 | New dependencies added this feature | {yes/no} | A06, A08 |
 
-Only perform checks for surfaces marked **yes**.
-
-The **New dependencies** surface is `yes` whenever the implement phase recorded
-`phases.implement.dependencies.added > 0` on `.forge-status.yml`, or whenever
-`traceability.yml` carries a `dependencies:` block (the W5-C2 dep list produced
-by `/speckit.product-forge.implement`).
-
----
-
-## Step 3: Run Targeted Security Checks
-
-For each detected surface, perform the following checks.
-Read the actual implementation files — do not guess.
-
-### A01: Broken Access Control
-
-**Check if detected:** auth, authorization, admin ops, file access
-
-For each protected endpoint:
-- [ ] Is auth guard applied? (`@UseGuards(JwtAuthGuard)` or equivalent)
-- [ ] Is ownership enforced? (user can only access their own resources)
-- [ ] Are role checks present for privileged operations?
-- [ ] Is there a direct object reference check? (cannot access by ID without ownership check)
-- [ ] Is CORS configured correctly? (not `*` in production)
-
-**Look for these patterns in code:**
-
-```typescript
-// ❌ Missing ownership check
-async getFeature(id: string) {
-  return this.repo.findById(id); // anyone can access any ID
-}
-
-// ✅ Correct ownership check
-async getFeature(id: string, userId: string) {
-  return this.repo.findOne({ id, userId }); // scoped to owner
-}
-```
-
-### A02: Cryptographic Failures
-
-**Check if detected:** payments, sensitive data, tokens, passwords
-
-- [ ] Are passwords hashed with bcrypt/argon2 (not MD5/SHA1)?
-- [ ] Are sensitive fields encrypted at rest? (PII, payment data)
-- [ ] Are API keys / secrets in environment variables (not hardcoded)?
-- [ ] Is HTTPS enforced? (no HTTP fallback in production config)
-- [ ] Are JWTs signed with strong secret (≥256-bit)?
-- [ ] Is sensitive data excluded from logs?
-
-**Scan for hardcoded secrets:**
-
-```bash
-# Look for patterns like:
-grep -r "apiKey\s*=\s*['\"]" src/
-grep -r "password\s*=\s*['\"]" src/
-grep -r "secret\s*=\s*['\"]" src/
-grep -r "BEGIN.*PRIVATE KEY" src/
-```
-
-Report any found with file + line number.
-
-### A03: Injection
-
-**Check if detected:** user input, database queries, file uploads
-
-- [ ] Are all database queries using parameterized queries / ORM (no string concatenation)?
-- [ ] Is user input sanitized before use in queries?
-- [ ] Are file uploads validated for type, size, and content?
-- [ ] Is user input sanitized before rendering (XSS prevention)?
-- [ ] Are RegExp patterns safe? (no ReDoS with unbounded quantifiers on user input)
-
-**Look for these anti-patterns:**
-
-```typescript
-// ❌ SQL injection via string concatenation
-db.query(`SELECT * FROM users WHERE name = '${userInput}'`);
-
-// ❌ NoSQL injection
-Model.findOne({ email: req.body.email }); // if email is an object {$gt: ""}
-
-// ✅ Safe parameterized query
-Model.findOne({ email: String(req.body.email) });
-```
-
-### A04: Insecure Design
-
-**Check always:**
-
-- [ ] Is there rate limiting on sensitive endpoints (login, password reset, OTP)?
-- [ ] Is there account lockout or brute-force protection?
-- [ ] Are error messages generic (not leaking internal details)?
-- [ ] Is there a mass assignment vulnerability? (accepting all body fields)
-
-**Look for:**
-
-```typescript
-// ❌ Mass assignment
-const user = Object.assign(existingUser, req.body); // attacker can set isAdmin: true
-
-// ✅ Whitelist fields explicitly
-const { name, email } = req.body;
-const user = Object.assign(existingUser, { name, email });
-```
-
-### A05: Security Misconfiguration
-
-**Check if detected:** public endpoints, admin ops, third-party APIs
-
-- [ ] Are debug endpoints disabled in production?
-- [ ] Are stack traces hidden from API error responses?
-- [ ] Are security headers set? (HSTS, X-Content-Type-Options, X-Frame-Options)
-- [ ] Are default credentials changed?
-- [ ] Is verbose logging disabled for sensitive operations in production?
-
-### A06: Vulnerable and Outdated Components — Dependency / supply-chain surface (v1.6, W5-C2)
-
-**Check if detected:** new dependencies added this feature
-
-Consume the SAME dep list `/speckit.product-forge.implement` produced — do not
-re-derive it: read the `dependencies:` block in `{FEATURE_DIR}/traceability.yml`
-(and `dependency-log.md`). For each `pkg@version` in that list, confirm the
-install-time vetting still holds and add the SCA layer the SBOM stage (W5-B3,
-release-readiness §5C) will later re-run:
-
-- [ ] Every added dep has `registry_exists: true` and a `verdict` of `pass`/`warn` (no `block` slipped into the lockfile).
-- [ ] No added dep is on the project `denylist` (re-check `security.dependency_vetting.denylist`).
-- [ ] Any `warn` dep (brand-new / low-popularity) carries `confirmed_by_user: true`.
-- [ ] Lockfile is pinned for every added dep (no `*` / `latest`).
-- [ ] Re-confirm existence + run a known-vulnerability scan on the added deps only:
-
-```bash
-# Re-confirm each added package still resolves (catches a dep that was
-# block-flagged at implement time but committed anyway):
-npm view "<pkg>@<version>" version        # npm:  E404 / non-zero => MISSING → CRITICAL
-pip index versions "<pkg>"                 # pip:  "No matching distribution" => MISSING → CRITICAL
-
-# Known-vulnerability scan, scoped to the change (PR-diff mode), via osv-scanner:
-osv-scanner --lockfile=package-lock.json   # node; or poetry.lock / requirements.txt for pip
-# (osv-scanner reports CVE/GHSA ids; map each to a SEC-* finding by severity)
-```
-
-Any **MISSING** (does-not-exist) or **denylisted** dep that reached the lockfile is a
-**CRITICAL** SEC finding (slopsquatting / hallucinated package). Known CVEs map to
-HIGH/MEDIUM per the advisory severity.
-
-### A07: Identification and Authentication Failures
-
-**Check if detected:** login, auth, payments, session management
-
-- [ ] Is token expiry set appropriately? (access token short-lived, refresh token rotating)
-- [ ] Is logout properly implemented? (token revocation, not just client-side delete)
-- [ ] Is there multi-factor auth for high-privilege operations?
-- [ ] Are password reset links time-limited and single-use?
-- [ ] Is there protection against credential stuffing?
-
-### A08: Software and Data Integrity Failures
-
-**Check if detected:** third-party APIs, webhooks, file uploads
-
-- [ ] Are webhook payloads verified with signatures? (Stripe/GitHub webhook secret)
-- [ ] Are third-party API responses validated before use?
-- [ ] Are uploaded file types validated server-side (not just client-side)?
-- [ ] Are dependencies pinned? (no `*` or `latest` versions in package.json)
-
----
-
-## Step 4: Generate Security Report
-
-Create `{FEATURE_DIR}/security-check.md`:
-
-```markdown
-# Security Audit: {Feature Name}
-
-> Audited: {date} | Phase: post-implement
-> Feature: `{feature-slug}`
-> Auditor: Product Forge Security Check
-
-## Threat Model Summary
-
-Detected surfaces: {list of detected surfaces}
-Skipped (not applicable): {list of skipped OWASP categories}
-
-## Findings
-
-### 🔴 CRITICAL (must fix before ship)
-
-#### SEC-001: {Title}
-**Category:** {OWASP A0X — name}
-**File:** `{path/to/file.ts}:{line}`
-**Evidence:**
-\`\`\`typescript
-{vulnerable code snippet}
-\`\`\`
-**Risk:** {what an attacker can do}
-**Fix:**
-\`\`\`typescript
-{safe code pattern}
-\`\`\`
-
----
-
-### 🟠 HIGH (fix before release)
-
-#### SEC-002: {Title}
-...
-
----
-
-### 🟡 MEDIUM (fix soon, document workaround)
-
-#### SEC-003: {Title}
-...
-
----
-
-### 🟢 LOW (fix in maintenance)
-
-#### SEC-004: {Title}
-...
-
----
-
-## Passed Checks ✅
-
-| Check | Category | Result |
-|-------|----------|--------|
-| Auth guard on all protected endpoints | A01 | ✅ Pass |
-| No hardcoded secrets found | A02 | ✅ Pass |
-| ORM queries only (no string concat) | A03 | ✅ Pass |
-| Rate limiting on login endpoint | A04 | ✅ Pass |
-| All added deps registry-verified, none denylisted/missing | A06 | ✅ Pass |
-| ... | ... | ... |
-
-## Summary
-
-| Severity | Count | Status |
-|----------|-------|--------|
-| 🔴 Critical | {N} | {must fix} |
-| 🟠 High | {N} | {fix before release} |
-| 🟡 Medium | {N} | {fix soon} |
-| 🟢 Low | {N} | {maintenance} |
-| ✅ Passed | {N} | — |
-
-**Ship readiness:** {✅ Ready / ⚠️ Fix critical issues first / 🔴 Not ready}
-```
-
----
-
-## Step 5: Update Status & Present Results
-
-Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-The run counters live under the phase key (never a top-level `security:` block):
+**New dependencies** is `yes` when `phases.implement.dependencies.added > 0` in
+`.forge-status.yml`, or when `traceability.yml` carries a `dependencies:` block (the dep
+list `/speckit.product-forge.implement` produced).
+
+Result: every surface is marked; checks run only for surfaces marked **yes**.
+
+## Step 3: Run the targeted checks
+
+Run the checks for each selected category from
+[security-check-owasp-checks.md](../docs/reference/security-check-owasp-checks.md),
+reading the actual implementation files and citing `file:line` for every finding:
+
+| Category | Run when |
+|----------|----------|
+| A01 Broken Access Control | auth, authorization, admin ops, file access |
+| A02 Cryptographic Failures | payments, sensitive data, tokens, passwords (includes the hardcoded-secret scan) |
+| A03 Injection | user input, database queries, file uploads |
+| A04 Insecure Design | always |
+| A05 Security Misconfiguration | public endpoints, admin ops, third-party APIs |
+| A06 Vulnerable and Outdated Components | new dependencies added this feature |
+| A07 Identification and Authentication Failures | login, auth, payments, session management |
+| A08 Software and Data Integrity Failures | third-party APIs, webhooks, file uploads |
+
+A06 severity: any **MISSING** (does-not-exist) or **denylisted** dependency that reached
+the lockfile is a **CRITICAL** finding (slopsquatting / hallucinated package); known CVEs
+map to HIGH or MEDIUM per the advisory severity.
+
+Result: every check of every selected category is marked pass or turned into a finding.
+
+## Step 4: Write the report
+
+Write `{FEATURE_DIR}/security-check.md` from
+[security-check-report.md](../docs/templates/security-check-report.md): findings as
+`SEC-NNN` grouped CRITICAL (must fix before ship) / HIGH (fix before release) / MEDIUM
+(fix soon, document workaround) / LOW (fix in maintenance), each with category, file and
+line, evidence, risk and fix; then passed checks, the summary and ship readiness.
+
+## Step 5: Update status and report
+
+Counters live under the phase key (there is no top-level `security:` block).
+`ship_ready` is `true` when ship readiness is ✅ Ready:
 
 ```yaml
 phases:
@@ -327,28 +106,22 @@ phases:
     ship_ready: {true/false}
 ```
 
-```
-🔒 Security Check Complete: {Feature Name}
+Show `Security Check Complete: {Feature Name}`: surfaces audited; skipped (not
+applicable); findings — Critical {N} (must fix before ship), High {N} (fix before
+release), Medium {N} (fix soon), Low {N} (maintenance backlog); passed {N} checks ✅;
+ship readiness; `Full report: {FEATURE_DIR}/security-check.md`.
 
-Surfaces audited: {list}
-Skipped: {list — not applicable}
+- Critical findings → *"❌ {N} critical security issue(s) found. Fix required before
+  shipping. Create tasks in your tracker for: SEC-001, SEC-002, …"*
+- No critical or high findings → *"✅ No critical or high issues found. Feature is
+  security-ready to ship."*
 
-Findings:
-  🔴 Critical: {N}   ← must fix before ship
-  🟠 High:     {N}   ← fix before release
-  🟡 Medium:   {N}   ← fix soon
-  🟢 Low:      {N}   ← maintenance backlog
+## Done when
 
-Passed:        {N} checks ✅
-
-Ship readiness: {status}
-
-Full report: {FEATURE_DIR}/security-check.md
-```
-
-If critical issues found:
-> 🔴 {N} critical security issue(s) found. Fix required before shipping.
-> Create tasks in your tracker for: SEC-001, SEC-002, ...
-
-If clean:
-> ✅ No critical or high issues found. Feature is security-ready to ship.
+- All 13 surfaces are marked, and every category triggered by a `yes` surface (plus A04)
+  was checked against the implementation files.
+- Every finding has a `SEC-NNN` id, a severity, `file:line` evidence, a risk and a fix;
+  every missing or denylisted added dependency is CRITICAL.
+- `security-check.md` exists with findings, passed checks, summary and ship readiness.
+- `phases.security_check` has `status: completed` and counters equal to the report's
+  counts, and the closing message matches the critical / clean outcome.

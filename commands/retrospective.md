@@ -1,392 +1,157 @@
 ---
 name: speckit.product-forge.retrospective
 description: >
-  Post-launch retrospective comparing predicted metrics from research/metrics-roi.md
-  against real data pulled from connected MCPs (PostHog / Amplitude product analytics,
-  Sentry error tracking, NewRelic APM) or manual input. Closes the loop on the full
-  product lifecycle. Run 2+ weeks after shipping.
-  Use: "retrospective", "/speckit.product-forge.retrospective {feature-slug}"
+  Post-launch retrospective: compare the research-predicted metrics with real data
+  from connected analytics, error-tracking and APM tools (or manual input), then log
+  lessons and optionally promote recurring ones to skills. Run 2+ weeks after shipping.
 ---
 
 # Product Forge — Post-Launch Retrospective
 
-You are the **Post-Launch Analyst** for Product Forge.
-Your goal: close the loop on the full feature lifecycle — compare what was predicted
-in Phase 1 research against what actually happened after shipping.
+You are the **Post-Launch Analyst**. Close the lifecycle loop: compare what Phase 1
+research predicted with what happened after shipping, write `retrospective.md`, and
+turn the findings into lessons for later features.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-draft the retrospective report and any lesson blocks under
-`{FEATURE_DIR}/.forge-dry-run/retrospective/`, do **not** append to
-`.product-forge/lessons.md`, do **not** promote skills (Step 5B), do **not**
-update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md` of what would change.
-
----
-
-## Step 1: Validate Prerequisites
-
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
-keys used: `telemetry.*` (`product_analytics`, `error_tracking`, `dashboards`),
-`learning.*` (`promote_to_skills`, `min_recurrence`, `require_confirmation`,
-`skill_category`), `features_dir` + `storage_strategy` (to resolve `{FEATURE_DIR}`,
-[§12](../docs/runtime.md#12-path-resolution-contract)).
-
-Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
-
-1. Read `.forge-status.yml` — find the feature slug and launch date
-2. Check that the feature was shipped: `phases.verify` is `completed` (minimum requirement).
-   Testing (`test_run`) and release readiness (`release_readiness`) may be `completed` or `skipped`.
-3. Read `research/metrics-roi.md` — predicted KPIs (the baseline for comparison)
-4. Read `product-spec/product-spec.md` — success metrics definition
-5. Check `tracking/tracking-plan.md` (if exists) — know which events to query
-
-If `research/metrics-roi.md` is missing:
-> ⚠️ No predicted metrics found (research/metrics-roi.md missing or metrics-roi phase was skipped).
-> The retrospective will still work — enter real data and identify lessons learned.
-> Predicted vs actual comparison will be marked as N/A.
-
-Ask the user:
-```
-Retrospective for: {feature-slug}
-Shipped: {date from .forge-status.yml}
-Days since launch: {N}
-
-1. How long has the feature been live?
-   (Recommended: run after ≥14 days for meaningful data)
-
-2. Data sources available (auto-detected from the effective config's `telemetry:` block):
-   - [ ] PostHog (connected MCP — query funnels, retention, experiments automatically)
-   - [ ] Amplitude (connected MCP — query events, funnels, charts automatically)
-   - [ ] Sentry (connected MCP — query error rates / regressions automatically)
-   - [ ] NewRelic (connected MCP — performance/APM)
-   - [ ] App Store / Play Store reviews
-   - [ ] Support tickets / CS data
-   - [ ] I'll enter the metrics manually
-```
-
-> **Use the connected MCPs (Theme D).** Read `telemetry:` from the effective
-> config (`product_analytics`, `error_tracking`, `dashboards`) and pull real data via the matching MCP rather than asking for manual entry. Map
-> `EVT-*` ids from the tracking plan / `traceability.yml` to real event names before
-> querying (discover event names; never guess).
-
----
-
-## Step 2: Load Predicted Metrics
-
-Extract from `research/metrics-roi.md` and `product-spec/product-spec.md`:
-
-```
-📋 Predicted Metrics (from Phase 1 research):
-
-Adoption:
-  Target: {N}% of active users try the feature in first 30 days
-  Rationale: {from metrics-roi.md}
-
-Engagement:
-  Target: {metric} = {value} (e.g., "retention D7 +5%")
-  Rationale: {from metrics-roi.md}
-
-Performance:
-  Target: {e.g., "P95 response time < 200ms"}
-  Rationale: {from plan.md non-functional requirements}
-
-Business:
-  Target: {e.g., "conversion rate +3%" or "support tickets -10%"}
-  Rationale: {from metrics-roi.md ROI section}
-
-Timeline:
-  Research predicted payback: {e.g., "2 months"}
-```
-
----
-
-## Step 3: Collect Real Data
-
-### 3A: NewRelic (if MCP connected)
-
-Query NewRelic for performance data since launch date:
-
-```nrql
--- Error rate for feature endpoints
-SELECT percentage(count(*), WHERE error IS true) as 'Error Rate'
-FROM Transaction
-WHERE appName = '{app_name}'
-AND request.uri LIKE '%{feature-api-path}%'
-SINCE '{launch_date}' UNTIL NOW
-TIMESERIES 1 day
-
--- P95 response time
-SELECT percentile(duration, 95) as 'P95 ms'
-FROM Transaction
-WHERE appName = '{app_name}'
-AND request.uri LIKE '%{feature-api-path}%'
-SINCE '{launch_date}'
-
--- Request volume (adoption proxy)
-SELECT count(*) as 'Requests'
-FROM Transaction
-WHERE request.uri LIKE '%{feature-api-path}%'
-SINCE '{launch_date}' FACET dateOf(timestamp)
-```
-
-### 3B: Product Analytics (PostHog / Amplitude MCP)
-
-When `telemetry.product_analytics` is `posthog` or `amplitude`, query the connected
-MCP directly for the feature's `EVT-*` events (resolve real event names first):
-- adoption — unique users on `{feature}_viewed`;
-- completion — `{feature}_completed` / `{feature}_viewed`;
-- a funnel across the journey steps (`JRN`/`STEP` → events) with drop-off;
-- retention/stickiness if the success metric is engagement;
-- experiment results when an `experiment-design` flag is live (PostHog experiments).
-
-Fall back to manual entry / dashboard paste only if no analytics MCP is configured.
-
-### 3C: Error Tracking (Sentry MCP)
-
-When `telemetry.error_tracking` is `sentry`, query Sentry for issues/regressions
-tied to the feature's code paths or release since launch (error rate, top issues,
-new vs resolved), and feed them into the Error Analysis table.
-
-### 3D: Manual Entry
-
-If no integrations:
-```
-Please provide the following metrics for the period since launch ({launch_date} → today):
-
-1. How many users have tried the feature? (or % of DAU)
-2. What is the main action completion rate? (e.g., % who completed the flow)
-3. Any notable errors or issues reported?
-4. Support ticket volume change related to this feature?
-5. Any business metric impact you've observed?
-```
-
----
-
-## Step 4: Generate Retrospective Report
-
-Create `{FEATURE_DIR}/retrospective.md`:
-
-````markdown
-# Post-Launch Retrospective: {Feature Name}
-
-> Shipped: {launch_date} | Retrospective: {today}
-> Days since launch: {N} | Feature: `{feature-slug}`
-
-## Lifecycle Summary
-
-```
-Phase 0 Problem Discovery  → {date} — {duration}
-Phase 1 Research           → {date} — {duration}
-Phase 2 Product Spec       → {date} — {duration}
-Phase 3 Revalidation       → {date} — N iterations
-Phase 4 Bridge             → {date}
-Phase 5-6 Implement        → {date} — {duration}
-Phase 7 Verify             → {date}
-Phase 8A Test Plan         → {date}
-Phase 8B Test Run          → {date} — {N} bugs found, {N} fixed
-Ship Date                  → {date}
-Retrospective              → {today} ({N} days post-launch)
-```
-
-Total time: research → ship = {N} days
-
-## Predicted vs Actual
-
-| Metric | Predicted | Actual | Delta | Status |
-|--------|-----------|--------|-------|--------|
-| Adoption (30-day) | {N}% | {N}% | {+/-N}% | {✅ On target / ⚠️ Below / 🚀 Exceeded} |
-| Completion rate | {N}% | {N}% | {+/-N}% | |
-| P95 response time | <{N}ms | {N}ms | {+/-N}ms | |
-| Error rate | <{N}% | {N}% | {+/-N}% | |
-| {Business metric} | {target} | {actual} | {delta} | |
-| ROI payback | {N} months | {estimate} | | |
-
-## Performance Data ({apm_provider})
-
-### Request Volume
-{chart or table of daily requests since launch}
-
-### Error Rate
-{error rate trend — target vs actual}
-
-### P95 Response Time
-{latency trend}
-
-## Analytics Funnel
-
-```
-{feature}_viewed:    {N} unique users ({N}% of DAU)
-{feature}_started:   {N} users ({conversion}%)
-{feature}_completed: {N} users ({conversion}%)
-{feature}_abandoned: {N} users ({abandonment}%)
-
-Completion rate: {N}% (target was {N}%)
-Abandonment rate: {N}%
-  Top drop-off step: {step} ({N}% abandon here)
-```
-
-## Error Analysis
-
-| Error Code | Count | % of Sessions | Root Cause | Status |
-|------------|-------|--------------|------------|--------|
-| {error_code} | {N} | {N}% | {cause} | {fixed / known / investigating} |
-
-## What Went Right ✅
-
-1. **{aspect}** — {what worked and why}
-2. **{aspect}** — {what worked and why}
-3. **{aspect}** — {what worked and why}
-
-## What Could Be Better ⚠️
-
-1. **{aspect}** — {what didn't go as expected}
-   *Root cause:* {why}
-   *Fix for next time:* {improvement}
-
-2. **{aspect}** — {what didn't go as expected}
-   *Root cause:* {why}
-   *Fix for next time:* {improvement}
-
-## Research Accuracy Audit
-
-*How well did Phase 1 research predict reality?*
-
-| Research Prediction | Actual | Accuracy |
-|--------------------|--------|----------|
-| {competitor had this feature} | {confirmed/wrong} | ✅/❌ |
-| {user pain point assumed} | {validated/invalidated} | ✅/❌ |
-| {tech complexity estimate} | {vs actual} | ✅/❌ |
-| {adoption metric predicted} | {vs actual} | ✅/❌ |
-
-Research accuracy score: {N}/10
-
-## Open Issues & Follow-up
-
-| ID | Type | Description | Priority | Owner |
-|----|------|-------------|----------|-------|
-| {ID} | Bug | {description} | {P0-P4} | {owner} |
-| {ID} | Enhancement | {description} | {High/Med/Low} | |
-| {ID} | Tech debt | {description} | | |
-
-## Next Steps
-
-Based on the data:
-
-1. **{action}** — {rationale from data}
-2. **{action}** — {rationale from data}
-3. **{action}** — {rationale from data}
-
-*If adoption < target:* {specific recommendation — onboarding, push notification, A/B test}
-*If completion < target:* {specific recommendation — UX improvement, step simplification}
-*If error rate > target:* {specific recommendation — fix list, monitoring alert}
-
-## Lessons Learned for Future Features
-
-1. **Process:** {what to do differently in the lifecycle}
-2. **Research:** {what to research more/less thoroughly}
-3. **Implementation:** {technical patterns to adopt or avoid}
-4. **Testing:** {what the test phase caught / missed}
-````
-
----
-
-## Step 5: Append Lessons to the Project Log
-
-Before updating status, turn the retrospective findings into lesson blocks
-for the cross-feature learning log.
-
-1. **Harvest candidate lessons from real artifacts first (v1.6, W5-D2).**
-   Before drafting anything, read the signals the lifecycle already produced —
-   do not invent lessons. Read each source **if present** (test-run, release
-   readiness, and sync-verify may have been skipped, so `gate-review.md`,
-   `code-review.md`, and `sync-report.md` may legitimately not exist). For each
-   real signal you find, draft a candidate lesson of the mapped type and **carry
-   the source artifact path as its evidence** (Step 3's rejection filter requires
-   project evidence — this satisfies it by construction):
+Follow the [command contract](../docs/runtime.md#0-command-contract).
+
+- **Phase key:** `retrospective` (post-launch, outside the phase map)
+- **Config keys:** `telemetry.product_analytics`, `telemetry.error_tracking`,
+  `telemetry.dashboards`, `learning.promote_to_skills`, `learning.min_recurrence`,
+  `learning.require_confirmation`, `learning.skill_category`
+- **Writes:** `retrospective.md`, `.product-forge/lessons.md` (append), host skills via
+  `skill_manage` (Step 5B), `phases.retrospective.*`
+- **Contract deltas:** no gate — the command sets `phases.retrospective.status`
+  itself and writes no digest. With `--dry-run`, lesson blocks are drafted in the
+  mirror; nothing is appended to `.product-forge/lessons.md` and no skill is promoted.
+
+## Step 1: Check the feature shipped
+
+1. Read `.forge-status.yml` → feature slug and launch date.
+2. `phases.verify` is `completed` (the minimum). `test_run` and `release_readiness`
+   may be `completed` or `skipped`.
+3. Read `research/metrics-roi.md` (predicted KPIs — the baseline),
+   `product-spec/product-spec.md` (success-metric definitions) and, when present,
+   `tracking/tracking-plan.md` (which events to query).
+
+When `research/metrics-roi.md` is missing (or the metrics phase was skipped), warn:
+*"No predicted metrics found — the retrospective still runs; predicted vs actual is
+marked N/A."*
+
+Ask (structured prompts), showing slug, ship date and days since launch:
+
+1. How long has the feature been live? Recommend ≥ 14 days for meaningful data.
+2. Which data sources are available? Pre-select from the `telemetry:` block:
+   PostHog (MCP: funnels, retention, experiments), Amplitude (MCP: events, funnels,
+   charts), Sentry (MCP: error rates / regressions), NewRelic (MCP: performance / APM),
+   App Store / Play Store reviews, support tickets / CS data, manual entry.
+
+Prefer the connected MCPs over manual entry. Before any query, map the `EVT-*` ids from
+the tracking plan / `traceability.yml` to the real event names by discovering them in
+the tool; query only discovered names.
+
+## Step 2: Load predicted metrics
+
+From `research/metrics-roi.md` and `product-spec/product-spec.md` (performance targets
+from the `plan.md` non-functional requirements), list each target with its rationale:
+
+- **Adoption** — e.g. `{N}%` of active users try the feature in the first 30 days.
+- **Engagement** — e.g. retention D7 +5%.
+- **Performance** — e.g. P95 response time < 200 ms.
+- **Business** — e.g. conversion +3% or support tickets −10% (ROI section).
+- **Timeline** — research-predicted payback (e.g. 2 months).
+
+## Step 3: Collect real data
+
+- **NewRelic** (MCP connected): run the error-rate, P95 and request-volume queries in
+  [retrospective-newrelic-queries.md](../docs/reference/retrospective-newrelic-queries.md)
+  since the launch date.
+- **Product analytics** (`telemetry.product_analytics` is `posthog` or `amplitude`):
+  query the MCP for the feature's `EVT-*` events — adoption (unique users on
+  `{feature}_viewed`); completion (`{feature}_completed` / `{feature}_viewed`); a funnel
+  across the journey steps (`JRN`/`STEP` → events) with drop-off; retention/stickiness
+  when the success metric is engagement; experiment results when an
+  `experiment-design` flag is live (PostHog experiments). Use manual entry or a
+  dashboard paste only when no analytics MCP is configured.
+- **Error tracking** (`telemetry.error_tracking` is `sentry`): query issues and
+  regressions tied to the feature's code paths or release since launch — error rate,
+  top issues, new vs resolved — for the Error Analysis table.
+- **Manual entry** (no integrations), for the period `{launch_date}` → today:
+  1. How many users have tried the feature (or % of DAU)?
+  2. What is the main action's completion rate?
+  3. Any notable errors or issues reported?
+  4. Support ticket volume change related to this feature?
+  5. Any business-metric impact observed?
+
+Result: every predicted metric has an actual value or an explicit N/A.
+
+## Step 4: Write the report
+
+Write `{FEATURE_DIR}/retrospective.md` from
+[retrospective-report.md](../docs/templates/retrospective-report.md).
+
+## Step 5: Append lessons to the project log
+
+1. **Harvest candidates from real artifacts.** Read each source below **if present**
+   (test-run, release readiness and sync-verify may have been skipped, so
+   `gate-review.md`, `code-review.md` and `sync-report.md` may not exist). For each real
+   signal, draft a candidate of the mapped type and carry the source artifact path as
+   its evidence — which satisfies item 3's evidence filter by construction. Draft
+   lessons only from these signals.
 
    | Source artifact (read if present) | Read for | Lesson type it feeds |
    |---|---|---|
    | `{FEATURE_DIR}/implement/digest.md` (deviations / manual-edits section) | Where generated artifacts had to be hand-corrected during build | **Implementation** |
    | `{FEATURE_DIR}/gate-review.md` (single `F-NNN` namespace) + `{FEATURE_DIR}/code-review.md` | Recurring finding themes across the consolidated review surface | **Process / Implementation** |
    | `{FEATURE_DIR}/verify-report.md` + `{FEATURE_DIR}/sync-report.md` (drift items) | Where downstream artifacts diverged from upstream intent | **Research / spec-accuracy** |
-   | the **"Suggested canonical-spec updates"** carrier inside `verify-report.md` / `code-review.md` (Theme G, CF-5) | Spec language that reality proved wrong/imprecise | **Research / spec-accuracy** |
-   | Large deltas in the **Predicted vs Actual** table above (Step 4) + post-launch incidents/bugs tracked to root cause | Where Phase-1 prediction missed | **Research** |
-   | Rules of thumb stated in §4 "Lessons Learned for Future Features" of the report above | Team-stated process/testing takeaways | **Process / Testing** |
+   | the **"Suggested canonical-spec updates"** carrier inside `verify-report.md` / `code-review.md` | Spec language that reality proved wrong/imprecise | **Research / spec-accuracy** |
+   | Large deltas in the **Predicted vs Actual** table (Step 4) + post-launch incidents/bugs tracked to root cause | Where Phase-1 prediction missed | **Research** |
+   | Rules of thumb in the report's "Lessons Learned for Future Features" section | Team-stated process/testing takeaways | **Process / Testing** |
 
-   This extends the same prompt-side learning loop that `research.md` already uses
-   to read `.product-forge/lessons.md` — it sources lessons from produced signals
-   rather than a free-form "think about what went wrong" prompt.
+2. Draft each candidate as a block in the format of
+   [lessons-format.md](../docs/lessons-format.md) §2.
+3. Show the drafted blocks and ask the user to confirm or edit them. Reject blocks that
+   are project-specific trivia with no general applicability, restatements of published
+   best practice with no project evidence, or negative assessments of individuals (no blame).
+4. Append confirmed blocks to `.product-forge/lessons.md`, creating the file when
+   missing; existing blocks stay untouched.
+5. Record the count as `phases.retrospective.lessons_added`.
 
-2. For each candidate, draft a block in the format described in
-   [`docs/lessons-format.md`](../docs/lessons-format.md) §2.
-3. Show the drafted blocks to the user and ask for confirmation or edits.
-   Reject blocks that are:
-   - Project-specific trivia with no general applicability.
-   - Restatements of published best practices with no project evidence.
-   - Negative assessments of individuals (policy: no blame).
-4. Append confirmed blocks to `.product-forge/lessons.md`. Create the file
-   if it does not exist. Never overwrite existing blocks.
-5. Record the count on `.forge-status.yml` under
-   `phases.retrospective.lessons_added`.
+## Step 5B: Promote recurring lessons to skills
 
----
+Runs only when `learning.promote_to_skills` is `true` (default `false`) **and** the
+host exposes `skill_manage` (e.g. Hermes). Otherwise skip it; `lessons.md` is the only
+output. When promotion is on but the host has no `skill_manage`, note that promotion was
+requested but the host has no skill store, and skip the rest of Step 5B — `lessons.md`
+already holds the content; continue with Step 6.
 
-## Step 5B: Promote Recurring Lessons to Hermes Skills (v1.7, P2-A)
-
-`lessons.md` is flat and **per-project**. The biggest force-multiplier of running
-Product Forge inside **Hermes** (or any host exposing `skill_manage`) is turning a
-*recurring* lesson into a reusable **skill** — procedural memory that carries
-across projects and sessions and is cheaper on every later run. This step is the
-PF→Hermes learning bridge.
-
-**Gated on config `learning.promote_to_skills`** (default `false`; see
-config-template.yml). When `false`, **skip this step entirely** — lessons.md is
-the only output. When `true` AND `skill_manage` is available in the host:
-
-1. **Detect recurrence.** For each lesson confirmed in Step 5, count how many
-   **distinct features** in `.product-forge/lessons.md` already carry a block
-   with an overlapping tag set (the §4 tag taxonomy is the join key). Promote
-   only patterns whose distinct-feature count ≥ `learning.min_recurrence`
-   (default 2) — a one-off stays a lesson, not a skill. Record the deciding
-   count so the choice is auditable.
-2. **Draft the skill.** Synthesize the recurring lesson(s) into a `SKILL.md`
-   body: a trigger ("when building a feature that touches {tags/domain}…"),
-   numbered steps capturing the pattern (the constraint, the check, the recipe),
-   and a pitfalls section sourced from the lessons' "What happened". Keep it
-   generalizable — the skill is the *rule*, not the original feature's specifics.
-3. **Confirm before writing.** When `learning.require_confirmation` is `true`
-   (default), show the drafted `SKILL.md` and ask the user to confirm or edit
-   before any write. Never write a skill silently.
-4. **Write via `skill_manage`** (`action: create`, passing
-   `learning.skill_category` when set). **Decide create vs. patch by first reading
-   back the prior promotions:** scan `phases.retrospective.skills_promoted` across
-   this project's features (the carrier written in step 5) for a skill already
-   covering this trigger; if one exists, `action: patch` it (refine, don't
-   duplicate) — otherwise `action: create`. If `skill_manage` is unavailable
-   (non-Hermes host), note that promotion was requested but the host has no skill
-   store, and stop — lessons.md already holds the content.
+1. **Detect recurrence.** For each lesson confirmed in Step 5, count the **distinct
+   features** in `.product-forge/lessons.md` that already carry a block with an
+   overlapping tag set (the lessons-format §4 tag taxonomy is the join key). Promote only
+   patterns whose count ≥ `learning.min_recurrence` (default 2); a one-off stays a
+   lesson. Record the deciding count.
+2. **Draft the skill.** Write a `SKILL.md` body: a trigger ("when building a feature that
+   touches {tags/domain}…"), numbered steps capturing the pattern (the constraint, the
+   check, the recipe), and a pitfalls section sourced from the lessons' "What happened".
+   State the general rule, not the original feature's specifics.
+3. **Confirm.** When `learning.require_confirmation` is `true` (default), show the draft
+   and wait for the user to confirm or edit it before any write.
+4. **Create or patch.** Read back `phases.retrospective.skills_promoted` across this
+   project's features. When a listed skill already covers this trigger, call
+   `skill_manage` with `action: patch` to refine it; otherwise `action: create`. Pass
+   `learning.skill_category` when set.
 5. **Record the carrier.** Append every promoted skill name to
-   `.forge-status.yml` under `phases.retrospective.skills_promoted` (a list).
-   This is the list step 4 reads back on the next retro to choose patch-vs-create,
-   so the loop is idempotent across features and a hardened skill is refined, not
-   recreated.
+   `phases.retrospective.skills_promoted` (a list) — the list item 4 reads on the next
+   retrospective, so a skill is refined rather than recreated.
 
-> Degradation: outside Hermes this step is a no-op (no `skill_manage`); the
-> lessons.md loop (Step 5) is unaffected. Inside Hermes it is the cross-project
-> upgrade of the same learning loop `research.md` already consumes.
+## Step 6: Update status
 
----
-
-## Step 6: Update Status
-
-Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-Everything lives under the phase key (never a top-level `retrospective:` block) —
-the same `phases.retrospective.*` location Steps 5 and 5B name:
+All fields live under the phase key (there is no top-level `retrospective:` block):
 
 ```yaml
 phases:
@@ -400,34 +165,26 @@ phases:
     error_rate: "{N}%"
     open_issues: {N}
     research_accuracy: "{N}/10"
-    lessons_added: {N}                # number of blocks appended to lessons.md in Step 5
-    skills_promoted: []               # v1.7 — Hermes skill names created/patched in Step 5B (empty unless learning.promote_to_skills)
+    lessons_added: {N}                # blocks appended to lessons.md in Step 5
+    skills_promoted: []               # skill names created/patched in Step 5B (empty unless learning.promote_to_skills)
 ```
 
----
+## Step 7: Present results
 
-## Step 7: Present Results
+Show `Retrospective Complete: {Feature Name}`: days since launch; predicted → actual
+with a legend marker for adoption, completion, P95 latency and error rate; research
+accuracy `{N}/10`; top win; top learning; open issues ({N} bugs, {N} enhancements);
+`Full report: {FEATURE_DIR}/retrospective.md`.
 
-```
-📊 Retrospective Complete: {Feature Name}
+## Done when
 
-{N} days since launch
-
-Predicted vs Actual:
-  Adoption:       {predicted}% → {actual}%  {status emoji}
-  Completion:     {predicted}% → {actual}%  {status emoji}
-  P95 latency:    {predicted}ms → {actual}ms  {status emoji}
-  Error rate:     <{predicted}% → {actual}%  {status emoji}
-
-Research accuracy: {N}/10
-
-Key wins:    {top win}
-Key learnings: {top learning}
-
-Open issues: {N} ({N} bugs, {N} enhancements)
-
-Full report: {FEATURE_DIR}/retrospective.md
-```
-
-This closes the Product Forge lifecycle loop:
-**Idea → Research → Spec → Build → Verify → Test → Ship → Measure → Learn**
+- `retrospective.md` exists with every template section; every predicted metric has an
+  actual value, or the row is marked N/A.
+- Every lesson candidate cites a source artifact, was shown to the user, and each
+  confirmed block is appended to `.product-forge/lessons.md` (count in `lessons_added`).
+- With `learning.promote_to_skills: true` and `skill_manage` available: each lesson at
+  or above `learning.min_recurrence` was confirmed (when required), created or patched,
+  and its name appended to `skills_promoted`; otherwise Step 5B was skipped and
+  `skills_promoted` is `[]`.
+- `phases.retrospective` carries every Step 6 field with `status: completed`, and the
+  Step 7 summary was shown.

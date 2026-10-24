@@ -1,528 +1,188 @@
 ---
 name: speckit.product-forge.api-docs
 description: >
-  Generates OpenAPI 3.1 spec and Postman collection from plan.md API contracts.
-  Auto-detects existing API framework (NestJS, Express, FastAPI, etc.), validates
-  consistency between spec and implementation, and outputs ready-to-publish docs.
-  Use after implement: "generate API docs", "/speckit.product-forge.api-docs"
+  Publish API docs after implement: reconcile the OpenAPI/AsyncAPI contracts with the
+  implementation (or author OpenAPI 3.1 when no contracts exist), generate a Postman
+  collection, and report contract↔implementation drift.
 ---
 
-# Product Forge — API Docs Generation
+# Product Forge — API Docs
 
-You are the **API Documentation Generator** for Product Forge.
-Your goal: extract API contracts from feature artifacts and generate production-ready
-OpenAPI 3.1 spec and a Postman collection — automatically, with no manual writing.
+You are the **API Documentation Generator**. Publish an OpenAPI 3.1 spec (plus AsyncAPI
+for events) and a Postman collection for the feature, and report drift between the
+contract, the FE client calls and the BE handlers. When `contracts/openapi.yaml` /
+`contracts/asyncapi.yaml` exist (authored in `bridge` / `plan`), they are the
+authoritative input: validate and regenerate against them and the implementation; author
+from scratch only when they are absent. Drift findings feed `verify-full` Layer 9.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** `api_docs` (optional, outside the phase map)
+- **Config keys:** `codebase_path` (or monorepo `codebase.paths`)
+- **Writes:** `contracts/openapi.yaml` / `contracts/asyncapi.yaml` (in place),
+  `api-docs/openapi.yml`, `api-docs/asyncapi.yml`, `api-docs/postman-collection.json`,
+  `api-docs/consistency-report.md`, `api-docs/README.md`, `phases.api_docs.status`,
+  top-level `api_docs_report`
+- **Contract deltas:** no gate — the command sets `phases.api_docs.status` itself and
+  writes no digest.
 
-> **Contract-first (v1.6, Theme F):** when `contracts/openapi.yaml` /
-> `contracts/asyncapi.yaml` already exist (authored in `bridge`/`plan`), this command
-> **validates and regenerates against them and the implementation** rather than
-> authoring contracts from scratch. Report drift between the contract, the FE client
-> calls, and the BE handlers as findings (feeds `verify-full` Layer 9).
+## Step 1: Check inputs
 
-## Step 1: Validate Prerequisites
+1. `phases.implement.status` is `completed`.
+2. `plan.md` and `spec.md` exist. Load
+   `contracts/openapi.yaml` and `contracts/asyncapi.yaml` when present.
 
-1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
-   keys used: `codebase_path` (or monorepo `codebase.paths`), `features_dir` +
-   `storage_strategy` (to resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
-   Every Markdown document this command writes follows `max_tokens_per_doc`
-   ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)).
-2. Read `.forge-status.yml` — `phases.implement.status` must be `completed` (Phase 6 done)
-3. Verify `plan.md` exists and contains API endpoint definitions
-4. Verify `spec.md` exists; load `contracts/openapi.yaml` + `contracts/asyncapi.yaml` if present
+Stop only when `plan.md` has no API endpoints **and** neither `contracts/openapi.yaml`
+nor `contracts/asyncapi.yaml` exists: *"No API endpoints detected in plan.md. This
+command generates docs for backend APIs; a frontend-only feature does not need
+api-docs."* A feature with only contracts (or only an AsyncAPI contract) still gets docs.
 
-If no API endpoints found in plan.md:
-> ℹ️ No API endpoints detected in plan.md. This command generates docs for backend APIs.
-> If this is a frontend-only feature, api-docs is not needed.
+## Step 2: Detect the API setup
 
----
+Scan the feature and codebase for:
 
-## Step 2: Auto-detect API Framework
+1. **Authoritative contracts** (check first): `{FEATURE_DIR}/contracts/openapi.yaml`
+   (HTTP) and `{FEATURE_DIR}/contracts/asyncapi.yaml` (events).
+2. **Framework** — NestJS / Express / FastAPI / Django REST / Rails / other, from
+   `nest-cli.json`, `@nestjs/swagger`, `express`, `fastapi`, `rest_framework`.
+3. **Existing OpenAPI setup** — `swagger.json`, `openapi.yml`, `@ApiProperty` decorators.
+4. **Base path / versioning** — app prefix in `main.ts`, `globalPrefix`, version in URLs.
+5. **Auth scheme** — JWT guards, API-key headers, OAuth2 config, `@ApiBearerAuth()`.
+6. **DTO / schema files** — `*.dto.ts`, `*.schema.ts`, Zod schemas, Pydantic models.
 
-Scan the codebase to understand the API framework:
+Report as a short list: framework (and marker found), base URL, auth, DTO count, and the
+existing spec — `contracts/openapi.yaml` / `contracts/asyncapi.yaml` detected
+(authoritative — validate + regenerate), or none (generate from scratch).
 
-```
-🔍 Detecting API framework...
-```
+## Step 3: Extract the API surface
 
-Detect:
-1. **Authoritative contracts (check first):**
-   - Look for: `{FEATURE_DIR}/contracts/openapi.yaml` (HTTP) and
-     `{FEATURE_DIR}/contracts/asyncapi.yaml` (events), authored in `bridge`/`plan`.
-   - **If present, these are the authoritative input** — this command validates and
-     regenerates against them + the implementation, it does **not** re-author from scratch.
-2. **Framework:** NestJS / Express / FastAPI / Django REST / Rails / other
-   - Look for: `nest-cli.json`, `@nestjs/swagger`, `express`, `fastapi`, `rest_framework`
-3. **Existing OpenAPI setup:**
-   - Look for: `swagger.json`, `openapi.yml`, `@ApiProperty` decorators (NestJS)
-4. **Base path / versioning:**
-   - Look for: app prefix in `main.ts`, `globalPrefix`, version in URL patterns
-5. **Auth scheme:**
-   - Look for: JWT guards, API key headers, OAuth2 config, `@ApiBearerAuth()`
-6. **Existing DTO/schema files:**
-   - Look for: `*.dto.ts`, `*.schema.ts`, Zod schemas, Pydantic models
+Read in priority order:
 
-Report (contracts present — the common path after `bridge`/`plan`):
-```
-🔍 Auto-detected:
-  Framework:       NestJS (@nestjs/swagger found)
-  Base URL:        /api/v1 (main.ts globalPrefix)
-  Auth:            Bearer JWT (JwtAuthGuard)
-  DTOs:            12 DTO files found
-  Existing spec:   contracts/openapi.yaml detected (authoritative — validate + regenerate)
-                   contracts/asyncapi.yaml detected (authoritative — validate + regenerate)
-```
+1. `contracts/openapi.yaml` + `contracts/asyncapi.yaml`, keyed by `API-*` ids — the
+   source of truth for the API surface when present.
+2. Implementation files (DTOs, controllers, route handlers) — the source of truth for
+   actual behaviour; drift against the contract is reported in Step 6.
+3. `plan.md` → API endpoints section (method, path, request, response schemas).
+4. `spec.md` → acceptance criteria that reference API behaviour.
+5. `product-spec/product-spec.md` → API requirements from Must Have stories.
 
-Report (no contracts — fallback, author from scratch):
-```
-🔍 Auto-detected:
-  ...
-  Existing spec:   None (no contracts/*; will generate from scratch)
-```
+Without `contracts/*`, derive the surface from `plan.md` + `spec.md` + implementation.
 
----
+For each endpoint record: HTTP method + path; request headers, path params, query params
+and body schema; success schema (200/201) and error schemas (400/401/403/404/422/500);
+whether auth is required and its scheme; description (from `plan.md` or inline
+comments); examples (from test cases or `plan.md`).
 
-## Step 3: Extract API Contracts from Artifacts
+## Step 4: Reconcile and publish the specs
 
-Read in order of priority:
-1. **`contracts/openapi.yaml` + `contracts/asyncapi.yaml` (authoritative when present)** —
-   the FE↔BE contract authored in `bridge`/`plan`, keyed by `API-*` ids. When these exist
-   they are the source of truth for the API surface; the steps below validate/regenerate
-   against them rather than re-deriving the contract.
-2. Implementation files (DTOs, controllers, route handlers) — source of truth for the
-   *actual* behavior; drift between contract and implementation is reported in Step 6.
-3. `plan.md` → API endpoints section (method, path, request, response schemas)
-4. `spec.md` → acceptance criteria referencing API behavior
-5. `product-spec/product-spec.md` → API requirements from Must Have stories
+### 4A — `contracts/*` exist
 
-> If `contracts/*` are **absent** (no `bridge`/`plan` contract step ran), fall back to
-> deriving the surface from `plan.md` + `spec.md` + implementation (the from-scratch path).
+When `contracts/openapi.yaml` exists:
 
-For each endpoint found, extract:
-- HTTP method + path
-- Request: headers, path params, query params, body schema
-- Response: success schema (200/201), error schemas (400/401/403/404/422/500)
-- Auth required: yes/no + scheme
-- Description: from plan.md or inline comments
-- Examples: from test cases or plan.md
+1. **Validate** `contracts/openapi.yaml` against the OpenAPI 3.1 schema and against the
+   implementation (Step 6).
+2. **Regenerate the same `contracts/openapi.yaml` in place** for endpoints, params or
+   response shapes the implementation added or changed, keeping every `API-*` operation
+   id. It stays the single source the FE and BE tasks share.
+3. **Publish** `{FEATURE_DIR}/api-docs/openapi.yml` as a reconciled copy of
+   `contracts/openapi.yaml`, with examples and descriptions enriched from test cases —
+   for Swagger UI, Redoc, Stoplight and Postman import. Overwrite an existing copy from
+   the contract; the published file is always a copy, never a separately authored spec.
 
----
+When `contracts/asyncapi.yaml` exists (event-driven feature):
 
-## Step 4: Reconcile & Publish the OpenAPI/AsyncAPI Specs
+1. Validate it against the AsyncAPI schema and the implementation's publishers,
+   subscribers, channel names and message payloads.
+2. Regenerate the same `contracts/asyncapi.yaml` in place for any drift, keeping `API-*` ids.
+3. Publish `{FEATURE_DIR}/api-docs/asyncapi.yml` as its reconciled copy. Events get no
+   Postman collection.
 
-### 4A — When `contracts/*` exist (authoritative path — the common case after `bridge`/`plan`)
+### 4B — no `contracts/openapi.yaml`, but HTTP endpoints exist
 
-Do **not** re-author a divergent spec. Instead:
+Author `{FEATURE_DIR}/api-docs/openapi.yml` from `plan.md` + `spec.md` + implementation,
+using [api-docs-openapi.md](../docs/templates/api-docs-openapi.md).
 
-1. **Validate** `contracts/openapi.yaml` against the implementation (Step 6 drift check) and
-   against the OpenAPI 3.1 schema.
-2. **Regenerate / update the SAME `contracts/openapi.yaml`** in place when the implementation
-   has added/changed endpoints, params, or response shapes that the contract is missing —
-   preserving its stable `API-*` operation ids. This keeps `contracts/openapi.yaml` the single
-   source the FE↔BE tasks share.
-3. **Publish** `{FEATURE_DIR}/api-docs/openapi.yml` as a **reconciled copy OF**
-   `contracts/openapi.yaml` (the human-/tool-facing published artifact for Swagger UI, Redoc,
-   Stoplight, Postman import). It is a copy with examples/descriptions enriched from test cases —
-   **never** a separately re-authored file. If it already exists, overwrite it from
-   `contracts/openapi.yaml` (reconcile, do not fork).
+Result: `api-docs/openapi.yml` exists when the feature has HTTP endpoints, and
+`api-docs/asyncapi.yml` when it has an AsyncAPI contract.
 
-**AsyncAPI branch** — if `contracts/asyncapi.yaml` exists (event-driven feature):
-1. **Validate** it against the AsyncAPI schema and against the emitted/consumed events in the
-   implementation (publishers/subscribers, channel names, message payloads).
-2. **Regenerate / update the SAME `contracts/asyncapi.yaml`** in place for any drift, preserving
-   `API-*` ids.
-3. **Publish** `{FEATURE_DIR}/api-docs/asyncapi.yml` as a reconciled copy of
-   `contracts/asyncapi.yaml`. (No Postman collection for events.)
+## Step 5: Postman collection
 
-Record contract↔implementation drift in Step 6.
+When the feature has HTTP endpoints, write `{FEATURE_DIR}/api-docs/postman-collection.json` from
+[api-docs-postman-collection.md](../docs/templates/api-docs-postman-collection.md) —
+one request per HTTP endpoint, each with success and validation-error examples.
 
-### 4B — Fallback: no `contracts/*` present (author from scratch)
+## Step 6: Consistency check — contract vs implementation
 
-Only when `bridge`/`plan` produced no contracts. Author `{FEATURE_DIR}/api-docs/openapi.yml`
-directly from `plan.md` + `spec.md` + implementation, using the skeleton below:
+The baseline is the contract (`contracts/openapi.yaml` / `contracts/asyncapi.yaml`, keyed
+by `API-*`); without `contracts/*`, the endpoints derived from `plan.md`. For each
+operation, check:
 
-```yaml
-openapi: "3.1.0"
-
-info:
-  title: "{Feature Name} API"
-  version: "{feature version from plan.md or 1.0.0}"
-  description: |
-    {Feature description from product-spec.md}
-
-    Generated by Product Forge from feature: `{feature-slug}`
-    Source: plan.md + spec.md + implementation analysis
-  contact:
-    name: "{project_name} Team"
-
-servers:
-  - url: "{BASE_URL}"
-    description: "Development"
-  - url: "{STAGING_URL}"
-    description: "Staging"
-
-security:
-  - BearerAuth: []      # if JWT detected
-
-components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
-  schemas:
-    # — Per-endpoint request/response schemas —
-
-    {FeatureName}CreateRequest:
-      type: object
-      required: [{required fields}]
-      properties:
-        {field}:
-          type: {type}
-          description: "{description}"
-          example: {example}
-      example:
-        {full request example}
-
-    {FeatureName}Response:
-      type: object
-      properties:
-        {field}:
-          type: {type}
-          description: "{description}"
-          example: {example}
-
-    ErrorResponse:
-      type: object
-      properties:
-        statusCode:
-          type: integer
-          example: 400
-        message:
-          type: string
-          example: "Validation failed"
-        errors:
-          type: array
-          items:
-            type: string
-
-paths:
-  {/api/v1/feature-path}:
-    get:
-      tags: ["{Feature Name}"]
-      summary: "{Short description}"
-      description: |
-        {Longer description}
-
-        **User Story:** {US-NNN}
-        **AC:** {AC reference}
-      operationId: "{camelCase operation name}"
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: {param}
-          in: query   # or path, header
-          required: false
-          schema:
-            type: string
-          description: "{description}"
-          example: "{example}"
-      responses:
-        "200":
-          description: "Success"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/{FeatureName}Response"
-              example:
-                {full response example from test cases}
-        "401":
-          description: "Unauthorized — missing or invalid token"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: "Not found"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    post:
-      tags: ["{Feature Name}"]
-      summary: "{Short description}"
-      operationId: "{camelCase operation name}"
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/{FeatureName}CreateRequest"
-            example:
-              {full request example}
-      responses:
-        "201":
-          description: "Created"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/{FeatureName}Response"
-        "400":
-          description: "Validation error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # ... all other endpoints ...
-```
-
----
-
-## Step 5: Generate Postman Collection
-
-Create `{FEATURE_DIR}/api-docs/postman-collection.json`:
-
-```json
-{
-  "info": {
-    "name": "{Feature Name} — {project_name}",
-    "_postman_id": "{generated UUID}",
-    "description": "Generated by Product Forge from feature: {feature-slug}",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "variable": [
-    { "key": "baseUrl", "value": "{BASE_URL}", "type": "string" },
-    { "key": "token", "value": "", "type": "string", "description": "Set after login" }
-  ],
-  "auth": {
-    "type": "bearer",
-    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-  },
-  "item": [
-    {
-      "name": "Auth",
-      "item": [
-        {
-          "name": "Login (get token)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const res = pm.response.json();",
-                  "pm.collectionVariables.set('token', res.accessToken);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/auth/login",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"email\": \"{{testEmail}}\", \"password\": \"{{testPassword}}\"}"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "{Feature Name}",
-      "item": [
-        {
-          "name": "{Endpoint name} — {HTTP method} {path}",
-          "request": {
-            "method": "{METHOD}",
-            "url": {
-              "raw": "{{baseUrl}}{path}",
-              "host": ["{{baseUrl}}"],
-              "path": ["{path segments}"],
-              "query": [
-                { "key": "{param}", "value": "{example}", "description": "{description}" }
-              ]
-            },
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{request body JSON example}"
-            },
-            "description": "{description from plan.md}\n\nUser Story: {US-NNN}"
-          },
-          "response": [
-            {
-              "name": "200 OK — Success",
-              "status": "OK",
-              "code": 200,
-              "body": "{response example JSON}"
-            },
-            {
-              "name": "400 — Validation error",
-              "status": "Bad Request",
-              "code": 400,
-              "body": "{error response example}"
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-## Step 6: Consistency Check — Contract vs Implementation
-
-Compare the authoritative contract against the actual implementation files. When
-`contracts/*` exist, the contract (`contracts/openapi.yaml` / `contracts/asyncapi.yaml`,
-keyed by `API-*`) is the baseline; otherwise fall back to the endpoints derived from
-`plan.md`. Reported drift also feeds `verify-full` Layer 9 (FE↔contract↔BE).
-
-For each endpoint/operation in the contract (fall back to `plan.md` if no `contracts/*`), verify:
-- [ ] Route path matches controller decorator
+- [ ] Route path matches the controller decorator
 - [ ] HTTP method matches
 - [ ] Request DTO fields match the contract schema
 - [ ] Response shape matches the contract response
-- [ ] Auth guard is applied (if the contract requires auth)
+- [ ] Auth guard is applied when the contract requires auth
 - [ ] Validation decorators exist on required fields
-- [ ] **[if `contracts/asyncapi.yaml`]** each channel's publisher/subscriber + message payload
-      matches the emitted/consumed events in the implementation
+- [ ] With `contracts/asyncapi.yaml`: each channel's publisher/subscriber and message
+      payload match the events the implementation emits/consumes
 
-Report any drift:
+Report each mismatch as a numbered `DRIFT-NNN` with the operation and its `API-*` id,
+the contract's statement, the implementation's statement, and the fix direction:
 
 ```
-⚠️ Consistency Issues Found:
-
 DRIFT-001: POST /api/v1/features (API-012)
   Contract:       body requires `priority` field (string, required)
   Implementation: `priority` is optional in CreateFeatureDto
   → Update DTO or update contracts/openapi.yaml
-
-DRIFT-002: GET /api/v1/features/:id (API-013)
-  Contract:       returns full feature object
-  Implementation: returns only {id, name, status} (projection)
-  → Update contracts/openapi.yaml response schema to match actual response
-
-No drift found: {N} operations ✅
 ```
 
-Save drift report to `{FEATURE_DIR}/api-docs/consistency-report.md`.
+End with `No drift found: {N} operations ✅`. Save the report to
+`{FEATURE_DIR}/api-docs/consistency-report.md`.
 
----
+## Step 7: API docs README
 
-## Step 7: Generate README for API Docs
+Write `{FEATURE_DIR}/api-docs/README.md` from
+[api-docs-readme.md](../docs/templates/api-docs-readme.md).
 
-Create `{FEATURE_DIR}/api-docs/README.md`:
+## Step 8: Update status and report
 
-```markdown
-# API Documentation: {Feature Name}
-
-Generated: {date} | Feature: `{feature-slug}`
-
-## Endpoints
-
-| Method | Path | Auth | Description | Story |
-|--------|------|------|-------------|-------|
-| GET | {path} | Bearer | {description} | {US-NNN} |
-| POST | {path} | Bearer | {description} | {US-NNN} |
-| PATCH | {path} | Bearer | {description} | {US-NNN} |
-| DELETE | {path} | Bearer | {description} | {US-NNN} |
-
-## Files
-
-- `openapi.yml` — OpenAPI 3.1 spec, **published copy of `contracts/openapi.yaml`** (import into Swagger UI, Redoc, Stoplight)
-- `asyncapi.yml` — **[event-driven features]** published copy of `contracts/asyncapi.yaml`
-- `postman-collection.json` — Import directly into Postman
-
-## How to use
-
-### Swagger UI (local)
-\`\`\`bash
-npx @stoplight/prism-cli mock api-docs/openapi.yml
-# Open: http://localhost:4010
-\`\`\`
-
-### Import into Postman
-1. Postman → Import → File → select `postman-collection.json`
-2. Set collection variable `baseUrl` to your dev server
-3. Run "Login" request first → token saved automatically
-4. All other requests use the token from login
-
-### Publish to project docs
-If project has Swagger/Redoc integration, copy `openapi.yml` to the expected location:
-\`\`\`bash
-cp api-docs/openapi.yml {project swagger path}
-\`\`\`
-
-## Consistency Report
-
-{summary from consistency-report.md}
-```
-
----
-
-## Step 8: Update Status & Present Results
-
-Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-Keys this command writes:
+`api_docs_report` is a top-level block (named so it does not collide with
+`phases.api_docs`):
 
 ```yaml
 phases:
   api_docs:
     status: completed
-# Top-level instrumentation block. Named `api_docs_report` (not `api_docs`) to avoid
-# the sibling collision with the `phases.api_docs` status entry — same rename pattern
-# the v3 schema applied to tasks → task_log.
 api_docs_report:
   endpoints: {N}
   source: contracts            # "contracts" (reconciled) | "scratch" (no contracts/*)
-  openapi_file: "api-docs/openapi.yml"
+  openapi_file: "api-docs/openapi.yml"     # omit if no HTTP endpoints
   asyncapi_file: "api-docs/asyncapi.yml"   # omit if no contracts/asyncapi.yaml
-  postman_file: "api-docs/postman-collection.json"
+  postman_file: "api-docs/postman-collection.json"   # omit if no HTTP endpoints
   drift_issues: {N}
 ```
 
-```
-📄 API Docs Generated: {Feature Name}
+Show `API Docs Generated: {Feature Name}`: the source (`contracts/openapi.yaml`
+(+ `contracts/asyncapi.yaml`) — reconciled & published, or scratch); endpoints documented
+(`{METHOD} {path} — {description}` each); files created (`api-docs/openapi.yml`,
+`api-docs/asyncapi.yml` if events, `api-docs/postman-collection.json`,
+`api-docs/consistency-report.md`); consistency `{N} operations clean ✅ {N} drift
+issues ⚠️`; preview command `npx @stoplight/prism-cli mock {FEATURE_DIR}/api-docs/openapi.yml`.
 
-Source: contracts/openapi.yaml (+ contracts/asyncapi.yaml) — reconciled & published
+## Done when
 
-Endpoints documented: {N}
-  GET   {path} — {description}
-  POST  {path} — {description}
-  PATCH {path} — {description}
-
-Files created:
-  api-docs/openapi.yml              ← published copy of contracts/openapi.yaml
-  api-docs/asyncapi.yml             ← published copy of contracts/asyncapi.yaml (if events)
-  api-docs/postman-collection.json  ← Postman collection
-  api-docs/consistency-report.md    ← contract vs implementation drift
-
-Consistency: {N} operations clean ✅  {N} drift issues ⚠️
-
-To preview:
-  npx @stoplight/prism-cli mock {FEATURE_DIR}/api-docs/openapi.yml
-```
+- Each existing contract is validated and regenerated in place with every existing
+  `API-*` id kept, and `api-docs/openapi.yml` / `api-docs/asyncapi.yml` is its reconciled
+  copy. HTTP endpoints without `contracts/openapi.yaml`: `api-docs/openapi.yml` is
+  authored from the template.
+- Every HTTP endpoint from Step 3 appears in `openapi.yml` and in `postman-collection.json`.
+- Every contract operation was checked against the implementation, and
+  `consistency-report.md` lists each `DRIFT-NNN` (or reports no drift).
+- `api-docs/README.md` exists; `phases.api_docs.status` is `completed` and
+  `api_docs_report` carries every field, with `drift_issues` equal to the reported count.
