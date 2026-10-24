@@ -1,4 +1,4 @@
-# Product Forge — Plugin Test Plan (v1.6.0)
+# Product Forge — Plugin Test Plan
 
 > **Audience:** reviewer / QA engineer / AI agent asked to validate this plugin.
 > **Scope:** testing the plugin itself, not features built with it.
@@ -9,16 +9,16 @@
 
 ## 1. What this plugin is
 
-A SpecKit extension (`speckit-product-forge`, v1.6.0) that orchestrates
+A SpecKit extension (`speckit-product-forge`, v1.8.0) that orchestrates
 a full product lifecycle — from problem discovery through shipped and
 measured code — as a sequence of human-gated phases. Users drive it
 through `/speckit.product-forge.*` slash commands. State between phases
 is a YAML file inside each feature directory.
 
 **The plugin is not runnable software in the traditional sense.** It
-ships ~50 files total. 31 of them are slash-command definitions in
+ships ~50 files total. 33 of them are slash-command definitions in
 `commands/*.md` — markdown instructions to an LLM, not code. The rest
-are reference docs under `docs/`, manifests at the root, and 12 helper
+are reference docs under `docs/`, manifests at the root, and 14 helper
 files under `scripts/` (all Node zero-dep or bash):
 
 - `scripts/migrate-status-v2-to-v3.js` (Node, zero-dep)
@@ -64,7 +64,7 @@ default, skip-reason policy, drift budget.
    `.product-forge/lessons.md` that research consumes on next feature.
 
 **Cross-cutting.** `/portfolio` reads every `.forge-status.yml` and
-produces a multi-feature view. `/sync-verify` checks 9 artifact layers
+produces a multi-feature view. `/sync-verify` checks 10 artifact layers
 for drift. `/change-request` handles formal scope changes with
 impact propagation. `/feature-flag-cleanup` audits stale flags.
 `/backfill` reverse-engineers a feature folder from existing code.
@@ -255,7 +255,7 @@ through phases with known expected outputs.
 | `task_log[]` not called `tasks[]` in normative files | `grep -rn '\btasks\[\]' . --include='*.md' --include='*.yml' \| grep -v schema.md \| grep -v 'docs/adr\|docs/brainstorms\|docs/reviews'` | matches only in comments explaining the historical rename |
 | all internal markdown links resolve | walk every `[text](relative/path.md#anchor)`, confirm target file exists and anchor matches a heading | 0 broken links |
 | no references to removed historical directories | `grep -rn 'docs/adr\|docs/brainstorms\|docs/reviews' . --include='*.md' \| grep -v 'docs/qa/plugin-test-plan.md'` | 0 matches. The test plan itself names these directories in the "resolved" log and the grep examples — excluded above. |
-| markdown frontmatter well-formed on every command | parse `commands/*.md`, assert `name` and `description` keys exist | all 31 parse cleanly |
+| markdown frontmatter well-formed on every command | parse `commands/*.md`, assert `name` and `description` keys exist | all 33 parse cleanly |
 | YAML validity | parse every `.yml`, assert no errors | all parse |
 
 ### 6.3 Layer C — Behavioral scenarios

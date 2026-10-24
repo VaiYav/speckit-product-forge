@@ -1,7 +1,7 @@
 ---
 name: speckit.product-forge.forge
 description: >
-  Full lifecycle orchestrator for Product Forge v1.6.0. Drives a feature from idea to
+  Full lifecycle orchestrator for Product Forge. Drives a feature from idea to
   shipped, measured code through the phase map selected by `feature_mode`
   (express / lite / standard / v-model) with human-in-the-loop gates, cross-artifact
   sync-verify between transitions, and a complete gate audit trail.
@@ -11,7 +11,7 @@ description: >
   Use with: "forge feature", "run full cycle", "product-forge", "/speckit.product-forge.forge"
 ---
 
-# Product Forge — Full Lifecycle Orchestrator (v1.6.0)
+# Product Forge — Full Lifecycle Orchestrator
 
 > **Command syntax.** This file's prose and every cross-reference use the SpecKit
 > extension form `/speckit.product-forge.<name>` (e.g. `/speckit.product-forge.research`).

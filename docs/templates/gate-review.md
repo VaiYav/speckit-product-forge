@@ -40,7 +40,7 @@ first); ids are stable once assigned.
 # Gate Review: {Feature Name}
 
 > Feature: `{slug}` | Updated: {ISO} | Reviewed against: `{git-sha-or-artifact-stamp}`
-> Risk: {🟢 low | 🟡 medium | 🔴 high} (from `node scripts/gate-risk.js`) → routing: {auto-recommend | require-human | block}
+> Risk: {🟢 low | 🟡 medium | 🔴 high} (from `node ${PLUGIN_ROOT}/scripts/gate-risk.js`) → routing: {auto-recommend | require-human | block}
 
 ## Summary (collapse-by-default)
 

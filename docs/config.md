@@ -600,7 +600,7 @@ These are not config keys but paths the config indirectly controls:
 |------|---------|-----------|
 | `.product-forge/lessons.md` | append-only learning log | `retrospective` |
 | `scripts/migrate-status-v2-to-v3.js` | lazy schema migration helper | ships with plugin |
-| `scripts/acquire-lock.sh` / `release-lock.sh` | state-lock helpers | ships with plugin |
+| `${PLUGIN_ROOT}/scripts/acquire-lock.sh` / `release-lock.sh` | state-lock helpers | ships with plugin |
 
 ---
 
@@ -701,7 +701,7 @@ aborts if the file is absent. See
 [`commands/forge.md`](../commands/forge.md) for the headless step contract.
 
 The policy maps each **{phase × risk-class}** to one of three actions
-(risk is computed by `node scripts/gate-risk.js --feature-dir <dir> --json`):
+(risk is computed by `node ${PLUGIN_ROOT}/scripts/gate-risk.js --feature-dir <dir> --json`):
 
 | Action | Behavior |
 |--------|----------|

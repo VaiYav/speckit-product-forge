@@ -14,9 +14,9 @@ repo in two installable forms** (workflows identical):
 
 This is a **content/spec repository, not an application.** There is no app to
 build or run. The deliverable is:
-- **31 command files** in `commands/` (markdown prompt-skills, one per slash command),
+- **33 command files** in `commands/` (markdown prompt-skills, one per slash command),
 - **normative docs** in `docs/`,
-- **4 zero-dependency Node helper scripts** in `scripts/`.
+- **zero-dependency helper scripts** in `scripts/` (Node CommonJS + two bash lock helpers).
 
 Both distribution forms reuse the *same* `commands/`, `docs/`, and `scripts/` —
 plugin support was added by adding manifests only, nothing was rewritten.
@@ -28,7 +28,7 @@ do not (and should not) exist here. Do not scaffold them in this repo.
 ## Layout
 
 ```
-commands/              31 slash-command definitions (markdown + YAML frontmatter)
+commands/              33 slash-command definitions (markdown + YAML frontmatter)
 docs/                  normative specs + templates (see hierarchy below)
   schema/              canonical .forge-status.yml v3 schema + migration notes
   templates/           gate-review, journey-spec, traceability-matrix, domains.yml, …
@@ -37,14 +37,14 @@ scripts/               zero-dependency Node helpers (CommonJS, Node ≥ 22)
 extension.yml          SpecKit extension manifest (declares all commands)
 .claude-plugin/        plugin.json + marketplace.json (Claude plugin manifests)
 config-template.yml    shipped config defaults + authoritative config reference
-CHANGELOG.md           Keep-a-Changelog; current: v1.6.0 "Bulbasaur"
+CHANGELOG.md           Keep-a-Changelog; current: v1.8.0 "Venusaur"
 ```
 
 ## Version sync rule (do not break)
 
 The version lives in **two** places and they MUST match on every release:
 `extension.yml` (`extension.version`) and `.claude-plugin/plugin.json`
-(`version`). Currently `1.6.0`. `plugin.json` wins if they ever diverge, but they
+(`version`). Currently `1.8.0`. `plugin.json` wins if they ever diverge, but they
 should never diverge — bump both. The marketplace entry intentionally omits
 `version` (single source of truth). Update `CHANGELOG.md` in the same change.
 
@@ -56,7 +56,7 @@ should never diverge — bump both. The marketplace entry intentionally omits
   coexist.
 - When adding/removing a command: add/remove the `commands/<name>.md` file AND
   its entry under `provides.commands` in `extension.yml`. Keep the README command
-  table and `docs/claude-plugin.md` count ("31 commands") in sync.
+  table and `docs/claude-plugin.md` count ("33 commands") in sync. `lint-docs` enforces the count here too.
 
 ## Helper scripts & verification
 
@@ -73,8 +73,12 @@ It wraps:
 node scripts/lint-docs.js --selftest             # doc-corpus consistency linter (its own tests)
 node scripts/lint-docs.js                         # run against the repo — 0 error-severity required
 node scripts/lib-paths.js --selftest             # Path-Resolution Contract (runtime.md §12)
-node scripts/gate-risk.js --selftest             # deterministic gate risk classifier (W5-A4)
-node scripts/validate-traceability.js --selftest # structural traceability/spec-lint (W5-A1)
+node scripts/gate-risk.js --selftest             # deterministic gate risk classifier
+node scripts/validate-traceability.js --selftest # structural traceability/spec-lint
+node scripts/check-links.js --selftest           # external-link probe (advisory in CI)
+node scripts/cost-report.js --selftest           # status --cost token/cost roll-up
+node scripts/build-catalog.js --selftest         # _portfolio/catalog.yml carrier (v1.8)
+node scripts/retrieve-catalog.js --selftest      # deterministic retrieval over the catalog (v1.8)
 ```
 
 `scripts/lint-docs.js` is the **consistency compiler** for this spec-as-product
@@ -83,12 +87,16 @@ repo: it blocks dangling refs, plugin-root escapes, command-count/version drift,
 (single-sourced from `docs/schema/phase-map.yml` — both forge.md tables must render
 it), **carrier-field contracts** (every cross-phase field has a producer + a
 consumer), **gate-policy shape**, **sync-verify/verify-full layer-count parity**,
-dead config switches (a documented key no command reads), and bare `node scripts/…`
-paths (must use `${PLUGIN_ROOT}`, see runtime.md §1A).
+dead config switches (a documented key no command reads — no exemption list),
+documented-but-undeclared config keys, stale current-version claims (install pins,
+title stamps, command descriptions), and bare `node scripts/…` / `scripts/*.sh`
+paths in commands and normative docs (must use `${PLUGIN_ROOT}`, see runtime.md §1A).
+`doctor` also runs the fixture smokes (traceability `--strict`, gate-risk, cost-report).
 `scripts/lib-yaml.js` is a **subset** YAML parser (only what Product Forge's own
 `.forge-status.yml` / `traceability.yml` / `journeys.yml` need — not a general
 engine); no standalone self-test, exercised inside the consumers' self-tests.
-`scripts/migrate-status-v2-to-v3.{js,ts}` is the lazy v2→v3 status migrator.
+`scripts/migrate-status-v2-to-v3.js` is the lazy v2→v3 status migrator (the `.ts` file is an exit-64 stub kept for old references).
+`scripts/acquire-lock.sh` / `release-lock.sh` implement the state-lock protocol (runtime.md §2).
 `fixtures/features/demo/` is a known-good feature state the scripts run against
 (real-file smoke). There is no package.json, no build framework — `doctor` is the
 test suite.

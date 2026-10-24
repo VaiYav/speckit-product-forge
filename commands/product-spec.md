@@ -97,7 +97,9 @@ For each journey, confirm the edge cases with the user via a structured prompt
 
 ### 2D. Wireframes — Format and Detail
 
-Ask: *"What level of wireframe fidelity do you need?"*
+Ask: *"What level of wireframe fidelity do you need?"* — read `default_wireframe_detail`
+from config (`"text" | "basic-html" | "detailed-html"`) and present that value as the
+**pre-selected / recommended** option:
 
 - **Text/ASCII** — Markdown text descriptions + ASCII box diagrams. Fast, version-controlled, no tools needed.
 - **Basic HTML** — Simple HTML wireframe per screen: boxes, labels, basic layout. Opens in any browser.

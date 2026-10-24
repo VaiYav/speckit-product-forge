@@ -42,8 +42,15 @@ Sum the scores → **Input Richness Score (0–8)**:
 - **3–5** → `PARTIAL_INTERVIEW` mode — ask only gaps (skip answered dimensions)
 - **6–8** → `CONFIRM` mode — brief 1-message confirmation, then proceed
 
-Load project config from `.product-forge/config.yml`:
+Load the effective config (5-layer merge, [docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)):
 - `project_name`, `project_domain`, `project_tech_stack`, `codebase_path`, `features_dir`
+- Research defaults — these **pre-fill** interview answers; the user can still override:
+  - `default_competitors` (list) → if non-empty, use as the competitor list and skip
+    question 2 (show it in the plan instead). Empty → ask / auto-discover.
+  - `default_tech_research` (bool) → pre-select **Tech-stack comparison** in the
+    research-scope multiSelect.
+  - `default_metrics_research` (bool) → pre-select **Metrics / ROI** in the
+    research-scope multiSelect.
 
 Resolve `FEATURE_DIR` via the Path-Resolution Contract `resolve(slug)`
 ([docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)) — under
@@ -71,7 +78,8 @@ multiSelect.
 1. **Feature description** (free text) — *"What does this feature do? Who uses it and
    why?"* (1–3 sentences: what it is, who benefits, what problem it solves)
 2. **Competitors** (free text) — *"Any specific apps or products I should analyze?"*
-   (leave blank to auto-discover 6–8 competitors)
+   (leave blank to auto-discover 6–8 competitors). **Skip** when `default_competitors`
+   is non-empty — those are used.
 3. **Tech stack** (free text) — *"What technology does your project use?"*
    (e.g., "Node.js + Express + Postgres" — or say "use config")
 4. **Domain** (free text) — *"What industry/domain is this for?"*

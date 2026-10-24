@@ -434,7 +434,7 @@ claude plugin install speckit-product-forge@vaiyav-plugins
 Pin to a tag or branch with `@ref`:
 
 ```bash
-claude plugin marketplace add VaiYav/speckit-product-forge@v1.7.0
+claude plugin marketplace add VaiYav/speckit-product-forge@v1.8.0
 ```
 
 **Command names when installed as a plugin** are namespaced with the plugin name — e.g. `/speckit-product-forge:forge`, `/speckit-product-forge:status`, `/speckit-product-forge:research`. (As a SpecKit extension the same commands are `/speckit.product-forge.forge`, etc. — see Option B.)
@@ -459,7 +459,7 @@ specify extension add product-forge --from https://github.com/VaiYav/speckit-pro
 #### Install (specific version)
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.7.0.zip
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.8.0.zip
 ```
 
 #### Update to latest
@@ -471,14 +471,14 @@ specify extension update product-forge --from https://github.com/VaiYav/speckit-
 #### Update to specific version
 
 ```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.7.0.zip
+specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.8.0.zip
 ```
 
 #### Verify installation
 
 ```bash
 specify extension list
-# Should show: product-forge  v1.7.0  enabled
+# Should show: product-forge  v1.8.0  enabled
 ```
 
 ---

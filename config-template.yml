@@ -222,9 +222,11 @@ require_skip_reason: true
 # All default false (the phase stays optional and may be skipped per §3).
 # See docs/policy.md §6.
 #
+#   require_problem_discovery — force Phase 0 problem discovery (lite/standard).
 #   require_pre_impl_review — force the pre-implementation review phase.
 #   require_code_review     — force the code-review phase.
 #   require_testing         — force the test-plan / test-run phases.
+require_problem_discovery: false
 require_pre_impl_review: false
 require_code_review: false
 require_testing: false

@@ -396,7 +396,7 @@ parallel hash store.
 
 ### 9.3 Risk routing (A4) — auto-recommend, never auto-approve
 
-`node scripts/gate-risk.js --feature-dir <dir>` computes a deterministic risk
+`node ${PLUGIN_ROOT}/scripts/gate-risk.js --feature-dir <dir>` computes a deterministic risk
 class (`low | medium | high`) from existing `.forge-status.yml` signals (XL/L
 task sizes, task count, cross-workspace scope, schema/migration changes,
 change-request rollbacks, open CRITICAL/HIGH findings, `v-model`/`express` mode)

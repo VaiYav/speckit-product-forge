@@ -20,15 +20,20 @@
 //   CMD-COUNT   — commands/*.md  ==  extension.yml provides.commands  ==  count
 //                 claimed in README/how-it-works/claude-plugin/QA docs.
 //   VERSION     — extension.yml version == .claude-plugin/plugin.json version,
-//                 and no stale "v1.5 adds"/"vN.N adds" narrative below current.
+//                 no stale "vN.N adds" narrative, no stale current-version claim
+//                 (install pins, doc-title stamps), no version in a command
+//                 frontmatter description.
 //   ENUM        — feature_mode / gate-decision / phase-status enums are
 //                 byte-identical everywhere they are enumerated.
 //   PHASEMAP    — forge.md Phase Map rows == execution-map rows == the count
 //                 every doc claims (no "18 rows" vs "20 rows" drift).
 //   CONFIG-READER — every config key documented in config-template.yml is read
 //                 by >=1 command (catches dead switches like a11y_gate).
-//   SCRIPT-PATH — no command invokes `node scripts/...` or require('./scripts/')
-//                 by bare relative path (must go through ${PLUGIN_ROOT}).
+//   CONFIG-DECLARED — every require_/default_/auto_ key the docs tell users to
+//                 set is declared in config-template.yml (reverse direction).
+//   SCRIPT-PATH — no command or normative doc invokes `node scripts/...`,
+//                 `scripts/*.sh` or require('./scripts/') by bare relative path
+//                 (must go through ${PLUGIN_ROOT}).
 //   ID-FORMAT   — task-id form is consistent (T001 canonical, not TASK-012).
 //
 // Usage:
@@ -154,7 +159,7 @@ function lint(root) {
   const corpus = [
     ...walk(R("commands"), [".md"]),
     ...walk(R("docs"), [".md", ".yml", ".yaml"]).filter((p) => !inImprovements(p)),
-    ...listFiles(root, ".md").filter((f) => /README|CHANGELOG|CONTRIBUTING/.test(f)),
+    ...listFiles(root, ".md").filter((f) => /README|CHANGELOG|CONTRIBUTING|CLAUDE/.test(path.basename(f))),
   ];
 
   // ── XREF: relative refs resolve + no escape above plugin root ──────────────
@@ -205,6 +210,11 @@ function lint(root) {
     const want = "speckit.product-forge." + path.basename(f, ".md");
     if (!fm) add("CMD-COUNT", "warn", rel(f), "no frontmatter name:");
     else if (fm[1] !== want) add("CMD-COUNT", "error", rel(f), `frontmatter name ${fm[1]} != expected ${want}`);
+    // A version in the user-visible description goes stale every release
+    // (forge.md said v1.6.0 at 1.8.0) — the manifests are the only version home.
+    const fmBlock = (read(f).match(/^---\n([\s\S]*?)\n---/) || [])[1] || "";
+    const desc = (fmBlock.match(/^description:([\s\S]*?)(?=^[A-Za-z][\w-]*:|$(?![\s\S]))/m) || [])[1] || "";
+    if (/\bv\d+\.\d+/.test(desc)) add("VERSION", "warn", rel(f), "frontmatter description carries a version string — drop it (manifests are the single version source)");
   }
   // any "<N> slash command(s)"/"<N> command files" claim that disagrees
   const countClaimRe = /(\d{1,3})\s+(?:slash[- ]command|command files|commands)/gi;
@@ -243,6 +253,31 @@ function lint(root) {
         const fa = Number(m[1]), fb = Number(m[2]);
         if (fa < maj || (fa === maj && fb < min)) {
           add("VERSION", "warn", rel(f), `stale "v${m[1]}.${m[2]} adds" narrative (current is ${extVer})`);
+        }
+      }
+    }
+    // Current-version CLAIMS (own-repo install pins, doc-title stamps,
+    // "Currently `x.y.z`") must equal the manifest version. Historical lower
+    // bounds ("normative for v1.5.0+", "added in v1.6.0") and other repos'
+    // pins (the V-Model pack's tags/v0.5.0.zip) are not claims.
+    const pinRes = [
+      /speckit-product-forge@v(\d+\.\d+\.\d+)\b/g,
+      /speckit-product-forge\/archive\/refs\/tags\/v(\d+\.\d+\.\d+)\.zip/g,
+      /git tag v(\d+\.\d+\.\d+)/g,
+      /^#\s.*\(v(\d+\.\d+\.\d+)\)\s*$/gm,
+      /Currently `(\d+\.\d+\.\d+)`/g,
+      /\bversion\s+`?(\d+\.\d+\.\d+)`?(?!\+)/g,
+      /product-forge\s+v(\d+\.\d+\.\d+)\s+enabled/g,
+    ];
+    const sameVer = (v) => v === extVer || extVer.startsWith(v + ".");
+    for (const f of corpus) {
+      if (/CHANGELOG\.md$/.test(f)) continue;
+      const txt = read(f);
+      for (const re of pinRes) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(txt)) !== null) {
+          if (!sameVer(m[1])) add("VERSION", "warn", rel(f), `claims current version ${m[1]} ("${m[0].trim().slice(0, 50)}"); manifests say ${extVer}`);
         }
       }
     }
@@ -511,7 +546,7 @@ function lint(root) {
     const maxLayer = Math.max(...defined);
     // "N-layer" / "N layer" / "all N layers" claims anywhere in the corpus that
     // sit near this owner's name (same line) must equal its max defined layer.
-    const claimRe = /(\d{1,2})[ -]layers?\b|all\s+(\d{1,2})\s+layers\b/gi;
+    const claimRe = /(\d{1,2})[ -](?:artifact[ -])?layers?\b|all\s+(\d{1,2})\s+layers\b/gi;
     for (const f of corpus) {
       if (/CHANGELOG\.md$/.test(f)) continue;   // CHANGELOG documents past layer counts (history, not drift)
       for (const line of lines(read(f))) {
@@ -548,20 +583,35 @@ function lint(root) {
   const declared = new Set();
   let km;
   while ((km = keyRe.exec(tmpl)) !== null) declared.add(km[1]);
-  // Stylistic prompt-default keys whose value feeds an LLM prompt default rather
-  // than being read by a literal key-name grep (e.g. default_wireframe_detail →
-  // WIREFRAME_DETAIL in product-spec). Identity keys used only in prompts too.
-  const readerExempt = new Set([
-    "project_name", "project_tech_stack", "project_domain",
-    "max_tokens_per_doc", "output_language", "default_competitors",
-    "default_tech_research", "default_metrics_research",
-    "default_wireframe_detail", "default_mockup_style",
-  ]);
+  // No exemption list: a key that no command or orchestrator doc names is a
+  // dead switch, full stop. (An exemption list previously hid six of them.)
   for (const key of declared) {
-    if (ignore.has(key) || readerExempt.has(key)) continue;
+    if (ignore.has(key)) continue;
     if (!new RegExp(`\\b${key}\\b`).test(readerBlob)) {
       add("CONFIG-READER", "warn", "config-template.yml", `config key '${key}' is documented but no command/orchestrator-doc reads it (dead switch?)`);
     }
+  }
+
+  // ── CONFIG-DECLARED: the reverse direction ─────────────────────────────────
+  // A `require_*` / `default_*` / `auto_*` key that docs or commands tell the
+  // user to set must exist in config-template.yml (any nesting level) or the
+  // gate-policy template — otherwise the documented switch cannot be set from
+  // the shipped defaults (require_problem_discovery lived only in policy.md).
+  const gpTxt = exists(R("docs/templates/gate-policy.yml")) ? read(R("docs/templates/gate-policy.yml")) : "";
+  const anyKeys = new Set([...`${tmpl}\n${gpTxt}`.matchAll(/^\s*([a-z][a-z0-9_]+):/gm)].map((m) => m[1]));
+  const cfgTokRe = /(?:`|\|\s*)((?:require|default|auto)_[a-z0-9_]+)(?=`|:|\s*\|)/g;
+  const undeclared = new Map();
+  for (const f of corpus) {
+    if (/CHANGELOG\.md$/.test(f)) continue;
+    let m;
+    const txt = read(f);
+    cfgTokRe.lastIndex = 0;
+    while ((m = cfgTokRe.exec(txt)) !== null) {
+      if (!anyKeys.has(m[1]) && !undeclared.has(m[1])) undeclared.set(m[1], rel(f));
+    }
+  }
+  for (const [key, where] of undeclared) {
+    add("CONFIG-DECLARED", "warn", where, `config key '${key}' is documented but not declared in config-template.yml`);
   }
 
   // ── SCRIPT-PATH: no bare-relative node script invocation in commands ───────
@@ -571,15 +621,25 @@ function lint(root) {
   // match the bare regex at all; the only legitimate bare form is
   // `cd ${PLUGIN_ROOT} && node scripts/…` — so exempt only when the PLUGIN_ROOT
   // token is on the SAME line as the bare invocation (tightest correct rule).
-  const bareLineRe = /node\s+scripts\//;
+  // Scope: commands AND the shipped normative docs (an LLM executes both). The
+  // root contributor files (README/CLAUDE/CONTRIBUTING) run from a checkout, so
+  // bare paths are correct there; docs/qa/ is a contributor test plan too.
+  // `.sh` helpers are covered as well (acquire-lock.sh was cited bare).
+  const bareLineRe = /node\s+scripts\/|(?<![\w}/.-])scripts\/[\w-]+\.sh\b/;
   const requireLineRe = /require\((['"])\.\/scripts\//;
   const pluginRootToken = /\$\{?PLUGIN_ROOT|\$\{?CLAUDE_PLUGIN_ROOT|specify extension path/;
-  for (const f of cmdFiles) {
+  const scriptPathScope = [
+    ...cmdFiles,
+    ...walk(R("docs"), [".md"]).filter((p) => !inImprovements(p) && !/[\\/]qa[\\/]/.test(p)),
+  ];
+  for (const f of scriptPathScope) {
     const ls = lines(read(f));
     const bad = [];
     for (let i = 0; i < ls.length; i++) {
       if (!bareLineRe.test(ls[i]) && !requireLineRe.test(ls[i])) continue;
       if (pluginRootToken.test(ls[i])) continue;   // same-line cd ${PLUGIN_ROOT} && node scripts/…
+      if (/\bbare\b/i.test(ls[i])) continue;       // prose stating the rule itself ("never a bare node scripts/…")
+      if (/scripts\/(?:doctor|lint-docs|check-links)\.js/.test(ls[i])) continue;  // contributor self-checks run from a checkout
       bad.push(i + 1);
     }
     if (bad.length) {
@@ -629,7 +689,8 @@ function printHelp() {
     "       node scripts/lint-docs.js --selftest",
     "",
     "Deterministic consistency-linter over the Product Forge doc corpus.",
-    "Rules: XREF, CMD-COUNT, VERSION, ENUM, PHASEMAP, CONFIG-READER, SCRIPT-PATH, ID-FORMAT.",
+    "Rules: XREF, CMD-COUNT, VERSION, ENUM, GATE-POLICY, CARRIER, PHASEMAP, LAYER-COUNT,",
+    "       CONFIG-READER, CONFIG-DECLARED, SCRIPT-PATH, ID-FORMAT.",
     "Exit 0 = clean, 1 = findings, 2 = usage/IO error.",
   ].join("\n"));
 }
@@ -798,6 +859,34 @@ function selftest() {
     W("commands/mixed.md", "---\nname: speckit.product-forge.mixed\n---\nRun: `cd ${PLUGIN_ROOT} && node scripts/ok.js`\n");
     assert(!lint(tmp).some((f) => f.rule === "SCRIPT-PATH" && /commands\/mixed\.md/.test(f.file)), "SCRIPT-PATH exempts a same-line cd ${PLUGIN_ROOT} && node scripts/ form");
     fs.rmSync(path.join(tmp, "commands/mixed.md"));
+
+    // SCRIPT-PATH covers bare .sh helpers and normative docs, not only commands.
+    W("docs/rt.md", "Acquire via `scripts/acquire-lock.sh <file>` first.\n");
+    assert(lint(tmp).some((f) => f.rule === "SCRIPT-PATH" && /docs\/rt\.md/.test(f.file)), "SCRIPT-PATH flags a bare scripts/*.sh in a normative doc");
+    W("docs/rt.md", "Acquire via `bash ${PLUGIN_ROOT}/scripts/acquire-lock.sh <file>` first.\n");
+    assert(!lint(tmp).some((f) => f.rule === "SCRIPT-PATH" && /docs\/rt\.md/.test(f.file)), "SCRIPT-PATH passes a ${PLUGIN_ROOT}/scripts/*.sh form");
+    fs.rmSync(path.join(tmp, "docs/rt.md"));
+
+    // CLAUDE.md is in the corpus: a stale command-count claim there is caught.
+    W("CLAUDE.md", "This repo ships 31 commands.\n");
+    assert(lint(tmp).some((f) => f.rule === "CMD-COUNT" && /CLAUDE\.md/.test(f.file)), "CMD-COUNT lints CLAUDE.md");
+    fs.rmSync(path.join(tmp, "CLAUDE.md"));
+
+    // VERSION: stale install pin / doc-title stamp / description version.
+    W("docs/pin.md", "# Phase Reference (v1.4.0)\nInstall `VaiYav/speckit-product-forge@v1.4.0`; other repo `spec-kit-v-model/archive/refs/tags/v0.5.0.zip` is fine.\nNormative for v1.4.0+ (history, fine).\n");
+    const pinF = lint(tmp).filter((f) => f.rule === "VERSION" && /pin\.md/.test(f.file));
+    assert(pinF.length === 2, "VERSION flags a stale install pin and title stamp but not a historical lower bound");
+    fs.rmSync(path.join(tmp, "docs/pin.md"));
+    W("commands/forge.md", read(path.join(tmp, "commands/forge.md")).replace("---\n", "---\ndescription: Orchestrator for Product Forge v1.2.0\n"));
+    assert(lint(tmp).some((f) => f.rule === "VERSION" && /description carries a version/.test(f.msg)), "VERSION flags a version in a command description");
+
+    // CONFIG-READER has no exemption list; CONFIG-DECLARED catches the reverse.
+    W("config-template.yml", 'project_name: "x"\nmax_tokens_per_doc: 4000\n');
+    assert(lint(tmp).some((f) => f.rule === "CONFIG-READER" && /max_tokens_per_doc/.test(f.msg)), "CONFIG-READER no longer exempts formerly-exempt keys");
+    W("docs/pol.md", "| `problem_discovery` | optional | `require_problem_discovery: true` |\n");
+    assert(lint(tmp).some((f) => f.rule === "CONFIG-DECLARED" && /require_problem_discovery/.test(f.msg)), "CONFIG-DECLARED flags a documented key missing from the template");
+    W("config-template.yml", 'project_name: "x"\nrequire_problem_discovery: false\n');
+    assert(!lint(tmp).some((f) => f.rule === "CONFIG-DECLARED"), "CONFIG-DECLARED passes once the key is declared");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

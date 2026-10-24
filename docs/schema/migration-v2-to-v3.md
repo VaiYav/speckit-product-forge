@@ -89,13 +89,13 @@ first write.
 
 ```bash
 # Dry-run (prints what would change; writes nothing):
-node scripts/migrate-status-v2-to-v3.js --dry-run
+node ${PLUGIN_ROOT}/scripts/migrate-status-v2-to-v3.js --dry-run
 
 # Apply:
-node scripts/migrate-status-v2-to-v3.js
+node ${PLUGIN_ROOT}/scripts/migrate-status-v2-to-v3.js
 
 # Custom features directory:
-node scripts/migrate-status-v2-to-v3.js --features-dir=custom/features
+node ${PLUGIN_ROOT}/scripts/migrate-status-v2-to-v3.js --features-dir=custom/features
 ```
 
 No package.json, tsconfig, or external dependencies are required — the

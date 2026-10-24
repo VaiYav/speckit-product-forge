@@ -1,4 +1,4 @@
-# Product Forge — Phase Reference (v1.6.0)
+# Product Forge — Phase Reference
 
 Full documentation for all Product Forge lifecycle phases: 1 optional pre-phase (Phase 0),
 7 required phases (1–7), 5 optional phases (5C, 6B, 8A, 8B, 9), plus cross-cutting commands.
@@ -362,7 +362,7 @@ Produces lessons learned and next-step recommendations.
 **Command:** `/speckit.product-forge.sync-verify`
 **Output:** `features/{slug}/sync-report.md` + `sync-report.json`
 
-Runnable between ANY phases. Checks 9 artifact layers (incl. contract-drift + doc↔code) for forward and backward drift.
+Runnable between ANY phases. Checks 10 artifact layers (incl. contract-drift + doc↔code) for forward and backward drift.
 `--quick` mode runs automatically between forge phase transitions.
 Human-in-the-loop for each CRITICAL/WARNING resolution.
 

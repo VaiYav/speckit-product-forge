@@ -257,8 +257,8 @@ Shell helpers:
 
 ```bash
 # In any sub-skill that writes status
-trap 'scripts/release-lock.sh "$FEATURE_DIR" "$SESSION_ID"' EXIT INT TERM
-scripts/acquire-lock.sh "$FEATURE_DIR" 1800 "$SESSION_ID"
+trap 'bash "${PLUGIN_ROOT}/scripts/release-lock.sh" "$FEATURE_DIR" "$SESSION_ID"' EXIT INT TERM
+bash "${PLUGIN_ROOT}/scripts/acquire-lock.sh" "$FEATURE_DIR" 1800 "$SESSION_ID"
 # … write status atomically: temp-file + rename …
 ```
 

@@ -221,19 +221,19 @@ The plugin ships portable shell helpers implementing the protocol above:
 
 ```bash
 # In a sub-skill that mutates .forge-status.yml:
-trap 'scripts/release-lock.sh "$FEATURE_DIR" "$FORGE_SESSION_ID"' EXIT INT TERM
-scripts/acquire-lock.sh "$FEATURE_DIR" 1800 "$FORGE_SESSION_ID"
+trap 'bash "${PLUGIN_ROOT}/scripts/release-lock.sh" "$FEATURE_DIR" "$FORGE_SESSION_ID"' EXIT INT TERM
+bash "${PLUGIN_ROOT}/scripts/acquire-lock.sh" "$FEATURE_DIR" 1800 "$FORGE_SESSION_ID"
 # ... write `.forge-status.yml` via temp + rename ...
 ```
 
-- `scripts/acquire-lock.sh` uses `ln` (hardlink) as its atomic acquisition
+- `${PLUGIN_ROOT}/scripts/acquire-lock.sh` uses `ln` (hardlink) as its atomic acquisition
   primitive, followed by a `session_id` verification step that confirms the
   writer owns the lock it just created. `ln` is used deliberately instead of
   `mv -n` (BSD `mv -n` silently skips on an existing target with exit 0,
   defeating the race guard); `ln` exits non-zero on an existing target on both
   GNU and BSD, so it works on Linux, macOS, and WSL. The script refuses fresh
   locks and takes over stale ones as described in §2.2.
-- `scripts/release-lock.sh` is idempotent and refuses to delete a lock held
+- `${PLUGIN_ROOT}/scripts/release-lock.sh` is idempotent and refuses to delete a lock held
   by a different `session_id`, preventing takeover-race foot-guns.
 
 Sub-skills that cannot run shell (pure in-LLM flows) should document which
