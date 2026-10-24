@@ -222,7 +222,7 @@ not auto-message anyone.
 ## Operating Principles
 
 1. **Read-only.** This command never modifies source code or flag
-   provider state in v1.5.0. Removal is a manual step initiated from
+   provider state. Removal is a manual step initiated from
    the report.
 2. **Registry is the source of truth.** Flags not in a registry are
    *orphans* — not errors. They may be intentional (long-lived kill
