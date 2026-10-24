@@ -1,8 +1,7 @@
 # Product Forge — Runtime
 
 > **Status:** normative for v1.5.0+
-> **Consumers:** `commands/forge.md` and every sub-skill that mutates
-> `.forge-status.yml`.
+> **Consumers:** every command in `commands/` (§0 is their shared contract).
 > **Companions:** [policy.md](./policy.md), [schema.md](./schema.md).
 
 This document describes the orchestration runtime — how the forge skill loads
@@ -10,7 +9,7 @@ config, resumes state, transitions between phases, writes to status files
 safely, and runs sync-verify. It is the highest-precedence normative doc: when
 it disagrees with policy.md, schema.md or a command file, this file wins.
 
-**Contents** — [1 Load config](#1-step-0--load-config) ·
+**Contents** — [0 Command contract](#0-command-contract) · [1 Load config](#1-step-0--load-config) ·
 [1A `${PLUGIN_ROOT}`](#1a-locating-bundled-scripts-plugin_root) ·
 [2 State lock & status writes](#2-state-lock-protocol-a2) (§2.9 [status-write procedure](#29-status-write-procedure)) ·
 [3 Resume](#3-step-1--feature-detection--resume) ·
@@ -23,6 +22,59 @@ it disagrees with policy.md, schema.md or a command file, this file wins.
 [10 Context & document budget](#10-context-budget-behavior) (§10.1 [`max_tokens_per_doc`](#101-document-size-budget-max_tokens_per_doc)) ·
 [11 Phase prerequisites](#11-phase-prerequisites--fluid-mode-runnable-set) ·
 [12 Path resolution](#12-path-resolution-contract)
+
+---
+
+## 0. Command Contract
+
+Every command in `commands/` follows this contract. A command file links it with
+one line — `Follow the [command contract](../docs/runtime.md#0-command-contract).`
+— and then states only its **deltas**: the phase key it owns, the config keys it
+reads, the artifacts it writes, and any rule below it changes. When a command and
+this section disagree, this section wins (runtime precedence).
+
+1. **Config.** Build the effective config per [§1](#1-step-0--load-config) and read
+   the keys the command lists. Missing project identity is asked once and saved
+   to the **project** config.
+2. **Feature.** Resolve `FEATURE_DIR` from the slug in `$ARGUMENTS` via
+   [§12.2](#122-resolveslug--feature_dir); with no slug, list features with
+   `enumerate()` and ask which one (a structured prompt).
+3. **Prerequisites.** Check the required upstream artifacts for the feature's
+   `feature_mode` ([§11.2](#112-per-phase-required-upstream-artifacts)). When one
+   is missing, stop and name the missing artifact and the command that produces it.
+   A phase that is `no` for the mode in [phase-map.yml](./schema/phase-map.yml)
+   stops with *"{phase} is not in scope for {mode} features."*
+4. **Dry-run.** With `--dry-run`, write every artifact under
+   `{FEATURE_DIR}/.forge-dry-run/<phase_key>/` (mirroring real paths), skip the
+   status file, gate entries and external side effects, and write
+   `DRY-RUN-REPORT.md` there ([§7](#7-dry-run-semantics)).
+5. **Documents.** Generated artifacts are English Markdown within the
+   `max_tokens_per_doc` size budget ([§10.1](#101-document-size-budget-max_tokens_per_doc)).
+   Each artifact keeps the IDs it inherits (`FR-*`, `US-*`, `JRN-*`, `T0NN`, `TC-*`, …).
+6. **Status.** Every `.forge-status.yml` write uses the status-write procedure
+   ([§2.9](#29-status-write-procedure)) and touches only `phases.<phase_key>` (plus
+   the shared lists the command declares, e.g. `task_log[]`), with fields declared
+   in the [canonical schema](./schema/forge-status-v3.schema.yml).
+7. **Digest.** A phase that requires a digest ([§8](#8-phase-digest-requirement-a4))
+   writes it before setting `completed`.
+8. **Gate.** Run standalone, a phase ends with the
+   [Gate template](./templates/interaction-prompts.md#gate-after-every-phase) and
+   records the decision ([§6.1](#61-gate-ownership)), setting status from it
+   ([§6.2](#62-status-follows-the-decision)). With `--from-forge`, the command
+   does its work and writes its own data fields, then **returns** the outcome
+   summary and any gate extras to forge — forge shows the single gate and writes
+   status and the `gates[]` entry.
+9. **Questions.** Every question to the user is a structured prompt
+   ([interaction.md](./interaction.md)): 2–4 labelled options, the recommended one
+   first, free text allowed, one decision per prompt.
+10. **Scripts.** Bundled scripts run as `node "${PLUGIN_ROOT}/scripts/<name>.js"`
+    ([§1A](#1a-locating-bundled-scripts-plugin_root)); when the script is missing,
+    print a one-line WARN and continue with the documented manual fallback.
+11. **Hand-off.** The final message names the next command for the feature's
+    mode (from [phase-map.yml](./schema/phase-map.yml)) as a `Next step:` line.
+
+Read-only commands (`status`, `retrieve`, `portfolio`, `catalog --check`,
+`sync-verify` without `--fix`) apply rules 1–3 and 9–11 only.
 
 ---
 

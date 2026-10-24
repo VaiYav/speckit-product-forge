@@ -35,6 +35,10 @@
 //                 `scripts/*.sh` or require('./scripts/') by bare relative path
 //                 (must go through ${PLUGIN_ROOT}).
 //   ID-FORMAT   — task-id form is consistent (T001 canonical, not TASK-012).
+//   CMD-SHAPE   — every command file links the command contract (runtime §0),
+//                 ends with a "## Done when" section, keeps its description
+//                 <= 40 words, carries no version/wave tags or "Background:"
+//                 history, and uses no decorative emoji or rule lines.
 //
 // Usage:
 //   node scripts/lint-docs.js [--json] [--root <repo-root>]
@@ -145,7 +149,14 @@ function headingSlugs(text) {
 }
 
 // ── the linter ───────────────────────────────────────────────────────────────
-function lint(root) {
+// Prompt-shape limits for command files (CMD-SHAPE).
+const DESC_MAX_WORDS = 40;
+// Status legend (docs/interaction.md §4) plus the ↔ pairing notation.
+const STATUS_EMOJI = new Set(["✅", "⚠", "❌", "⏳", "⏭", "↔"]);
+const SEDIMENT_RE = /\((?:v1\.\d+[^)]*|W\d-[A-Z]\d+[^)]*|P\d-[A-Z]\b[^)]*|Theme [A-I]\b[^)]*)\)|^>\s*Background:|\bTheme [A-I]\b/m;
+const DECOR_RULE_RE = /[━═]{8,}|─{20,}/;
+
+function lint(root, opts = {}) {
   const findings = [];
   const add = (rule, severity, file, msg) => findings.push({ rule, severity, file, msg });
 
@@ -666,16 +677,40 @@ function lint(root) {
     }
   }
 
+  // ── CMD-SHAPE: command files follow the prompt-shape contract ──────────────
+  // Opt-in (--prompt-shape) until every command is migrated (v1.9.0 rewrite).
+  if (opts.promptShape) {
+    for (const f of cmdFiles) {
+      const txt = read(f);
+      const fmBlock = (txt.match(/^---\n([\s\S]*?)\n---/) || [])[1] || "";
+      const body = txt.slice(fmBlock.length + 8);
+      const desc = (fmBlock.match(/^description:([\s\S]*?)(?=^[A-Za-z][\w-]*:|$(?![\s\S]))/m) || [])[1] || "";
+      const words = desc.replace(/^\s*[>|]-?\s*$/m, "").split(/\s+/).filter(Boolean).length;
+      if (words > DESC_MAX_WORDS) add("CMD-SHAPE", "error", rel(f), `description is ${words} words (max ${DESC_MAX_WORDS}) — it sits in context every turn`);
+      if (!/runtime\.md#0-command-contract/.test(body)) add("CMD-SHAPE", "error", rel(f), "does not link the command contract (runtime.md#0-command-contract)");
+      if (!/^## Done when\b/m.test(body)) add("CMD-SHAPE", "error", rel(f), "has no `## Done when` section");
+      const sed = body.match(SEDIMENT_RE);
+      if (sed) add("CMD-SHAPE", "error", rel(f), `history/version tag in a command: "${sed[0].trim().slice(0, 40)}" (history lives in CHANGELOG)`);
+      body.split("\n").forEach((line, i) => {
+        if (DECOR_RULE_RE.test(line)) add("CMD-SHAPE", "error", rel(f), `line ${i + 1}: decorative rule line`);
+        for (const ch of line.match(/\p{Extended_Pictographic}/gu) || []) {
+          if (!STATUS_EMOJI.has(ch)) { add("CMD-SHAPE", "error", rel(f), `line ${i + 1}: decorative emoji ${ch} (status legend: ✅ ⚠️ ❌ ⏳ ⏭)`); break; }
+        }
+      });
+    }
+  }
+
   return findings;
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
-  const o = { json: false, selftest: false, root: process.cwd() };
+  const o = { json: false, selftest: false, promptShape: false, root: process.cwd() };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") o.json = true;
     else if (a === "--selftest") o.selftest = true;
+    else if (a === "--prompt-shape") o.promptShape = true;
     else if (a === "--root") o.root = path.resolve(argv[++i]);
     else if (a === "--help" || a === "-h") { printHelp(); process.exit(0); }
     else { console.error("Unknown argument: " + a); process.exit(2); }
@@ -685,12 +720,12 @@ function parseArgs(argv) {
 
 function printHelp() {
   console.log([
-    "Usage: node scripts/lint-docs.js [--json] [--root <repo-root>]",
+    "Usage: node scripts/lint-docs.js [--json] [--prompt-shape] [--root <repo-root>]",
     "       node scripts/lint-docs.js --selftest",
     "",
     "Deterministic consistency-linter over the Product Forge doc corpus.",
     "Rules: XREF, CMD-COUNT, VERSION, ENUM, GATE-POLICY, CARRIER, PHASEMAP, LAYER-COUNT,",
-    "       CONFIG-READER, CONFIG-DECLARED, SCRIPT-PATH, ID-FORMAT.",
+    "       CONFIG-READER, CONFIG-DECLARED, SCRIPT-PATH, ID-FORMAT, CMD-SHAPE (--prompt-shape).",
     "Exit 0 = clean, 1 = findings, 2 = usage/IO error.",
   ].join("\n"));
 }
@@ -887,6 +922,20 @@ function selftest() {
     assert(lint(tmp).some((f) => f.rule === "CONFIG-DECLARED" && /require_problem_discovery/.test(f.msg)), "CONFIG-DECLARED flags a documented key missing from the template");
     W("config-template.yml", 'project_name: "x"\nrequire_problem_discovery: false\n');
     assert(!lint(tmp).some((f) => f.rule === "CONFIG-DECLARED"), "CONFIG-DECLARED passes once the key is declared");
+
+    // CMD-SHAPE: contract link, Done when, description cap, sediment, decor.
+    const shape = (t) => lint(tmp, { promptShape: true }).filter((f) => f.rule === "CMD-SHAPE" && /shape\.md/.test(f.file));
+    const good = "---\nname: speckit.product-forge.shape\ndescription: >\n  Phase 9: short pointer.\n---\n# T\nFollow the [command contract](../docs/runtime.md#0-command-contract).\n✅ done\n## Done when\n- file written\n";
+    W("commands/shape.md", good);
+    assert(shape().length === 0, "CMD-SHAPE passes a conforming command");
+    assert(!lint(tmp).some((f) => f.rule === "CMD-SHAPE"), "CMD-SHAPE is off without --prompt-shape");
+    W("commands/shape.md", good.replace("short pointer.", "word ".repeat(45)));
+    assert(shape().some((f) => /description is/.test(f.msg)), "CMD-SHAPE caps description length");
+    W("commands/shape.md", good.replace("## Done when", "## Finish").replace("runtime.md#0-command-contract", "runtime.md#1-x"));
+    assert(shape().filter((f) => /Done when|contract/.test(f.msg)).length === 2, "CMD-SHAPE needs the contract link and Done when");
+    W("commands/shape.md", good.replace("# T", "# T\nPrior lessons (v1.6, W5-D1) apply.\n━━━━━━━━━━\n🚀 Launching"));
+    const sh = shape();
+    assert(sh.some((f) => /history/.test(f.msg)) && sh.some((f) => /rule line/.test(f.msg)) && sh.some((f) => /emoji/.test(f.msg)), "CMD-SHAPE flags sediment, rule lines and decorative emoji");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -898,7 +947,7 @@ function main() {
   const o = parseArgs(process.argv);
   if (o.selftest) process.exit(selftest());
   let findings;
-  try { findings = lint(o.root); }
+  try { findings = lint(o.root, { promptShape: o.promptShape }); }
   catch (e) { console.error("lint-docs error: " + (e && e.message)); process.exit(2); }
   emit(o, findings);
   process.exit(findings.some((f) => f.severity === "error") ? 1 : (findings.length ? 1 : 0));

@@ -100,6 +100,10 @@ naturally-related toggles into one `multiSelect` question to limit round-trips.
    `feature_mode` (express is a mode value); skip reasons → `skip_reason`.
 6. **Keep labels stable.** Reuse the standard headers (`Gate`, `Track`,
    `Next step`) so the experience is predictable across phases.
+7. **Status markers.** Reports and summaries use one legend: ✅ done / pass ·
+   ⚠️ warning / partial · ❌ failed / blocked · ⏳ pending / in progress ·
+   ⏭ skipped / not applicable. Plain Markdown headings and tables carry the
+   rest of the structure.
 
 See [templates/interaction-prompts.md](./templates/interaction-prompts.md) for
 ready-to-use prompt snippets.

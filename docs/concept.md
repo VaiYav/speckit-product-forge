@@ -201,3 +201,26 @@ providers; `i18n-harvest` writes stubs, not translations; `portfolio` and
 | [claude-plugin.md](./claude-plugin.md) | plugin packaging and command-name mapping |
 | [qa/plugin-test-plan.md](./qa/plugin-test-plan.md) | validating the plugin itself |
 | [improvements/](./improvements/) | design notes and their rationale (non-normative); implemented notes move to `improvements/archive/` |
+
+## 8. Glossary
+
+The shared vocabulary of commands and docs. Commands use these words without
+re-defining them.
+
+| Term | Meaning |
+|------|---------|
+| **phase** / **phase key** | One lifecycle step (Research, Plan, …); its snake_case key (`product_spec`) names its block under `phases.` in `.forge-status.yml`. The set per mode is [schema/phase-map.yml](./schema/phase-map.yml). |
+| **feature mode** | `express` · `lite` · `standard` · `v-model` — which phases run ([policy.md §4](./policy.md#4-feature-modes-e1)). |
+| **flow mode** | `gated` (one phase at a time, gate after each) or `fluid` (any phase in the runnable set). |
+| **gate** | The human decision after a phase: `approved` · `approved_with_conditions` · `revised` · `skipped` · `rolled_back` · `aborted`, recorded in `gates[]` ([runtime.md §6](./runtime.md#6-gate-audit-trail)). **Gate extras** are the phase-specific fields on that entry. |
+| **standalone** / **`--from-forge`** | How a command runs: on its own (it shows and records its gate) or under the `forge` orchestrator (it returns its outcome; forge shows the single gate). |
+| **effective config** | The merged five-layer config ([runtime.md §1](./runtime.md#1-step-0--load-config)). |
+| **command contract** | The rules every command follows ([runtime.md §0](./runtime.md#0-command-contract)). |
+| **carrier** | A file one phase writes so a later phase reads one small, structured input (`traceability.yml`, `journeys.yml`, `_portfolio/catalog.yml`, a named report section). |
+| **digest** | The short summary a phase writes before it completes; later phases read digests before full artifacts ([runtime.md §8](./runtime.md#8-phase-digest-requirement-a4)). |
+| **drift** | Two artifacts (or an artifact and the code) that should agree but do not. Each **layer** of `sync-verify` / `verify-full` checks one such pair. |
+| **canonical spec** / **delta spec** | `specs/<domain>/spec.md` is how the system behaves now; a delta spec lists one change's ADDED / MODIFIED / REMOVED requirements and is folded in by `spec-merge`. |
+| **index** / **part** | The halves of a document split under the size budget; a **single-file document** is one a later step reads by name, so it is tightened instead of split ([runtime.md §10.1](./runtime.md#101-document-size-budget-max_tokens_per_doc)). |
+| **red gate** | The test-first checkpoint inside `implement`: a Must-Have story's tests exist and fail before its code is written. |
+| **runnable set** | The phases a `fluid` feature may run next: prerequisites met and in scope for the mode ([runtime.md §11](./runtime.md#11-phase-prerequisites--fluid-mode-runnable-set)). |
+| **`FEATURE_DIR`** / **`${PLUGIN_ROOT}`** | The resolved feature folder ([runtime.md §12](./runtime.md#12-path-resolution-contract)) and the installed plugin root ([runtime.md §1A](./runtime.md#1a-locating-bundled-scripts-plugin_root)). |
