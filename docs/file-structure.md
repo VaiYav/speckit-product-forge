@@ -113,6 +113,7 @@ Which files exist depends on the feature mode and on which optional phases ran
     ├── gaps-report.md                       ← backfilled features only
     ├── sync-report.md / sync-report.json    ← cross-cutting: latest sync-verify report
     ├── change-log.md                        ← cross-cutting: change-request history
+    ├── _rewound/<date>-CR-NNN/              ← artifacts archived by a rollback (policy.md §8); skipped by scans
     └── backlog.md                           ← cross-cutting: changes deferred by change requests
 ```
 
@@ -262,20 +263,7 @@ HTML files include an in-page navigation bar linking sibling screens.
 
 The `.forge-status.yml` shape — phases, status values, `gates[]`, `task_log[]` — is
 **not** restated here; read [schema/forge-status-v3.schema.yml](./schema/forge-status-v3.schema.yml).
-The shapes below are the markdown artifacts and the one status sub-shape the
-canonical schema leaves open.
-
-### Change request entry (within `change_requests:` on `.forge-status.yml`)
-
-```yaml
-- id: "CR-001"
-  title: "Add notification sound selection"
-  status: "accepted"                  # accepted | deferred | rejected
-  timestamp: "2026-03-29T10:00:00Z"
-  artifacts_affected: 3
-  tasks_added: 2
-  phase_rollback: null                # phase name or null
-```
+The shapes below are the markdown artifacts.
 
 ### review.md
 
@@ -418,7 +406,7 @@ stay local to one artifact.
 | Journey files | `JRN-NNN-{slug}.md` | `JRN-001-save-prefs.md` |
 | Wireframe files | `wireframe-{screen}.html` | `wireframe-home-screen.html` |
 | Mockup files | `mockup-{screen}.html` | `mockup-settings-panel.html` |
-| Digest files | `<phase-dir>/digest.md` (kebab-case phase key) | `product-spec/digest.md` |
+| Digest files | `<phase-dir>/digest.md` (the phase's artifact folder, else the kebab-case phase key — runtime.md §8.1) | `product-spec/digest.md`, `plan/digest.md` |
 | Failed-task logs | `failures/<task-id>.md` | `failures/T007.md` |
 | Bug IDs | `BUG-NNN` | `BUG-001` |
 | Change request IDs | `CR-NNN` | `CR-003` |

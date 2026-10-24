@@ -269,6 +269,13 @@ learning:
 review:
   cross_model: ""
 
+# ─── Verification ──────────────────────────────────────────────────────────────
+# verify.ac_judge — opt-in LLM judge for subjective ("judgeable") acceptance
+#   criteria in verify-full Layer 3. Off by default; keep it off in CI unless a
+#   reviewer wants it. Executable ACs are always covered by tests, never judged.
+verify:
+  ac_judge: false
+
 # ─── Sync-Verify Drift Budget (v1.5.0) ─────────────────────────────────────────
 
 # Drift budget controls how sync-verify categorizes and reports differences.

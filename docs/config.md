@@ -16,7 +16,7 @@ keys and defaults. This page documents every key once, in the template's order.
   [Telemetry Providers](#telemetry-providers) · [Design System](#design-system) ·
   [Skip-Reason Policy](#skip-reason-policy) ·
   [Optional-Phase Governance](#optional-phase-governance) ·
-  [Learning Loop](#learning-loop) · [Cross-Model Review](#cross-model-review) ·
+  [Learning Loop](#learning-loop) · [Cross-Model Review](#cross-model-review) · [Verification](#verification) ·
   [Sync-Verify](#sync-verify) · [Supply Chain](#supply-chain) ·
   [Localization](#localization) · [Advanced](#advanced)
 - [Config Layers](#config-layers) ([which keys belong in which layer](#which-keys-belong-in-which-layer)) ·
@@ -405,6 +405,17 @@ into the `F-NNN` namespace (a model reviewing its own family rationalizes). See
 given on the command line. Product Forge never silently invokes another paid
 model. The chosen reviewer is stamped on the gate entry as `reviewed_by_model`.
 
+## Verification
+
+```yaml
+verify:
+  ac_judge: false
+```
+Opt-in LLM judge for subjective ("judgeable") acceptance criteria in
+[verify-full](../commands/verify-full.md) Layer 3. Executable criteria are always
+covered by tests and never judged. Off by default; keep it off in CI unless a
+reviewer wants it.
+
 ## Sync-Verify
 
 ```yaml
@@ -541,6 +552,7 @@ per-repo. `either` = both valid (personal default OR team-pinned per repo).
 | `learning.require_confirmation` | either | Safety preference; personal default or team-pinned. |
 | `learning.skill_category` | either | Grouping label; personal or per-team naming. |
 | `review.cross_model` | either | Personal default reviewer id, or a team-standard reviewer pinned per repo. |
+| `verify.ac_judge` | project | Whether this repo's verification runs the subjective-AC judge. |
 | `sync_verify.drift_budget` (cosmetic/structural) | either | Drift tolerance; teams often pin per repo. |
 | `sync_verify.auto_resolve` (cosmetic) | either | Auto-resolve opt-in: personal default OR team policy. |
 | `sync_verify.contract_differ` | global | Depends on `oasdiff` being on PATH — a machine trait; falls back to prose if absent. |

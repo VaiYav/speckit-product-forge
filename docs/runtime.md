@@ -498,8 +498,15 @@ Exactly **one** writer appends the gate entry for a phase boundary:
   writes the entry, including its extras.
 
 A sub-skill detects an orchestrated run from the `--from-forge` marker forge
-passes in `$ARGUMENTS`. Writing the entry from both sides produces duplicate
-audit records and is a contract violation.
+passes in `$ARGUMENTS`. Under that marker the sub-skill does its phase work and
+writes its own data keys (artifacts, `digest_path`, counters, `red_gate`), but it
+does **not** show its own Gate prompt, does **not** set `phases.<key>.status`, and
+does **not** append to `gates[]` — it returns its outcome and gate extras, and forge
+presents the one gate, sets the status (§6.2) and appends the entry. A phase whose
+work is itself an approval loop (revalidate's revise rounds) still runs that loop.
+Writing the entry from both sides produces duplicate audit records, and prompting
+from both sides asks the user the same question twice; both are contract
+violations.
 
 Phase-owned audit records that are not gate entries keep a single owner too:
 `phases.implement.red_gate` is written **only** by `implement`; forge reads it
@@ -514,7 +521,7 @@ The gate decision, not the fact that the phase ran, sets the phase status:
 | `approved` / `approved_with_conditions` | `completed` (or `completed_with_known_issues` where the phase defines it) | unchanged |
 | `revised` | `in_progress` (the phase re-runs) | unchanged |
 | `skipped` | Skip at phase X's gate means "accept X, skip the next phase Y" (Y is always optional): X → `completed` and Y → `skipped` + `skip_reason`. Append **two** entries: `{phase: X, decision: approved}` then `{phase: Y, decision: skipped, skip_reason}` | Y's later phases unchanged |
-| `rolled_back` | the `rolled_back_to` phase and every phase after it → `pending`; rewound artifacts are archived per [policy.md §8](./policy.md#8-change-management) | `pending` |
+| `rolled_back` | the `rolled_back_to` phase and every later **in-scope** phase → `pending` (phases that are `not_applicable` for the mode stay so); rewound artifacts move to `{FEATURE_DIR}/_rewound/<date>-<reason>/` per [policy.md §8](./policy.md#8-change-management) | `pending` |
 | `aborted` | unchanged (left as it was when the gate opened) | unchanged |
 
 ### 6.3 Gate prompt
@@ -616,8 +623,10 @@ exempt regardless of mode.
 ### 8.1 Contract
 
 - File path: `<FEATURE_DIR>/<phase-dir>/digest.md`, where `<phase-dir>` is the
-  kebab-case form of the phase key (`product_spec` → `product-spec/`,
-  `problem_discovery` → `problem-discovery/`, `verify` → `verify/`).
+  phase's own artifact folder when it has one (`research/`, `product-spec/`,
+  `problem-discovery/`, `design-system/`, `i18n/`, `migrations/`, `monitoring/`,
+  `experiment/`), otherwise the kebab-case phase key (`plan/`, `tasks/`,
+  `implement/`, `verify/`).
 - Template: [`docs/templates/phase-digest.md`](./templates/phase-digest.md).
 - Sections (required, in order): Diff since last approved state, Key decisions,
   Artifacts produced, Open risks, Handoff notes.

@@ -142,28 +142,68 @@ phases:
     status: "pending"
   spec_merge:                      # NEW v1.6 — living-spec merge into canonical specs/
     status: "pending"              # runs after release-readiness; not_applicable when no canonical specs/
+    archived_to: null              # "{features_dir}/_archived/<date>-<slug>/" once the feature folder is archived
   retrospective:
     status: "pending"
+    date: null                     # run summary (commands/retrospective.md Step 6)
+    days_post_launch: 0
+    adoption_actual: null
+    adoption_predicted: null
+    completion_rate: null
+    error_rate: null
+    open_issues: 0
+    research_accuracy: null        # "N/10"
+    lessons_added: 0               # blocks appended to .product-forge/lessons.md
+    skills_promoted: []            # Hermes skills created/patched (learning.promote_to_skills)
 
   # Supporting / extension phase keys — written by the standalone supporting commands
   # (api-docs, security-check, tracking-plan) and the optional extension phases run by
   # the orchestrator (i18n-harvest, migration-plan, monitoring-setup, experiment-design).
   # Each is recognized in the canonical phases map; `not_applicable` when the phase was
-  # never run for this feature.
-  api_docs:                        # written by the api-docs command (instrumentation in top-level api_docs_report below)
+  # never run for this feature. Every phase may also carry the common fields shown on
+  # problem_discovery above (started_at, completed_at, digest_path, counters, …). The
+  # per-command run summaries live UNDER the phase key, never as top-level blocks:
+  api_docs:                        # run summary is the top-level api_docs_report block below
     status: "not_applicable"
-  security_check:                  # written by the security-check command (instrumentation block lives in commands/security-check.md, not here)
+  security_check:
     status: "not_applicable"
-  tracking_plan:                   # written by the tracking-plan command (instrumentation block lives in commands/tracking-plan.md, not here)
+    critical: 0                    # findings by severity
+    high: 0
+    medium: 0
+    low: 0
+    passed: 0
+    ship_ready: false
+  tracking_plan:
     status: "not_applicable"
-  i18n_harvest:                    # written by i18n-harvest; not_applicable for English-only projects
+    sdk: "posthog"                 # analytics SDK the snippets target
+    events: 0
+    funnels: 0
+    files: ["tracking/tracking-plan.md", "tracking/snippets.md"]
+  i18n_harvest:                    # not_applicable for single-locale projects
     status: "not_applicable"
-  migration_plan:                  # written by migration-plan; not_applicable when no data/schema migration
+    primary_locale: "en"
+    keys_created: 0
+    keys_reused: 0
+    todos_per_locale: {}           # { <locale>: <untranslated stub count> }
+  migration_plan:                  # not_applicable when no data/schema migration
     status: "not_applicable"
-  monitoring_setup:                # written by monitoring-setup; not_applicable when no observability scope
+    db_kind: "postgres"
+    strategy: "expand-migrate-contract"
+    destructive_changes: false
+    files: {}                      # { plan, forward, rollback, validation, backfill? }
+  monitoring_setup:
     status: "not_applicable"
-  experiment_design:               # written by experiment-design; not_applicable unless flag marked experiment: true
+    dashboard_path: "monitoring/dashboard.json"
+    alerts_path: "monitoring/alerts.yml"
+    slo_path: "monitoring/slo.md"
+    provider: "posthog"            # resolved telemetry.dashboards
+  experiment_design:               # not_applicable unless a flag is marked experiment: true
     status: "not_applicable"
+    flag: "new-onboarding"
+    primary_metric: "activation_rate"
+    sample_size_per_variant: 0
+    expected_runtime_days: 0
+    files: {}                      # { design, spec }
 
 # Legacy v2 field — preserved.
 testing:
@@ -261,8 +301,15 @@ sync_runs:
   last_critical_count: 0
   last_verdict: "clean"
 
-# Legacy v2 field — preserved.
-change_requests: []
+# Legacy v2 field — preserved. Appended by change-request (one entry per CR).
+change_requests:
+  - id: "CR-001"
+    title: "Add notification sound selection"
+    status: "accepted"             # accepted | deferred | rejected
+    timestamp: "2026-03-29T10:00:00Z"
+    artifacts_affected: 3
+    tasks_added: 2
+    phase_rollback: null           # phase rolled back to, or null
 
 # NEW v1.6. Top-level instrumentation block written by the `api-docs` command.
 # Renamed from `api_docs:` to `api_docs_report:` to remove the sibling collision
@@ -288,9 +335,9 @@ api_docs_report:
 # YAML parse. Flagged for maintainer reconciliation.
 release_readiness:
   supply_chain_paths:
-    sbom: "release/sbom.json"
-    sca: "release/sca-report.json"
-    licenses: "release/licenses.txt"
+    sbom: "supply-chain/sbom.cdx.json"
+    sca: "supply-chain/osv-head.json"
+    licenses: "supply-chain/osv-licenses.json"
 
 # NEW in v3. Cross-feature dependency graph used by `portfolio` (B1).
 # Both lists contain feature slugs from sibling `features/<slug>/` directories.
