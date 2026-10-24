@@ -165,7 +165,7 @@ become v-model (lite never produced the artifacts) — suggest a new v-model fea
 | 6B. Code Review | — | — | opt | opt |
 | 7. Verify Full | ✅ | ✅ | ✅ | ✅ |
 | 8A. Test Plan | — | — | opt | opt |
-| 8B. Test Run | No offer — 8A's offer covered 8A + 8B; runs right after the 8A gate | — | opt | opt |
+| 8B. Test Run | — | — | opt | opt |
 | 9. Release Readiness | — | — | opt | opt |
 | 9.5. Monitoring Setup | — | — | opt | opt |
 | 9B. Experiment Design | — | — | opt (conditional on experiment flag) | opt |
@@ -218,8 +218,9 @@ the missing standard phases on the next loop.
 
 Repeat for the current phase `P` (the next `pending` in-scope phase for the
 feature's mode, or the override) until no in-scope phase is left. 2H is never `P`:
-it runs inside Phase 2 for UI features, and its status comes from product-spec's
-returned outcome (`not_applicable` for backend-only work). Under `--dry-run`,
+it runs inside Phase 2 for UI features (product-spec calls design-system-harvest
+with `--nested`, which writes 2H's own status — `not_applicable` for backend-only
+work — and no gate entry). Under `--dry-run`,
 steps 5–8 record nothing — quick sync writes no `sync_runs`, the phase's
 `DRY-RUN-REPORT.md` replaces the gate, and no status or gate entry is written.
 
@@ -227,9 +228,12 @@ steps 5–8 record nothing — quick sync writes no `sync_runs`, the phase's
    conditional and its trigger is not met → set `not_applicable`, no gate; move on.
 2. **Offer (optional phases).** When `P` is `opt`, show a Run / Skip prompt with the
    offer line from the Phase transitions table (Run recommended / Skip with the
-   stated consequence) — unless the previous gate already decided `P`. When config makes `P` required, run it without the prompt. Declining
-   is the `skipped` decision for `P` (status `skipped` + `skip_reason` per
-   `require_skip_reason`).
+   stated consequence) — unless the previous gate already decided `P`. When config
+   makes `P` required, run it without the prompt; when config disables it
+   (`release_readiness: skip`), record `skipped` with
+   `skip_reason: "release_readiness: skip (config)"` and no prompt or gate.
+   Declining is the `skipped` decision for `P` (status `skipped` + `skip_reason`
+   per `require_skip_reason`).
 3. **Delegate.** Call `P`'s command with the suppress-handoff preamble
    ([policy.md §1](../docs/policy.md#1-operating-rules) rule 5), `--from-forge`
    (plus `--dry-run` when active) and the inputs in the table's **Provide** column.
@@ -252,8 +256,8 @@ steps 5–8 record nothing — quick sync writes no `sync_runs`, the phase's
    since `gates[].reviewed_sha` plus stale prior findings.
 7. **Gate.** Ask the [Gate template](../docs/templates/interaction-prompts.md#gate-after-every-phase)
    with `{Phase}`, the outcome line, and `{next phase}` = the next in-scope phase
-   for the mode, skipping 2H and any conditional phase whose trigger is not met
-   (set that one `not_applicable` now). Options follow [runtime.md §6.3](../docs/runtime.md#63-gate-prompt):
+   for the mode, skipping 2H, any conditional phase whose trigger is not met (set
+   it `not_applicable` now) and any phase config disables. Options follow [runtime.md §6.3](../docs/runtime.md#63-gate-prompt):
    Skip only when `{next phase}` is `opt` for the mode and not required by
    `require_problem_discovery`, `require_pre_impl_review`, `require_code_review`,
    `require_testing` or `release_readiness: required`; Rollback lists completed
@@ -284,7 +288,7 @@ steps 5–8 record nothing — quick sync writes no `sync_runs`, the phase's
 | 6B. Code Review | Multi-agent review of quality, security, patterns and test coverage. Skip: go to verification | FEATURE_DIR, all artifacts | findings by dimension and severity | Record `findings` (+ `reviewed_by_model` / `cross_model_findings` when present) and acknowledged items. |
 | 7. Verify Full | — | FEATURE_DIR, `spec.md` + code (standard / v-model) or `product-spec/README.md` + code (express / lite), codebase_path | CRITICAL / WARNING / PASSED counts from `verify-report.md` | Option 1 is **Acknowledge** → `approved` with 0 CRITICAL (recommended; offer a commit). With CRITICAL > 0 option 1 is **Accept with conditions** → `approved_with_conditions` listing every open CRITICAL, and Revise is recommended. The Skip option reads **Skip Test Plan (and Test Run)**; it also sets `test_run` to `skipped` with the same reason. |
 | 8A. Test Plan | Generate test cases, run them, auto-fix bugs and report (8A + 8B). Lead with "Verification passed" when the report has 0 CRITICAL, else "Verification accepted with conditions ({N} CRITICAL open)". Skip: no automated testing — move to Release Readiness (or finish) | FEATURE_DIR, codebase_path, project_tech_stack | test-case counts per type | Not offered again when the Phase 7 gate decided it. Declining the offer skips 8A and 8B with the same reason (8B's input never exists). |
-| 8B. Test Run | — | FEATURE_DIR, codebase_path | pass rate, bugs found / fixed / deferred (`test-report.md`) | test-run runs its own loop to its exit criteria. Option 1 is **Acknowledge** → `approved`; approval with deferred bugs → `completed_with_known_issues`. On approval, apply the traceability updates test-run returned (reconciled `tests` columns; rows set to `tested`). Offer a commit of the test artifacts. |
+| 8B. Test Run | No offer — 8A's offer covered 8A + 8B; runs right after the 8A gate | FEATURE_DIR, codebase_path | pass rate, bugs found / fixed / deferred (`test-report.md`) | test-run runs its own loop to its exit criteria. Option 1 is **Acknowledge** → `approved`; approval with deferred bugs → `completed_with_known_issues`. On approval, apply the traceability updates test-run returned (reconciled `tests` columns; rows set to `tested`). Offer a commit of the test artifacts. |
 | 9. Release Readiness | Monitoring dashboard, flag registry, rollback playbook and pre-ship checklist — recommended for user-facing features. Skip: feature is ready to ship | FEATURE_DIR, all artifacts | readiness verdict, action items; `release-readiness.md`, `monitoring/dashboard.json`, `flags/registry.yml` | Record `action_items`. Runs after 8B, or after 7 when testing was skipped. |
 | 9.5. Monitoring Setup | SLI / SLO doc, alert policy and extended dashboard from plan NFRs and tracking events (`telemetry.dashboards` backend) — recommended before deploy. Skip: no extra monitoring | FEATURE_DIR | `monitoring/slo.md`, `alerts.yml`, extended `dashboard.json` | — |
 | 9B. Experiment Design | Pre-register the A/B plan (hypothesis, MDE, sample size, guardrails, decision rule). Skip: ship to 100% without experimentation | FEATURE_DIR | `experiment/experiment-design.md`, `experiment.yml` | — |
