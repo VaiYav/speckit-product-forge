@@ -1,7 +1,8 @@
 ---
 name: speckit.product-forge.plan
 description: >
-  Phase 5: Generate technical plan from spec.md with cross-validation against product-spec.
+  Phase 5: Generate technical plan from spec.md (express/lite: from the product spec,
+  ending with an inline task list) with cross-validation against product-spec.
   Ensures plan covers all Must Have user stories and aligns with codebase analysis.
   Standalone — run independently, before tasks or implement.
   Use: "create plan", "technical plan", "/speckit.product-forge.plan"
@@ -14,7 +15,8 @@ Your job: generate a technical plan from `spec.md`, cross-validate it against th
 product spec, and present the plan for user approval.
 
 This is a **standalone command** — it does one thing and exits.
-The next step is `/speckit.product-forge.tasks` (or any custom step you want to insert first).
+The next step is `/speckit.product-forge.tasks` in standard/v-model, or
+`/speckit.product-forge.implement` in express/lite (or any custom step you want to insert first).
 
 ## User Input
 
@@ -38,11 +40,19 @@ write `plan.md` (and any ADRs) under `{FEATURE_DIR}/.forge-dry-run/plan/`, do
 
 ## Step 1: Validate Prerequisites
 
-1. Read `.forge-status.yml` — `bridge` must be `completed`
-2. Verify `spec.md` exists in FEATURE_DIR
-3. If `plan.md` already exists:
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
+and read: `codebase_path`, `constitution_path`, `features_dir`. Resolve `FEATURE_DIR`
+via [docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract).
+
+1. Read `.forge-status.yml` → `feature_mode`, then check the upstream inputs for that
+   mode ([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts)):
+   - **standard / v-model:** `bridge` is `completed` and `spec.md` exists in FEATURE_DIR.
+   - **express / lite:** `product-spec/README.md` exists (no bridge, no `spec.md` —
+     the plan reads the product spec directly).
+2. If `plan.md` already exists:
    > ℹ️ `plan.md` already exists. Regenerating will overwrite it.
-   > Confirm to proceed, or run `/speckit.product-forge.tasks` to continue with the existing plan.
+   > Confirm to proceed, or continue with the existing plan
+   > (`/speckit.product-forge.tasks` in standard/v-model, `/speckit.product-forge.implement` in express/lite).
 
 ---
 
@@ -53,7 +63,9 @@ Collect context to pass to the plan agent:
 Read the following artifacts to build a rich brief:
 - `product-spec/product-spec.md` → Must Have stories, functional requirements, tech constraints
 - `research/codebase-analysis.md` → integration points, affected modules, naming patterns
-- `spec.md` → acceptance criteria, technical requirements
+  (standard/v-model; in express/lite scan `{codebase_path}` for the affected modules instead)
+- `spec.md` → acceptance criteria, technical requirements (standard/v-model; in
+  express/lite the acceptance criteria come from the product spec's journeys / stories)
 
 **Prior lessons (v1.6, W5-D1).** Read `research/README.md` and extract the section
 titled exactly **"Prior lessons that apply"** — the selection `research` already
@@ -70,7 +82,7 @@ Show:
 ```
 🎯 Plan Brief: {Feature Name}
 
-SpecKit spec:     {FEATURE_DIR}/spec.md
+SpecKit spec:     {FEATURE_DIR}/spec.md   (standard/v-model only)
 Product spec:     {FEATURE_DIR}/product-spec/
 Codebase path:    {codebase_path}
 
@@ -95,7 +107,29 @@ Prior lessons to respect:  {N} (from research/README.md → "Prior lessons that 
 
 ## Step 3: Delegate to SpecKit Plan
 
-**Delegate to SpecKit `plan`** with the enriched context note:
+**express / lite:** there is no `spec.md` to delegate on. Author `plan.md` directly
+from `product-spec/` (inline and short in express — [docs/policy.md §4.1](../docs/policy.md#41-phase-maps)),
+honoring the same lessons constraints below, and end it with an inline
+**`## Tasks`** section in the exact `tasks.md` task format — `T001`… ids, one
+`Paths:` line and one `Size:` line per task (`Test-first: true` on unit/contract test
+tasks that must go red first; see [tasks.md Step 4.3 and Step 5](./tasks.md)):
+
+```markdown
+## Tasks
+
+- [ ] T001 — Unit test: export retries on 503
+      Paths: src/export/client.test.ts
+      Test-first: true
+      Size: XS
+- [ ] T002 — Add retry to the export client
+      Paths: src/export/client.ts
+      Size: S
+```
+
+This list is what `implement` executes in express/lite (there is no tasks phase).
+Then continue at Step 3.5.
+
+**standard / v-model — delegate to SpecKit `plan`** with the enriched context note:
 
 > *"Product Forge context: This spec is backed by thorough research in `research/`.
 > Key integration points and affected modules are in `research/codebase-analysis.md`.
@@ -120,7 +154,7 @@ If no lessons were forwarded, omit this paragraph entirely.
 After SpecKit plan returns, automatically verify `plan.md` against the project constitution.
 
 **Locate the constitution file** (in priority order):
-1. Read `.product-forge/config.yml` → look for `constitution_path` key
+1. `constitution_path` from the effective config (Step 1)
 2. Fall back to `.specify/memory/constitution.md`
 3. If neither file exists → skip this step silently and note "No constitution found — compliance check skipped" in the approval summary
 
@@ -140,7 +174,7 @@ For each section below, mark ✅ / ⚠️ / ❌ based on what's present in `plan
 **Testing**
 - [ ] Coverage targets specified per service or module
 - [ ] Integration test strategy described (not just unit tests)
-- [ ] At least one test case listed per critical path in spec.md
+- [ ] At least one test case listed per critical path in spec.md (express/lite: in the product spec's journeys)
 
 **EDA (skip if not applicable)**
 - [ ] Event handlers do not throw — errors are caught and logged, never propagated to the bus
@@ -167,6 +201,8 @@ If ❌ violations found: add them as additional rows in the Cross-Validation tab
 ---
 
 ## Step 3.6: Contract refinement (Theme F)
+
+*standard / v-model only — skip in express/lite (no bridge, so no bridge-authored contracts).*
 
 `bridge` Step 4.6 already authored the FE↔BE contracts — `contracts/openapi.yaml`
 (OpenAPI 3.1, HTTP endpoints) and `contracts/asyncapi.yaml` (AsyncAPI, events) — each
@@ -207,7 +243,26 @@ If only ✅/⚠️: proceed to approval gate.
 
 ---
 
-## Step 5: Plan Approval Gate
+## Step 5: Phase Digest (required)
+
+Write `{FEATURE_DIR}/plan/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) **before**
+any status write marks the phase complete
+([docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)).
+
+The digest must include:
+- **Key decisions** — tech choices, module boundaries, major data model shapes, top 3 NFRs.
+- **Artifacts produced** — `plan.md` (with its inline `## Tasks` list in express/lite) and any ADRs created during planning.
+- **Open risks** — unresolved architectural trade-offs or dependencies.
+- **Handoff notes** — what tasks generation (standard/v-model) or implement (express/lite) must keep in mind (sequencing hints, shared work).
+- **Prior lessons applied (v1.6, W5-D1)** — list each forwarded lesson (title) and the
+  one-line note on how the plan honors it, or *"none"* if Step 2 forwarded no lessons.
+  This carries the lessons forward through the brief→digest chain so `tasks`/`implement`
+  inherit them rather than re-discovering them.
+
+---
+
+## Step 6: Plan Approval Gate
 
 Present a summary:
 
@@ -220,6 +275,7 @@ Plan sections: {N}
   • Frontend components: {N}
   • Backend services: {N}
   • Migrations / schema changes: {N}
+  • Inline tasks: {N}            ← express/lite only
 
 Cross-validation (product spec):
   ✅ {N} checks passed
@@ -234,51 +290,37 @@ Constitution compliance:
 Story coverage: {N}/{N} Must Have stories addressed
 ```
 
-Then present the **Gate** prompt from
-[interaction-prompts.md](../docs/templates/interaction-prompts.md):
+Gate ownership ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)): with
+**`--from-forge`** in `$ARGUMENTS`, skip the prompt and do not append to `gates[]` —
+write only `phases.plan.digest_path`, return the summary to the orchestrator, which
+presents the gate and sets the status. **Standalone**, present the **Gate** prompt from
+[interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase).
+`{next phase}` is Tasks (standard/v-model) or Implement (express/lite); both are
+required, so there is no Skip option:
 
 ```
 [Gate] Plan complete — {N}/{N} Must Have stories addressed, cross-validation {N}/{N} passed. How do you want to proceed?
 
-  1. Approve (recommended) — accept the plan and continue to tasks
+  1. Approve (recommended) — accept the plan and continue to {Tasks | Implement}
   2. Revise — re-run this phase with feedback
-  3. Skip tasks — move on without it (a reason may be required)
-  4. Rollback — return to an earlier phase by name
-  5. Abort — stop the lifecycle for this feature
+  3. Rollback — return to an earlier, completed phase by name
+  4. Abort — stop the lifecycle for this feature
   (or type your own answer)
 ```
 
-On **Approve** → update `.forge-status.yml`:
+Set the status from the decision ([docs/runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision))
+and append one `gates[]` entry. Write via the status-write procedure
+([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
 
 ```yaml
 phases:
-  plan: completed
-last_updated: "{ISO timestamp}"
+  plan:
+    digest_path: "plan/digest.md"
+    status: completed        # approved / approved_with_conditions
 ```
 
-On **Revise**, loop back with the user's feedback. On **Rollback**/**Abort**, hand
-control back to the orchestrator without marking `plan` complete.
-
----
-
-## Step 6: Phase Digest (required)
-
-Before handoff, write `{FEATURE_DIR}/plan/digest.md` using the template at
-[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
-its path on `.forge-status.yml` under `phases.plan.digest_path`.
-
-The digest must include:
-- **Key decisions** — tech choices, module boundaries, major data model shapes, top 3 NFRs.
-- **Artifacts produced** — `plan.md` and any ADRs created during planning.
-- **Open risks** — unresolved architectural trade-offs or dependencies.
-- **Handoff notes** — what tasks generation must keep in mind (sequencing hints, shared work).
-- **Prior lessons applied (v1.6, W5-D1)** — list each forwarded lesson (title) and the
-  one-line note on how the plan honors it, or *"none"* if Step 2 forwarded no lessons.
-  This carries the lessons forward through the brief→digest chain so `tasks`/`implement`
-  inherit them rather than re-discovering them.
-
-The orchestrator refuses to mark Phase 5 complete until `digest.md` exists.
-See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+On **Revise** → `in_progress`, loop back with the user's feedback. On **Rollback**,
+rewind per §6.2. On **Abort**, leave `plan` unchanged.
 
 ---
 
@@ -287,10 +329,11 @@ See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
 ```
 ✅ Plan approved and saved to {FEATURE_DIR}/plan.md
 
-Next step: /speckit.product-forge.tasks
+Next step: /speckit.product-forge.tasks        (standard / v-model)
+           /speckit.product-forge.implement    (express / lite — executes the inline ## Tasks)
   (or insert any custom step before continuing)
 ```
 
 > **Extension point:** This is where community commands can be inserted.
 > For example: a cost-estimation step, architecture review, security design check,
-> or any custom validation — before task breakdown begins.
+> or any custom validation — before task breakdown (or, in express/lite, implementation) begins.

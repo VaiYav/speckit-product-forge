@@ -19,6 +19,24 @@ Your goal: validate that the problem is real, well-understood, and worth solving
 $ARGUMENTS
 ```
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+write the `problem-discovery/` artifacts under `{FEATURE_DIR}/.forge-dry-run/problem_discovery/`,
+do **not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
+
+---
+
+## Step 0: Load Config & Resolve Feature
+
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
+and read: `features_dir`, `storage_strategy`, `default_feature_mode`.
+
+Resolve `FEATURE_DIR` via the Path-Resolution Contract `resolve(slug)`
+([docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)).
+
+If `{FEATURE_DIR}/.forge-status.yml` already exists with `feature_mode: express`,
+stop: *"Problem Discovery is not in scope for express features
+([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts))."*
+
 ---
 
 ## Why This Phase Exists
@@ -297,56 +315,43 @@ Initialize the feature directory if it doesn't exist:
 └── .forge-status.yml
 ```
 
-Update `.forge-status.yml` (schema v2):
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+If `.forge-status.yml` does not exist yet (Problem Discovery is often the first
+writer), it is initialized from the v3 initial document in
+[docs/schema.md §3.1](../docs/schema.md#31-initial-document-new-features)
+(`feature_mode` from `--mode` or `default_feature_mode`); if it exists (e.g. forge
+intake created it), merge — never re-initialize. Keys this phase owns:
 
 ```yaml
-schema_version: 2
-feature: "{feature-slug}"
-created_at: "{ISO date}"
 phases:
-  problem_discovery: completed
-  research: pending
-  product_spec: pending
-  revalidation: pending
-  bridge: pending
-  plan: pending
-  tasks: pending
-  pre_impl_review: pending
-  implement: pending
-  code_review: pending
-  verify: pending
-  test_plan: pending
-  test_run: pending
-  release_readiness: pending
-  retrospective: pending
-speckit_mode: ""
-testing:
-  final_pass_rate: ""
-  bugs_found: 0
-  bugs_fixed: 0
-  bugs_deferred: 0
-  test_runs_total: 0
-gates: []
-sync_runs:
-  last_run: ""
-  total_runs: 0
-  last_drift_count: 0
-  last_critical_count: 0
-  last_verdict: ""
-change_requests: []
-problem:
-  statement: "{1-sentence statement}"
-  severity: "{score}/10"
-  validation: "{Strong|Moderate|Weak}"
-  go_decision: "{go|investigate|no-go}"
-last_updated: "{ISO timestamp}"
+  problem_discovery:
+    status: completed        # set from the gate decision — see below
 ```
+
+The problem statement, severity, validation strength and go/no-go decision live
+in `problem-discovery/problem-statement.md`, not in the status file.
+
+**Gate & status** ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)–[§6.3](../docs/runtime.md#63-gate-prompt)):
+
+- **`--from-forge` in `$ARGUMENTS`** — do not prompt and do not append to `gates[]`.
+  Return the go/no-go recommendation and the hypotheses to the orchestrator; forge
+  presents the gate and sets `phases.problem_discovery.status` from its decision.
+- **Standalone** — present the **Gate** prompt from
+  [interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)
+  with `{next phase}` = Research (standard/v-model) or Product Spec (lite). Both are
+  required, so Skip is not offered. Map the answer per
+  [§6.2](../docs/runtime.md#62-status-follows-the-decision): Approve / Go →
+  `approved` (`completed`); Revise → `revised` (`in_progress`, re-run with feedback);
+  Abort / No-go → `aborted` (status unchanged). Append one `gates[]` entry with the
+  decision.
 
 ---
 
-## Step 7: Handoff to Phase 1
+## Step 7: Handoff to the Next Phase
 
-If **Go** or **Investigate further** (user confirmed to proceed):
+If **Go** or **Investigate further** (user confirmed to proceed). In lite mode the
+next phase is Product Spec (`/speckit.product-forge.product-spec`) instead of
+Research; adapt the message below accordingly.
 
 ```
 ✅ Problem Discovery Complete

@@ -29,13 +29,35 @@ do **not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
 
 ## Step 1: Load Context
 
-Read:
-- `{FEATURE_DIR}/research/README.md` — research summary
-- `{FEATURE_DIR}/research/competitors.md` — competitor insights
-- `{FEATURE_DIR}/research/ux-patterns.md` — UX/UI patterns
-- `{FEATURE_DIR}/research/codebase-analysis.md` — integration analysis
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
+and read: `features_dir`, `codebase_path`, `default_wireframe_detail`,
+`default_mockup_style`, `default_feature_mode` (only when this phase creates the
+status file). Resolve `FEATURE_DIR` via
+[docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract) and read
+`feature_mode` from `.forge-status.yml` (absent → `--mode` or `default_feature_mode`).
+
+Read the upstream inputs for the mode
+([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts)):
+
+- **standard / v-model — required:**
+  - `{FEATURE_DIR}/research/README.md` — research summary
+  - `{FEATURE_DIR}/research/competitors.md` — competitor insights
+  - `{FEATURE_DIR}/research/ux-patterns.md` — UX/UI patterns
+  - `{FEATURE_DIR}/research/codebase-analysis.md` — integration analysis
+- **express / lite — no research** (the phase is `not_applicable`; skip these
+  reads). Read `{FEATURE_DIR}/problem-discovery/` if present (lite only) and take
+  the rest from the user's description and the codebase. Omit the research
+  references (Background & Research section, `../research/` links) from the
+  generated documents.
 
 Set `PRODUCT_SPEC_DIR = {FEATURE_DIR}/product-spec/`
+
+**Express is minimal** ([docs/policy.md §4.1](../docs/policy.md#41-phase-maps)):
+skip the Step 2 detail-level questions and produce a concise `product-spec.md`
+with exactly **one journey + its acceptance criteria** (`JRN-001` in
+`journeys/journeys.yml`); skip wireframes, mockups and `metrics.md` unless the
+user asks for them. Lite uses
+the light end of each Step 2 option (recommend Small / Concise).
 
 ---
 
@@ -600,33 +622,12 @@ Create `{FEATURE_DIR}/README.md` — top-level index for the entire feature:
 
 ---
 
-## Step 7: Update Status
+## Step 7: Phase Digest (required)
 
-Update `{FEATURE_DIR}/.forge-status.yml`:
-```yaml
-phases:
-  product_spec: completed
-last_updated: "{ISO timestamp}"
-```
-
----
-
-## Step 8: Present Results
-
-Show the user:
-1. The complete document tree that was created
-2. Clickable paths to each document
-3. Summary of key product decisions captured
-
-Ask: *"Product spec complete with [N] documents. All cross-linked via product-spec/README.md. Ready to proceed to Phase 3: Revalidation? Or would you like to review and adjust any document now?"*
-
----
-
-## Step 9: Phase Digest (required)
-
-Before returning, write `{FEATURE_DIR}/product-spec/digest.md` using the template at
-[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
-its path on `.forge-status.yml` under `phases.product_spec.digest_path`.
+Write `{FEATURE_DIR}/product-spec/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) **before**
+any status write marks the phase complete
+([docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)).
 
 The digest must include:
 - **Key decisions** — target users, scope boundaries, top 3 user stories, journeys
@@ -635,8 +636,42 @@ The digest must include:
   `journeys/journeys.yml`, `mockups/component-map.yml`) and
   `design-system/manifest.yml`, with one-line descriptions.
 - **Open risks** — any NEEDS-CLARIFICATION items unresolved and why.
-- **Handoff notes** — what revalidation and bridge need to verify; seed the
-  traceability matrix (`US → JRN → CMP → API`) for downstream phases.
+- **Handoff notes** — what the next phase needs to verify (revalidation and bridge
+  in standard/v-model; plan in express/lite); seed the traceability matrix
+  (`US → JRN → CMP → API`) for downstream phases.
 
-The orchestrator refuses to mark Phase 2 complete until `digest.md` exists.
-See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+---
+
+## Step 8: Update Status & Gate
+
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+In express/lite this phase may be the first writer: if `.forge-status.yml` does not
+exist, it is initialized from the v3 initial document in
+[docs/schema.md §3.1](../docs/schema.md#31-initial-document-new-features); if it
+exists, merge — never re-initialize. Keys this phase owns:
+
+```yaml
+phases:
+  product_spec:
+    digest_path: "product-spec/digest.md"
+    status: completed        # set from the gate decision — see below
+```
+
+Show the user:
+1. The complete document tree that was created
+2. Clickable paths to each document
+3. Summary of key product decisions captured
+
+**Gate** ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)–[§6.3](../docs/runtime.md#63-gate-prompt)):
+
+- **`--from-forge` in `$ARGUMENTS`** — write only `digest_path`, do not prompt and
+  do not append to `gates[]`; return the summary to the orchestrator, which presents
+  the gate and sets `phases.product_spec.status` from its decision.
+- **Standalone** — present the **Gate** prompt from
+  [interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase):
+  *"Product Spec complete — [N] documents, cross-linked via product-spec/README.md"*,
+  with `{next phase}` = Revalidation (standard/v-model) or Plan (express/lite). Both
+  are required, so Skip is not offered. Map the answer per
+  [§6.2](../docs/runtime.md#62-status-follows-the-decision) (Approve → `completed`;
+  Revise → `in_progress`, adjust documents with the feedback; Rollback → rewind;
+  Abort → unchanged) and append one `gates[]` entry.

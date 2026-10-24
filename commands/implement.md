@@ -1,7 +1,8 @@
 ---
 name: speckit.product-forge.implement
 description: >
-  Phase 6: Execute implementation from tasks.md with progressive verification.
+  Phase 6: Execute implementation from tasks.md (express/lite: the plan's inline
+  task list) with progressive verification.
   Delegates to SpecKit implement, monitors task completion, runs mini-verify every N tasks,
   surfaces product-spec context to implementation agents.
   Standalone — run after pre-impl-review (or after any custom step inserted before coding).
@@ -11,7 +12,9 @@ description: >
 # Product Forge — Phase 6: Implementation (with Progressive Verification)
 
 You are the **Implementation Coordinator** for Product Forge Phase 6.
-Your job: drive implementation to completion from `tasks.md`, keep implementation agents
+Your job: drive implementation to completion from the task list (`tasks.md`, or the
+inline `## Tasks` section of `plan.md` in express/lite — called **the task list**
+below), keep implementation agents
 anchored to the product spec, run progressive verification checkpoints, and report when
 all tasks are done.
 
@@ -43,12 +46,23 @@ compute from write, abort per §7.3 rather than writing for real.
 
 ## Step 1: Validate Prerequisites
 
-1. Read `.forge-status.yml` — `tasks` must be `completed`
-2. Verify `tasks.md` exists with at least one unchecked task `[ ]`
-3. Verify `plan.md` and `spec.md` exist
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
+and read: `features_dir`, `progressive_verify_interval`, `codebase.paths`,
+`codebase.workspace_type`, `security.dependency_vetting`, `require_code_review`,
+`require_skip_reason`. Resolve `FEATURE_DIR` via
+[docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract).
+
+Read `.forge-status.yml` → `feature_mode`, then check the upstream inputs for that mode
+([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts)):
+
+- **standard / v-model:** `tasks` is `completed`; `tasks.md` exists with at least one
+  unchecked task `[ ]`; `plan.md` and `spec.md` exist.
+- **express / lite:** `plan` is `completed`; `plan.md` exists and its inline
+  `## Tasks` section has at least one unchecked task `[ ]` (no `tasks.md`, no
+  `spec.md` — acceptance criteria come from `product-spec/`).
 
 If all tasks are already `[x]`:
-> ✅ All tasks in `tasks.md` are already completed.
+> ✅ All tasks in the task list are already completed.
 > Run `/speckit.product-forge.verify-full` for full traceability verification.
 
 ---
@@ -60,9 +74,9 @@ Show the user a summary before starting:
 ```
 🔨 Implementation Brief: {Feature Name}
 
-tasks.md:         {FEATURE_DIR}/tasks.md
+Task list:        {FEATURE_DIR}/tasks.md   (express/lite: plan.md → ## Tasks)
 plan.md:          {FEATURE_DIR}/plan.md
-spec.md:          {FEATURE_DIR}/spec.md
+spec.md:          {FEATURE_DIR}/spec.md    (standard/v-model only)
 Product spec:     {FEATURE_DIR}/product-spec/
 
 Tasks to complete: {N} remaining / {N} total
@@ -75,7 +89,7 @@ Key context for implementation agents:
   • Mockups + component map: {FEATURE_DIR}/product-spec/mockups/ (+ component-map.yml)
   • Design system manifest:  {FEATURE_DIR}/design-system/manifest.yml (use real CMP-* components)
   • Structured journeys:     {FEATURE_DIR}/product-spec/journeys/journeys.yml
-  • Acceptance criteria in spec.md — reference these for each task group
+  • Acceptance criteria in spec.md (express/lite: product-spec/) — reference these for each task group
   • Live matrix:             {FEATURE_DIR}/traceability.yml (fill code paths as you go)
 ```
 
@@ -88,19 +102,29 @@ progressive-verify checkpoints in this phase) — it does NOT move the optional
 Phase 8 browser **E2E** suite earlier. E2E remains journey-driven in Phases 8A/8B.
 
 Per the spec-kit Red gate: for each Must-Have story/journey, the unit/contract test
-tasks carrying the `Test-first: true` marker in `tasks.md` (Step 4.3) MUST be written
+tasks carrying the `Test-first: true` marker in the task list (tasks.md Step 4.3) MUST be written
 and confirmed **failing** before their implementation tasks run. Select these tasks by
 that exact `Test-first: true` field. Run the relevant tests, confirm they fail
 for the right reason, and note it in `implementation-log.md`. Only then proceed to
 implement those tasks. (Skippable only when the user explicitly opts out via a
-structured prompt — record the skip reason; this sets `red_gate.status: skipped` in the
-Step 5 status update and the orchestrator gate-records the skip.)
+structured prompt — record the skip reason as `red_gate.skip_reason` with
+`red_gate.status: skipped`.)
+
+`implement` is the **sole owner** of `phases.implement.red_gate`
+([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)): it records the outcome
+itself in the Step 7 status write on **every** run — standalone or `--from-forge` — and
+never relies on the orchestrator to record it. `forge` only reads it at the Phase 6 gate.
 
 ---
 
 ## Step 3: Delegate to SpecKit Implement
 
-**Delegate to SpecKit `implement`** with the enriched context note:
+**express / lite:** there is no `tasks.md` for SpecKit to consume — execute the inline
+`## Tasks` of `plan.md` directly, in order, with the same context note below
+(acceptance criteria from `product-spec/` instead of `spec.md`), checking each task off
+in `plan.md` as it completes.
+
+**standard / v-model — delegate to SpecKit `implement`** with the enriched context note:
 
 > *"Product Forge context:
 > — Wireframes and mockups are in `product-spec/mockups/` — use them for UI implementation.
@@ -118,7 +142,7 @@ Run this only when `--parallel` was passed AND the host exposes `delegate_task`
 `implement` phase** — it is the intra-phase carve-out of "one phase at a time"
 (policy §1.1), not concurrent phases.
 
-1. **Build the path-conflict matrix.** Group `tasks.md` tasks by their `Paths:`
+1. **Build the path-conflict matrix.** Group the task list's tasks by their `Paths:`
    lines using the **same computation `portfolio` uses**
    ([`commands/portfolio.md §Step 3`](./portfolio.md)). Two groups *conflict* if
    they share any path (workspace-prefix-normalized). Build the set of
@@ -133,12 +157,14 @@ Run this only when `--parallel` was passed AND the host exposes `delegate_task`
 3. **Delegate.** Dispatch each eligible disjoint group as its own `delegate_task`
    subagent, each with the same enriched context note above scoped to its task
    group + its `Paths:`. Cap concurrency at the host's configured limit.
-4. **Reconcile under the lock.** Subagents return diffs/summaries; the orchestrator
-   applies/validates them **serially while holding `.forge-status.yml.lock`** (no
-   concurrent status writes), then runs the Step 4 progressive-verify checkpoint
+4. **Reconcile serially.** Subagents return diffs/summaries; the orchestrator
+   applies/validates them **one at a time**, and every resulting status update goes
+   through the status-write procedure and its lock
+   ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)) — subagents
+   never write `.forge-status.yml` themselves. Then it runs the Step 4 progressive-verify checkpoint
    over the merged result. A subagent failure isolates to its group — the others
    still land; the failed group is retried sequentially.
-5. **Single gate.** The phase still ends at exactly **one** human gate (Step 5/§1.2)
+5. **Single gate.** The phase still ends at exactly **one** human gate (Step 7/§1.2)
    over the combined result — parallelism changes *how* tasks execute, never the
    gate or the audit trail.
 
@@ -157,7 +183,7 @@ in the product spec, redirect:
 > this decision was made in the product spec."*
 
 If a blocker arises that requires changing the plan or tasks, surface it to the user
-before proceeding. Do not silently deviate from `tasks.md`.
+before proceeding. Do not silently deviate from the task list.
 
 ### Progressive Verification Checkpoints
 
@@ -167,8 +193,8 @@ pause implementation and run a mini-verify checkpoint:
 **Mini-verify checks:**
 
 1. **Task-Code correspondence:** For each just-completed task, verify the target files exist and contain relevant changes
-2. **Spec drift check:** Compare completed work against `spec.md` acceptance criteria — are AC being met?
-3. **Unplanned changes check:** Identify files modified that are NOT referenced by any task in `tasks.md`
+2. **Spec drift check:** Compare completed work against the acceptance criteria (`spec.md`; express/lite: `product-spec/`) — are AC being met?
+3. **Unplanned changes check:** Identify files modified that are NOT referenced by any task in the task list
 4. **Plan alignment check:** Verify implementation approach matches `plan.md` architecture (e.g., correct layers, correct data model)
 5. **Matrix update (v1.6, Theme C):** fill the `code` paths (and component usage for UI) for the just-completed rows in `traceability.yml`, setting `status: implemented`. For UI tasks, confirm the real `CMP-*` component from `component-map.yml` was used (not a re-implementation).
 6. **Dependency / supply-chain vetting (v1.6, W5-C2 — slopsquatting):** if the just-completed tasks **added or proposed a NEW dependency** (a package not already in the lockfile before this phase), vet it BEFORE letting it stay. Skip this check entirely when no new dependency was introduced. See "Install-time dependency vetting" below.
@@ -266,7 +292,8 @@ If CLEAN: continue silently (just append to implementation-log.md).
 
 ## Step 5: Completion Check
 
-After SpecKit implement returns, verify all tasks in `tasks.md` are `[x]`.
+After SpecKit implement returns (or, in express/lite, after the last inline task),
+verify all tasks in the task list are `[x]`.
 
 If incomplete tasks remain:
 > ⚠️ {N} tasks still pending. Resume implementation? Or mark as skipped with a reason?
@@ -286,7 +313,7 @@ Progressive verification:
   Warnings found:  {N}
   Critical drifts: {N}
 
-Product Forge traceability chain:
+Product Forge traceability chain:          (express/lite: product-spec/ → plan.md → CODE)
   problem-discovery/ ✅ (Phase 0 — if ran)
   research/          ✅ (Phase 1)
   product-spec/      ✅ (Phase 2–3)
@@ -296,38 +323,14 @@ Product Forge traceability chain:
   CODE               ✅ (Phase 6 — just implemented)
 ```
 
-Update `.forge-status.yml`:
-
-```yaml
-phases:
-  implement:
-    status: completed
-    red_gate:                     # v1.6, Theme D — Step 2.5 Red-gate outcome
-      status: confirmed_failing   # confirmed_failing | skipped
-      tests: [TC-*]               # the test-first tasks the gate covered
-      skip_reason: null           # set to the recorded reason when status: skipped
-implement:
-  tasks_completed: {N}
-  tasks_total: {N}
-  progressive_checkpoints: {N}
-  progressive_warnings: {N}
-  progressive_critical: {N}
-  dependencies:                 # v1.6, W5-C2 — install-time supply-chain vetting
-    added: {N}                  # new deps introduced this phase
-    vetted: {N}                 # passed registry-exists + heuristics
-    warned: {N}                 # brand-new / low-popularity (user-confirmed)
-    blocked: {N}                # non-existent / denylisted — NOT added
-    log_path: "{FEATURE_DIR}/dependency-log.md"
-last_updated: "{ISO timestamp}"
-```
-
 ---
 
 ## Step 6: Phase Digest (required)
 
-Before handoff, write `{FEATURE_DIR}/implement/digest.md` using the template at
-[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
-its path on `.forge-status.yml` under `phases.implement.digest_path`.
+Write `{FEATURE_DIR}/implement/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) **before**
+any status write marks the phase complete (Step 7;
+[docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)).
 
 The digest must include:
 - **Key decisions** — deviations from `plan.md`, shortcuts taken, intentional TODOs left for follow-up.
@@ -337,13 +340,13 @@ The digest must include:
 
 The orchestrator also records each completed task on `.forge-status.yml` under
 `task_log[]` with `status`, `paths` (copied from the task's `Paths:` line in
-tasks.md), `commit_sha` (when a commit per task is produced), and
+the task list), `commit_sha` (when a commit per task is produced), and
 timestamps. If a task failed, write `failures/<task-id>.md` and point the
 `failure_log_path` field to it.
 
 The `paths` field is the canonical source for `portfolio` file-conflict
 detection — see [`commands/portfolio.md §Step 3`](./portfolio.md). Always
-copy paths verbatim from tasks.md; if the tasks.md line said `unknown`,
+copy paths verbatim from the task list; if the `Paths:` line said `unknown`,
 record `paths: []` here and the portfolio command will count this task
 as "path-unknown" rather than silently missing it.
 
@@ -362,18 +365,63 @@ the template in [runtime.md §9.3](../docs/runtime.md#93-test-runner-resolution)
 Run tests scoped to the workspaces affected by the last N completed
 tasks, not the whole monorepo.
 
-The orchestrator refuses to mark Phase 6 complete until `digest.md` exists.
-See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+---
+
+## Step 7: Update Status & Gate
+
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+Keys this phase owns — all under `phases.implement`:
+
+```yaml
+phases:
+  implement:
+    digest_path: "implement/digest.md"
+    red_gate:                     # v1.6, Theme D — Step 2.5 Red-gate outcome (sole owner: implement)
+      status: confirmed_failing   # confirmed_failing | skipped
+      tests: [TC-*]               # the test-first tasks the gate covered
+      skip_reason: null           # set to the recorded reason when status: skipped
+    tasks_completed: {N}
+    tasks_total: {N}
+    progressive_checkpoints: {N}
+    progressive_warnings: {N}
+    progressive_critical: {N}
+    dependencies:                 # v1.6, W5-C2 — install-time supply-chain vetting
+      added: {N}                  # new deps introduced this phase
+      vetted: {N}                 # passed registry-exists + heuristics
+      warned: {N}                 # brand-new / low-popularity (user-confirmed)
+      blocked: {N}                # non-existent / denylisted — NOT added
+      log_path: "dependency-log.md"
+    status: completed             # set from the gate decision — see below
+```
+
+`red_gate`, the counters and `digest_path` are written on **every** run, including
+`--from-forge` — forge reads `red_gate` at the Phase 6 gate.
+
+**Gate** ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)–[§6.3](../docs/runtime.md#63-gate-prompt)):
+
+- **`--from-forge` in `$ARGUMENTS`** — write the keys above except `status`, do not
+  prompt and do not append to `gates[]`; return the summary (checkpoints, drifts,
+  dependency verdicts) to the orchestrator, which presents the gate and sets
+  `phases.implement.status` from its decision.
+- **Standalone** — present the **Gate** prompt from
+  [interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase):
+  *"Implementation complete — {N}/{N} tasks, {N} checkpoints, {N} critical drifts"*.
+  `{next phase}` is Code Review in standard/v-model — `opt`, so **Skip Code Review** is
+  offered unless `require_code_review: true` (on Skip with `require_skip_reason: true`,
+  ask for the reason) — or Verify in express/lite (required, no Skip). Map the answer per
+  [§6.2](../docs/runtime.md#62-status-follows-the-decision): Approve → `completed`;
+  Skip → `completed` and `code_review` `skipped` + `skip_reason`; Revise →
+  `in_progress`; Rollback → rewind; Abort → unchanged. Append one `gates[]` entry.
 
 ---
 
-## Step 7: Handoff
+## Step 8: Handoff
 
 ```
 ✅ Implementation done.
 
-Next step: /speckit.product-forge.code-review (Phase 6B)
-  (or /speckit.product-forge.verify-full to skip code review)
+Next step: /speckit.product-forge.code-review (Phase 6B, standard/v-model)
+  (or /speckit.product-forge.verify-full — directly in express/lite, or when code review was skipped)
 ```
 
 > **Extension point:** Between implementation and code review, community commands

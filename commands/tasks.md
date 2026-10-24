@@ -30,7 +30,15 @@ do **not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
 
 ## Step 1: Validate Prerequisites
 
-1. Read `.forge-status.yml` — `plan` must be `completed`
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
+and read: `features_dir`, `codebase.paths` (monorepo workspaces, Step 4.1),
+`require_pre_impl_review`, `require_skip_reason`. Resolve `FEATURE_DIR` via
+[docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract).
+
+1. Read `.forge-status.yml` — if `feature_mode` is `express` or `lite`, stop: *"Tasks is
+   not in scope for {mode} features — the plan carries an inline `## Tasks` list
+   ([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts))."*
+   Otherwise `plan` must be `completed`.
 2. Verify `plan.md` exists in FEATURE_DIR
 3. If `tasks.md` already exists with unchecked tasks:
    > ℹ️ `tasks.md` already exists with {N} pending tasks.
@@ -107,7 +115,7 @@ checks. Failures are hard errors — fix and regenerate, do not gate.
    unique — rename and re-run tasks."* This prevents ambiguous
    `task_log[]` entries downstream.
 
-2. **Workspace-prefix validation (monorepo only).** If the project
+2. **Workspace-prefix validation (monorepo only).** If the effective
    config has a `codebase.paths` block, every `Paths:` line with a
    prefix (`<workspace>:<relative-path>`) MUST use a workspace name
    that appears as a key in `codebase.paths`. On mismatch abort with:
@@ -155,52 +163,12 @@ Phase 8 browser E2E suite.
 
 ---
 
-## Step 5: Tasks Approval Gate
+## Step 5: Phase Digest (required)
 
-Present a summary:
-
-```
-📋 Task Breakdown Created: {Feature Name}
-
-Task groups: {N}
-  Phase 1: {name} — {N} tasks
-  Phase 2: {name} — {N} tasks
-  Phase 3: {name} — {N} tasks
-  ...
-Total tasks: {N}
-
-Coverage check:
-  ✅ {N}/{N} Must Have stories covered
-  ✅ {N}/{N} Functional requirements covered
-  ⚠️ {N} warnings: {list}
-
-Estimated implementation surface:
-  Files to create:  {N}
-  Files to modify:  {N}
-```
-
-Ask: *"Task breakdown ready — {N} tasks across {N} groups.
-All {N} Must Have stories covered. Approve and begin implementation?"*
-
-On approval → update `.forge-status.yml`:
-
-```yaml
-phases:
-  tasks: completed
-tasks:
-  total: {N}
-  groups: {N}
-  story_coverage: "{N}/{N}"
-last_updated: "{ISO timestamp}"
-```
-
----
-
-## Step 6: Phase Digest (required)
-
-Before handoff, write `{FEATURE_DIR}/tasks/digest.md` using the template at
-[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
-its path on `.forge-status.yml` under `phases.tasks.digest_path`.
+Write `{FEATURE_DIR}/tasks/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) **before**
+any status write marks the phase complete (Step 6;
+[docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)).
 
 The digest must include:
 - **Key decisions** — task count, parallelizable groups, dependency shape, any XL-sized tasks flagged.
@@ -254,8 +222,59 @@ The orchestrator also updates `.forge-status.yml` `scope.paths` with
 the union of workspaces referenced across all tasks, and sets
 `scope.cross_workspace: true` when more than one workspace is touched.
 
-The orchestrator refuses to mark Phase 5B complete until `digest.md` exists.
-See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+---
+
+## Step 6: Tasks Approval Gate
+
+Present a summary:
+
+```
+📋 Task Breakdown Created: {Feature Name}
+
+Task groups: {N}
+  Phase 1: {name} — {N} tasks
+  Phase 2: {name} — {N} tasks
+  Phase 3: {name} — {N} tasks
+  ...
+Total tasks: {N}
+
+Coverage check:
+  ✅ {N}/{N} Must Have stories covered
+  ✅ {N}/{N} Functional requirements covered
+  ⚠️ {N} warnings: {list}
+
+Estimated implementation surface:
+  Files to create:  {N}
+  Files to modify:  {N}
+```
+
+Gate ownership ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)): with
+**`--from-forge`** in `$ARGUMENTS`, skip the prompt and do not append to `gates[]` —
+write the phase-owned data below (without `status`), return the summary to the
+orchestrator, which presents the gate and sets the status. **Standalone**, present the
+**Gate** prompt from
+[interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase):
+*"Tasks complete — {N} tasks across {N} groups, {N}/{N} Must Have stories covered"*,
+with `{next phase}` = Pre-Implementation Review. It is `opt`, so **Skip
+Pre-Implementation Review** is offered unless `require_pre_impl_review: true`
+([docs/runtime.md §6.3](../docs/runtime.md#63-gate-prompt)); on Skip with
+`require_skip_reason: true`, ask for the reason.
+
+Set the status from the decision ([docs/runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision)):
+Approve → `tasks` `completed`; Skip → `tasks` `completed` and `pre_impl_review`
+`skipped` + `skip_reason`; Revise → `in_progress`; Rollback → rewind; Abort →
+unchanged. Append one `gates[]` entry. Write via the status-write procedure
+([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
+
+```yaml
+phases:
+  tasks:
+    digest_path: "tasks/digest.md"
+    total: {N}
+    groups: {N}
+    story_coverage: "{N}/{N}"
+    status: completed        # approved / approved_with_conditions / skipped (next phase)
+```
 
 ---
 

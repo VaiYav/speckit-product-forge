@@ -4,7 +4,7 @@ description: >
   Phase 1: Adaptive multi-dimensional feature research. Assesses input richness and
   auto-adjusts interview depth — minimal input triggers full 7-question interview,
   rich input skips to confirmation. Mandatory: competitors, UX/UI, codebase.
-  Optional: tech stack, metrics/ROI. Saves to features/<name>/research/.
+  Optional: tech stack, metrics/ROI. Saves to {FEATURE_DIR}/research/.
   Use with: "research feature", "/speckit.product-forge.research"
 ---
 
@@ -43,7 +43,8 @@ Sum the scores → **Input Richness Score (0–8)**:
 - **6–8** → `CONFIRM` mode — brief 1-message confirmation, then proceed
 
 Load the effective config (5-layer merge, [docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)):
-- `project_name`, `project_domain`, `project_tech_stack`, `codebase_path`, `features_dir`
+- `project_name`, `project_domain`, `project_tech_stack`, `codebase_path`, `features_dir`,
+  `default_feature_mode` (only when this phase creates the status file)
 - Research defaults — these **pre-fill** interview answers; the user can still override:
   - `default_competitors` (list) → if non-empty, use as the competitor list and skip
     question 2 (show it in the plan instead). Empty → ask / auto-discover.
@@ -57,6 +58,10 @@ Resolve `FEATURE_DIR` via the Path-Resolution Contract `resolve(slug)`
 the default `flat` strategy this is `{features_dir}/{feature-slug}/`; under
 `domain-nested` it locates/places the feature at `{features_dir}/<domain>/<slug>/`.
 Set `RESEARCH_DIR = {FEATURE_DIR}/research/`
+
+If `.forge-status.yml` exists with `feature_mode` `express` or `lite`, stop:
+*"Research is not in scope for {mode} features
+([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts))."*
 
 ---
 
@@ -514,60 +519,40 @@ Create `{RESEARCH_DIR}/README.md`:
 
 ---
 
-## Step 6: Update Status
+## Step 6: Phase Digest (required)
 
-```yaml
-# {FEATURE_DIR}/.forge-status.yml
-schema_version: 2
-feature: "{feature-slug}"
-created_at: "{ISO date}"
-phases:
-  research: completed
-  product_spec: pending
-  revalidation: pending
-  bridge: pending
-  plan: pending
-  tasks: pending
-  pre_impl_review: pending
-  implement: pending
-  code_review: pending
-  verify: pending
-  test_plan: pending
-  test_run: pending
-  release_readiness: pending
-  retrospective: pending
-speckit_mode: ""
-testing:
-  final_pass_rate: ""
-  bugs_found: 0
-  bugs_fixed: 0
-  bugs_deferred: 0
-  test_runs_total: 0
-gates: []
-sync_runs:
-  last_run: ""
-  total_runs: 0
-  last_drift_count: 0
-  last_critical_count: 0
-  last_verdict: ""
-change_requests: []
-research_dimensions:
-  competitors: completed
-  ux_patterns: completed
-  codebase: completed
-  tech_stack: completed   # or: skipped
-  metrics_roi: skipped    # or: completed
-input_richness_score: {0-8}
-last_updated: "{ISO timestamp}"
-```
+Write `{FEATURE_DIR}/research/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) **before**
+any status write marks the phase complete
+([docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)).
 
-> **Note:** If `.forge-status.yml` already exists (e.g., from Phase 0 Problem Discovery),
-> only update `phases.research: completed` and append the `research_dimensions:` block.
-> Do not overwrite existing phase states or gates.
+The digest must include:
+- **Key decisions** — which research dimensions were run (and which were skipped),
+  the input-richness score / interview mode, and the top 3 findings.
+- **Artifacts produced** — every file under `{FEATURE_DIR}/research/` with a one-line description.
+- **Open risks** — unresolved questions forwarded to product-spec.
+- **Handoff notes** — what product-spec needs to know that is not obvious from the file list.
 
 ---
 
-## Step 7: Present Results
+## Step 7: Update Status & Gate
+
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+If `.forge-status.yml` does not exist yet, it is initialized from the v3 initial
+document in [docs/schema.md §3.1](../docs/schema.md#31-initial-document-new-features);
+(`feature_mode` from `--mode` or `default_feature_mode`); if it exists (forge
+intake, Problem Discovery), merge — never re-initialize. Keys
+this phase owns:
+
+```yaml
+phases:
+  research:
+    digest_path: "research/digest.md"
+    status: completed        # set from the gate decision — see below
+```
+
+The dimensions run and the input-richness score are recorded in
+`research/README.md` and the digest, not in the status file.
 
 Show:
 1. Summary table of completed dimensions
@@ -575,23 +560,15 @@ Show:
 3. Open questions that need answers in Phase 2
 4. Any red flags or risks
 
-Ask: *"Research complete — {N} dimensions analyzed, saved to `{RESEARCH_DIR}/`. Ready to proceed to Phase 2: Product Spec creation?"*
+**Gate** ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)–[§6.3](../docs/runtime.md#63-gate-prompt)):
 
-If standalone: *"Next: `/speckit.product-forge.product-spec`"*
-
----
-
-## Step 8: Phase Digest (required)
-
-Before returning, write `{FEATURE_DIR}/research/digest.md` using the template at
-[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
-its path on `.forge-status.yml` under `phases.research.digest_path`.
-
-The digest must include:
-- **Key decisions** — which research dimensions were run and the top 3 findings.
-- **Artifacts produced** — every file under `{FEATURE_DIR}/research/` with a one-line description.
-- **Open risks** — unresolved questions forwarded to product-spec.
-- **Handoff notes** — what product-spec needs to know that is not obvious from the file list.
-
-The orchestrator refuses to mark Phase 1 complete until `digest.md` exists.
-See [`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
+- **`--from-forge` in `$ARGUMENTS`** — write only `digest_path`, do not prompt and
+  do not append to `gates[]`; return the summary to the orchestrator, which presents
+  the gate and sets `phases.research.status` from its decision.
+- **Standalone** — present the **Gate** prompt from
+  [interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase):
+  *"Research complete — {N} dimensions analyzed, saved to `{RESEARCH_DIR}/`"*, with
+  `{next phase}` = Product Spec (required, so no Skip). Map the answer per
+  [§6.2](../docs/runtime.md#62-status-follows-the-decision) (Approve → `completed`;
+  Revise → `in_progress`; Rollback → rewind; Abort → unchanged) and append one
+  `gates[]` entry. On Approve: *"Next: `/speckit.product-forge.product-spec`"*.
