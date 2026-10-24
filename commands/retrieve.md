@@ -1,71 +1,68 @@
 ---
 name: speckit.product-forge.retrieve
 description: >
-  Cross-cutting: deterministic retrieval over the feature catalog. Given a query, slug,
-  bounded-context, or status, returns the matching feature(s) and the exact files to open —
-  so understanding "what touches X?" costs one index scan + 1–3 targeted reads instead of
-  walking every feature folder. No embeddings; wraps scripts/retrieve-catalog.js (which
-  builds the catalog in-memory, always fresh).
-  Use: "what handles payments", "find the onboarding feature", "/speckit.product-forge.retrieve"
+  Retrieve the best-matching features (default 5, `--limit N`) for a query, slug,
+  bounded context, status or kind, plus the exact files to open, from the
+  feature catalog. Use to answer "what touches X?" without walking every
+  feature folder.
 ---
 
-# Product Forge — Retrieve (Catalog-Scoped Lookup)
+# Product Forge — Retrieve
 
-You are the **Retriever** for Product Forge.
-Your job: turn a developer's question into the **smallest correct set of files to read**.
-Read the catalog first, return the 1–3 features that matter and their key artifacts, and
-let the next step open only those — never the whole `features/` tree.
+You are the **Retriever**. Turn a developer's question into the smallest correct
+set of files to read: scan the catalog, return the features that matter and their
+key artifacts, and open only those.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Parse for:
-- a free-text **query** (default; matches slug / name / summary / bounded-context), or
-- `--slug <slug>`, `--context <bounded_context>`, `--status <status>`, `--kind <build|documentation-only>`,
-- `--limit N` (default 5), `--json` (machine output).
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
-
-## Step 0: Load Config
-
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
-→ `features_dir` (default `features`).
-
----
+- **Phase key:** none — read-only
+- **Config keys:** `features_dir` (default `features`)
+- **Writes:** nothing
+- **Contract deltas:** no feature slug is resolved. Arguments are a free-text
+  **query** (default; matches slug / name / summary / bounded context) or one of
+  `--slug <slug>`, `--context <bounded_context>`, `--status <status>`,
+  `--kind <build|documentation-only>`; plus `--limit N` (default 5) and `--json`
+  (machine output).
 
 ## Step 1: Run the retriever
-
-Locate the bundled script via `${PLUGIN_ROOT}`
-([docs/runtime.md §1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root)). It builds
-the catalog in-memory (so results are always fresh even if `_portfolio/catalog.yml` is stale)
-and filters it — deterministic, no LLM, no network. If the script is absent, follow the
-§1A WARN-and-fallback rule: read `_portfolio/catalog.yml` directly (warn if it may be stale)
-and filter it by hand:
 
 ```bash
 node ${PLUGIN_ROOT}/scripts/retrieve-catalog.js --query "{query}" --features-dir {features_dir}
 # or: --slug {slug} | --context {bounded_context} | --status {status} | --kind {kind}
 ```
 
----
+The script builds the catalog in memory (fresh even when
+`_portfolio/catalog.yml` is stale — the same carrier [`catalog`](./catalog.md)
+writes and [`portfolio`](./portfolio.md) reads) and filters it deterministically:
+no LLM, no network, no embeddings. The old `--mode` flag exits 2 with
+"`--mode` was renamed `--kind`"; rerun with `--kind`.
+
+Fallback when the script is missing: read `{features_dir}/_portfolio/catalog.yml`
+directly, warn that it may be stale, and filter it by hand.
+
+Result: a ranked match list.
 
 ## Step 2: Present the minimal slice
 
-Render the script's matches. For each, show: `slug`, status / kind / feature_mode, one-line summary, the
-source `code:` path, and the `open:` file list. Then **open only those files** to answer the
-user's question — do not read other feature folders.
+For each match show `slug`, status / kind / `feature_mode`, the one-line summary,
+the `code:` path and the `open:` file list. Then open **only** those files to
+answer the question; every other feature folder stays unread.
 
-If there are zero matches, say so and suggest a broader query or
-`/speckit.product-forge.catalog` to (re)build the index. If the top score is weak (the query
-matched only a summary substring), say the match is approximate and show the next candidates
-so the user can disambiguate.
+- **Zero matches** → say so and suggest a broader query or
+  `/speckit.product-forge.catalog` to rebuild the index.
+- **Weak top match** (only a summary substring matched) → say the match is
+  approximate and show the next candidates so the user can pick.
 
----
+## Done when
 
-> **Why this is bounded.** The retriever reads the same `catalog.yml` carrier that
-> [`catalog`](./catalog.md) produces and [`portfolio`](./portfolio.md) consumes; it never
-> embeds or guesses. A vector layer, if ever added, slots in behind the same filter seam —
-> the command contract (query → ranked features → files to open) does not change.
+- The ranked matches (at most `--limit`) are shown with slug, status / kind /
+  mode, summary, code path and open list — or the zero-match message with its
+  suggestion.
+- Only the listed `open:` files were read to answer the question.
+- A weak match is labelled approximate, with the next candidates shown.

@@ -1,68 +1,47 @@
 ---
 name: speckit.product-forge.migration-plan
 description: >
-  Optional pre-implement phase: when plan.md introduces data-model changes,
-  generate a zero-downtime migration plan with forward + rollback scripts,
-  validation queries, backfill job outline, and risk matrix. Wraps the
-  installed `db-migration-manager` and `mongodb-ops` skills.
-  Runs at Phase 5.5 — after Phase 5B (Tasks) and before Phase 5C (Pre-Impl
-  Review), when schema changes are detected in plan.md.
-  Use: "migration plan", "schema migration", "/speckit.product-forge.migration-plan"
+  Plan a zero-downtime data migration when plan.md changes the data model:
+  schema diff, strategy per change, runnable forward / rollback / validation
+  scripts, backfill outline and risk matrix. Use after Tasks, before Pre-Impl
+  Review, when schema changes exist.
 ---
 
-# Product Forge — Migration Plan (Phase 5.5)
+# Product Forge — Phase 5.5: Migration Plan
 
-You are the **Migration Strategist** for Product Forge.
-Your job: turn data-model changes in `plan.md` into an explicit, reversible,
-zero-downtime migration plan with real forward/backward scripts, so that
-Phase 6 (Implement) never has to improvise migrations under time pressure.
+You are the **Migration Strategist**. Turn the data-model changes in `plan.md`
+into an explicit, reversible, zero-downtime migration plan with real forward and
+rollback scripts, so Phase 6 (Implement) never improvises a migration.
 
-This phase is **opt-in** and **conditional** — trigger only when plan.md
-declares schema changes.
-
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Parse for:
-- Feature slug (required).
-- `--db=<kind>` — `mongodb` | `postgres` | `mysql`. If omitted, detect
-  from project config / plan.md hints.
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+- **Phase key:** `migration_plan` (Phase 5.5)
+- **Config keys:** `project_tech_stack`, `features_dir`, `storage_strategy`
+- **Writes:** `migrations/forward.sql` (or `.ts`), `migrations/rollback.sql` (or
+  `.ts`), `migrations/validation.sql`, `migrations/backfill.md` (when needed),
+  `migrations/risk-matrix.md`, `migrations/migration-plan.md`,
+  `migrations/digest.md`, `phases.migration_plan.*`
+- **Contract deltas:** `--db=<mongodb|postgres|mysql>` sets the DB kind; without
+  it, detect it (Step 0).
 
----
+## Step 0: Check scope and DB kind
 
-## Step 0: Prerequisites
+1. `plan.md` exists and its Data Model section is non-empty. No schema changes →
+   exit with *"No data-model changes detected in plan.md — migration plan not needed."*
+2. DB kind: `--db`, else `project_tech_stack` when clear, else plan.md hints
+   (Prisma schema ⇒ Postgres/MySQL; Mongoose schema ⇒ MongoDB; raw SQL ⇒ inspect).
+3. Confirm the detected DB kind with the user before continuing.
 
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
-keys used: `project_tech_stack`, `features_dir` + `storage_strategy` (to resolve
-`{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+## Step 1: Schema diff
 
-Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
-
-1. `plan.md` exists AND its Data Model section is non-empty.
-2. Identify the DB kind:
-   - From the effective config's `project_tech_stack` if clear.
-   - Otherwise from plan.md (Prisma schema ⇒ Postgres/MySQL; Mongoose
-     schema ⇒ MongoDB; raw SQL ⇒ inspect).
-3. Confirm with the user before proceeding.
-
-If plan.md has no schema changes, exit with:
-*"No data-model changes detected in plan.md — migration plan not needed."*
-
----
-
-## Step 1: Schema Diff
-
-Extract the before/after schema:
-
-- **Before:** current schema from the codebase (read-only).
-- **After:** schema described in plan.md Data Model section.
-
-Produce a diff:
+- **Before:** the current schema from the codebase (read-only).
+- **After:** the schema in plan.md's Data Model section.
 
 | Change | Field / collection | Type | Reversible? |
 |--------|-------------------|:----:|:-----------:|
@@ -70,13 +49,11 @@ Produce a diff:
 | MODIFY | `Subscription.status` (enum `active → trialing`) | enum | ⚠️ data-dependent |
 | DROP | `User.legacy_flag` | bool | ❌ destructive |
 
-Flag any `❌` as HIGH RISK.
+Flag every ❌ row as HIGH RISK.
 
----
+## Step 2: Strategy per change
 
-## Step 2: Strategy Selection
-
-Pick one strategy per change, defaulting toward safe:
+Pick one strategy per change, defaulting toward the safest:
 
 | Strategy | When to use |
 |----------|-------------|
@@ -85,53 +62,44 @@ Pick one strategy per change, defaulting toward safe:
 | **Blue-green** | Changes to hot paths where a short flip window is acceptable. |
 | **Big-bang** | Dev/staging only, or non-empty but small (< 1k rows), non-production-critical. |
 
-Reject big-bang for production-critical changes — flag as action item
-instead.
+Zero-downtime is the default: big-bang needs an explicit written rationale, and
+for a production-critical change it becomes an action item instead.
 
----
+## Step 3: Generate scripts
 
-## Step 3: Generate Scripts
+Delegate to `db-migration-manager` (Postgres / MySQL / Prisma) or `mongodb-ops`
+(MongoDB), matching the DB kind, with the Step 1 diff and the Step 2 strategies.
+Produce, under `{FEATURE_DIR}/migrations/`:
 
-Delegate to `db-migration-manager` (Postgres/MySQL/Prisma) or
-`mongodb-ops` (Mongo) — whichever matches the project's DB kind — with:
+- `forward.sql` (or `forward.ts` for Mongo) — runnable as-is against a copy of
+  the database; real DDL, not stubs.
+- `rollback.sql` (or `rollback.ts`).
+- `validation.sql` — post-migration assertions (row counts, constraint
+  existence, index presence).
 
-- The diff table from Step 1.
-- The strategy per change from Step 2.
-
-Produce:
-
-- `{FEATURE_DIR}/migrations/forward.sql` (or `forward.ts` for Mongo)
-- `{FEATURE_DIR}/migrations/rollback.sql` (or `rollback.ts`)
-- `{FEATURE_DIR}/migrations/validation.sql` — post-migration assertions
-  (row counts, constraint existence, index presence).
-
-For destructive rollbacks that cannot recover data, write a comment at
-the top of `rollback.sql`:
+When a rollback cannot recover data, start `rollback.sql` with:
 
 ```sql
 -- WARNING: rollback is destructive — <field> data will be lost.
 -- Take a backup before applying forward.sql.
 ```
 
----
+## Step 4: Backfill plan
 
-## Step 4: Backfill Plan
+Whenever a backfill is required (expand–migrate–contract selected), write
+`migrations/backfill.md` — a backfill never hides inside `forward.sql`
+unplanned. Sections:
 
-If Step 2 selected expand–migrate–contract, produce
-`{FEATURE_DIR}/migrations/backfill.md`:
-
-- Estimated row count (best-effort; state source of estimate).
+- Estimated row count (best effort; state the source).
 - Chunk size and throttle (e.g. "1k rows / 100 ms").
 - Progress tracking table (`backfill_progress (cursor, started_at, ...)`).
 - Resume semantics (idempotent keys).
 - Rollback of a partial backfill (whether cursor state is preserved).
 - Expected wall-clock duration.
 
----
+## Step 5: Risk matrix
 
-## Step 5: Risk Matrix
-
-Write `{FEATURE_DIR}/migrations/risk-matrix.md`:
+Write `migrations/risk-matrix.md`:
 
 | # | Risk | Severity | Mitigation |
 |--:|------|:--------:|------------|
@@ -139,58 +107,17 @@ Write `{FEATURE_DIR}/migrations/risk-matrix.md`:
 | 2 | Index build blocks writes | MEDIUM | Use `CREATE INDEX CONCURRENTLY` (Postgres). |
 | 3 | Replication lag under backfill load | MEDIUM | Throttle + monitor replica_lag_ms. |
 
-Each row must have a concrete mitigation — "monitor carefully" is not a
-mitigation.
+Every row carries a concrete mitigation ("monitor carefully" is not one), and
+every destructive change appears as a risk.
 
----
+## Step 6: Write `migrations/migration-plan.md`
 
-## Step 6: Write migration-plan.md
+Write it from [docs/templates/migration-plan-migration-plan.md](../docs/templates/migration-plan-migration-plan.md).
 
-Top-level summary document:
+## Step 7: Digest and status
 
-```markdown
-# Migration Plan — {Feature Name}
-
-> Generated: {ISO}
-> DB: {kind}
-> Strategy: {primary strategy}
-
-## Schema diff
-{table from Step 1}
-
-## Strategy per change
-{list mapping change → strategy with rationale}
-
-## Files produced
-- `migrations/forward.sql`
-- `migrations/rollback.sql`
-- `migrations/validation.sql`
-- `migrations/backfill.md` (if backfill needed)
-- `migrations/risk-matrix.md`
-
-## Pre-migration checklist
-- [ ] Take backup of affected tables
-- [ ] Announce migration window (if required)
-- [ ] Verify monitoring and alerts are active
-- [ ] Dry-run on staging with production-shaped data
-
-## Rollback trigger criteria
-- Validation query fails
-- Error rate exceeds baseline by {threshold}
-- Replication lag > {threshold}
-
-## Owner
-{person or team}
-```
-
----
-
-## Step 7: Update Status
-
-First write `migrations/digest.md` per the digest template
-([docs/templates/phase-digest.md](../docs/templates/phase-digest.md)), then update
-`.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-The run summary lives under the phase key (never a top-level `migration:` block):
+Write `migrations/digest.md` from [docs/templates/phase-digest.md](../docs/templates/phase-digest.md),
+then the run summary under the phase key (never a top-level `migration:` block):
 
 ```yaml
 phases:
@@ -209,19 +136,20 @@ phases:
       validation: "migrations/validation.sql"
 ```
 
----
+`status` here is the standalone value: set it from the gate decision (approve →
+`completed`). Under `--from-forge`, write the digest and the data fields, leave
+`status` out, and return the outcome to forge.
 
-## Operating Principles
+## Done when
 
-1. **Zero-downtime by default.** Big-bang strategy is only permitted
-   explicitly with a written rationale.
-2. **Reversibility first.** Destructive operations produce explicit
-   warnings in the rollback script and in the risk matrix.
-3. **Real files, not sketches.** `forward.sql` must be runnable as-is
-   against a copy of the database. Stub DDL is not acceptable.
-4. **Delegation over reimplementation.** Defer mechanics to
-   `db-migration-manager` / `mongodb-ops`; this command orchestrates
-   them and enforces the plan structure.
-5. **No implicit backfills.** If a backfill is required, `backfill.md`
-   is mandatory. No "backfill happens as part of forward.sql" without a
-   written plan.
+- Every schema change in plan.md has a diff row, a reversibility mark and one
+  strategy; every ❌ change is flagged HIGH RISK and carries the rollback warning.
+- `forward`, `rollback` and `validation` scripts exist and are runnable.
+- `backfill.md` exists whenever a backfill is required.
+- Every risk-matrix row has a concrete mitigation.
+- `migration-plan.md` follows the template.
+- No schema changes → exited with the "not needed" message and wrote nothing.
+- Standalone: digest written, gate shown, decision recorded, status set from it.
+- `--from-forge`: digest and `migration_plan` data fields written; outcome
+  (DB kind, strategy, destructive changes) returned to forge; no gate prompt, no
+  status write.

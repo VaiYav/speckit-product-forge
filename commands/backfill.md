@@ -1,97 +1,75 @@
 ---
 name: speckit.product-forge.backfill
 description: >
-  Brown-field entry point: reverse-engineer a Product Forge feature folder
-  from existing code. Reads a target module/directory, synthesises retro
-  product-spec, plan, and simplified tasks, then writes `.forge-status.yml`
-  (v3, `backfilled: true`) with the reconstructed phases `completed`, the
-  never-run ones `not_applicable` and the rest `pending`. Produces a
-  gaps-report.md listing what a modern Product Forge run would have
-  required but is currently missing (tests, tracking, ADRs).
-  Use: "backfill module", "create feature from existing code", "/speckit.product-forge.backfill"
+  Reverse-engineer a Product Forge feature folder from existing code: retro
+  product spec, plan, tasks, initial canonical spec, a `backfilled: true` status
+  file and a gaps report. Use to bring a brownfield module under Product Forge.
 ---
 
 # Product Forge — Backfill
 
-You are the **Backfill Archaeologist** for Product Forge.
-Your job: take an existing module or directory in the user's codebase and
-produce a Product Forge feature folder that looks as if the feature had gone
-through the lifecycle — but clearly marked as reverse-engineered, not
-original intent.
+You are the **Backfill Archaeologist**. Take an existing module or directory and
+produce a feature folder that looks as if the feature had gone through the
+lifecycle — clearly marked as reverse-engineered, not original intent. The
+source code is only read; you write to `{FEATURE_DIR}` and the canonical
+`specs/`.
 
-This is the only Product Forge command allowed to write `completed` phase
-statuses without running the underlying phases. It compensates by stamping
-`backfilled: true` on the feature and emitting a **gaps report** describing
-what the real lifecycle would have required.
+This is the only command that sets phases `completed` without running them. It
+compensates by stamping `backfilled: true` and writing a **gaps report** of what
+the real lifecycle would have required.
 
-> **Living spec (v1.6, Theme B):** backfill also writes initial canonical
-> requirements into `specs/<domain>/spec.md` (stable `REQ-*` ids) reverse-engineered
-> from the code, so brownfield features have a living source of truth that future
-> changes can delta against via [`spec-merge`](./spec-merge.md). This directly
-> addresses the "diminishing returns on large/brownfield codebases" critique.
-
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Parse for:
-- `--source=<path>` — required. Path to the module/directory to backfill
-  (e.g. `back/src/modules/core/users`, `apps/web/src/features/checkout`).
-- `--slug=<feature-slug>` — optional. Default: last path component of source.
-- `--dry-run` — do everything except write files; report what would be produced.
-  Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics)
-  (artifacts under `{FEATURE_DIR}/.forge-dry-run/backfill/`, no `.forge-status.yml`).
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** none — writes the initial `.forge-status.yml`
+- **Config keys:** `project_name`, `project_tech_stack`, `project_domain`,
+  `codebase_path`, `features_dir`, `storage_strategy`
+- **Writes:** `product-spec/README.md`, `plan.md`, `tasks.md`, the phase
+  digests, `gaps-report.md`, canonical `specs/<domain>/spec.md`,
+  `.forge-status.yml` (many `phases.*` keys)
+- **Contract deltas:**
+  - `--source=<path>` (required) — the module / directory to backfill (e.g.
+    `back/src/modules/core/users`, `apps/web/src/features/checkout`).
+  - `--slug=<feature-slug>` — default: the source's last path component.
+  - `FEATURE_DIR` is **created** from the slug (Step 1), not resolved; there are
+    no upstream prerequisites.
+  - `--dry-run` writes under `{FEATURE_DIR}/.forge-dry-run/backfill/` (the 3E
+    canonical spec at `{FEATURE_DIR}/.forge-dry-run/backfill/specs/<domain>/spec.md`)
+    and no `.forge-status.yml`.
+  - Status writes span every phase key (Step 4). No gate.
 
-## Step 0: Load Config
+## Step 1: Validate the source
 
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
-Keys used:
-- `project_name`, `project_tech_stack`, `project_domain`, `codebase_path`,
-  `features_dir`, `storage_strategy`.
-
-Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
-
----
-
-## Step 1: Validate Source
-
-1. Resolve `--source` to an absolute path.
-2. Check the path exists and is a directory or file.
-3. Confirm the path is under `codebase_path` (warn if not).
-4. Derive `slug` from `--slug` or last path component (slugify). Place/resolve
-   `FEATURE_DIR` via the Path-Resolution Contract CREATE rule (`resolve(slug)`,
-   [docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)) —
-   `flat` → `{features_dir}/<slug>/`; `domain-nested` → prompt for/derive
+1. Resolve `--source` to an absolute path; it must exist (directory or file) and
+   be non-empty — otherwise stop with a clear message.
+2. Warn when it is not under `codebase_path`.
+3. Slugify `--slug` (or the last path component) and place `FEATURE_DIR` with
+   the CREATE rule of `resolve(slug)`
+   ([runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)):
+   `flat` → `{features_dir}/<slug>/`; `domain-nested` → ask for or derive
    `<domain>` and use `{features_dir}/<domain>/<slug>/`.
 
-Abort with a clear message if the source does not exist or is empty.
+## Step 2: Scan the source
 
----
+A short inventory — input for the retro artifacts, not an artifact itself:
 
-## Step 2: Scan Source
+- top-level files and their kinds (controller / service / component / test / config);
+- framework signals (NestJS decorators, Vue SFC, React hooks, Python imports);
+- public entry points (HTTP routes, exported symbols, public API);
+- dependencies (other internal modules, external packages);
+- tests present (count, kind);
+- i18n strings referenced (if any);
+- database schema references (Prisma / Mongoose / SQL migrations touched).
 
-Produce an inventory of the source without interpreting it yet:
+## Step 3: Synthesize the retro artifacts
 
-- List of top-level files and their kinds (controller / service / component / test / config).
-- Framework signals (NestJS decorators, Vue SFC, React hooks, Python imports).
-- Public entry points (HTTP routes, exported symbols, public API).
-- Dependencies (imports from other modules, external packages).
-- Tests present (count, kind).
-- i18n strings referenced (if any).
-- Database schema references (Prisma/Mongoose/SQL migrations touched).
-
-Keep this inventory short — it feeds the retro-spec; it is not the artifact.
-
----
-
-## Step 3: Synthesize Retro Artifacts
-
-Create `{FEATURE_DIR}` (resolved in Step 1) with the following content. Each file MUST
-include a banner at the top:
+Every generated artifact — 3A–3E, the Step 4 digests and the gaps report —
+starts with:
 
 ```markdown
 > ⚠ BACKFILLED ARTIFACT
@@ -100,67 +78,58 @@ include a banner at the top:
 > description based on code inspection. Treat as documentation, not spec.
 ```
 
-### 3A — `product-spec/README.md`
+Where inference is shaky, write a NEEDS-CLARIFICATION item instead of a
+plausible-sounding fact.
 
-Sections:
+**3A — `product-spec/README.md`:** feature summary (one paragraph, from names,
+comments, route paths) · target users (best guess or `unknown — please fill in`)
+· primary user stories (from route handlers / public methods) · in-scope /
+out-of-scope (in-scope = what the code does; out-of-scope empty) · non-functional
+reality (observed error handling, caching, auth, rate limits) · open questions
+(NEEDS-CLARIFICATION items).
 
-1. Feature summary (1 paragraph) inferred from names, comments, and route paths.
-2. Target users (best guess or `unknown — please fill in`).
-3. Primary user stories (derived from route handlers / public methods).
-4. In-scope / out-of-scope (in-scope = what code does; out-of-scope = empty).
-5. Non-functional reality (current error handling, caching, auth, rate limits
-   — observed, not prescribed).
-6. Open questions (list of NEEDS-CLARIFICATION items where inference was shaky).
+**3B — `plan.md`:** architecture as-is (modules, files, call graph) · data model
+(schemas observed) · API contracts (route signatures, request / response shapes)
+· dependencies (external services, internal modules) · known technical debt
+(`TODO` / `FIXME`, commented-out blocks).
 
-### 3B — `plan.md`
-
-Sections:
-
-1. Architecture as-is — modules, files, call graph.
-2. Data model — schemas observed in code.
-3. API contracts — route signatures, request/response shapes.
-4. Dependencies — external services, internal modules.
-5. Known technical debt — `TODO`/`FIXME` comments, commented-out code blocks.
-
-### 3C — `tasks.md`
-
-A flat list of tasks representing the **components that currently exist**:
+**3C — `tasks.md`:** one task per component that exists today, all shipped:
 
 ```markdown
 - [x] T001 — {component name}  — {file path}
 - [x] T002 — {component name}  — {file path}
 ```
 
-All marked `[x]` because they are shipped. `task_log[]` on the status
-file is left empty (`[]`) — backfill does not have per-task commit SHAs
-or sizes to record. The gaps report flags this explicitly.
+`task_log[]` stays `[]` — there are no per-task commit SHAs or sizes; the gaps
+report says so.
 
-### 3D — `verify/digest.md` (skipped verification)
+**3D — `verify/digest.md`:** the single paragraph *"Verification was not run
+because this feature was backfilled from existing code. See gaps-report.md for
+what a modern verification would check."* It provides `phases.verify.digest_path`.
 
-Single paragraph: *"Verification was not run because this feature was
-backfilled from existing code. See gaps-report.md for what a modern
-verification would check."* Sets `phases.verify.digest_path` so the phase
-can be marked completed without bypassing the digest rule from
-[runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4).
+**3E — canonical spec:** write the initial canonical requirements,
+reverse-engineered from the code, to `specs/<domain>/spec.md` with stable
+`REQ-*` ids, so later changes delta against it through [`spec-merge`](./spec-merge.md).
+`<domain>` is the feature's bounded context in `{features_dir}/domains.yml` when
+that registry exists, else the module / folder the source code lives in, else
+the feature slug. When `specs/<domain>/spec.md` already exists, upsert: add each
+new requirement under the next free `REQ-NNN` and leave every existing
+requirement unchanged.
 
----
+## Step 4: Digests, then `.forge-status.yml`
 
-## Step 4: Write digests, then `.forge-status.yml`
+First write minimal `<phase>/digest.md` files for product-spec, plan, tasks,
+implement and verify (verify's is 3D), each noting `backfilled: true` in its
+handoff notes — the digest rule
+([runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)) holds before
+any phase is `completed`.
 
-**First** produce minimal `<phase>/digest.md` files for product-spec, plan,
-tasks, implement, verify (verify's is the 3D file) so the digest rule is
-satisfied before any phase is marked `completed`
-([runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)). Each digest
-notes `backfilled: true` in the handoff notes section.
-
-**Then** write the status file via the status-write procedure
-([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)). A new
-feature starts from the v3 initial document in
+Then write the status file. A new feature starts from the v3 initial document in
 [schema.md §3.1](../docs/schema.md#31-initial-document-new-features) with
-`feature_mode: "standard"` — pinned, not `default_feature_mode`, because backfill
-synthesizes the standard artifact set (`tasks.md` would be `not_applicable` in
-express/lite). Every phase in [`schema/phase-map.yml`](../docs/schema/phase-map.yml)
-gets an object entry; backfill then merges its own keys:
+`feature_mode: "standard"` — pinned rather than `default_feature_mode`, because
+backfill produces the standard artifact set (`tasks.md` would be
+`not_applicable` in express / lite). Every phase in
+[schema/phase-map.yml](../docs/schema/phase-map.yml) gets an entry; merge in:
 
 ```yaml
 schema_version: 3
@@ -200,46 +169,36 @@ gates: []
 task_log: []     # optional population in a later run
 ```
 
-If `{FEATURE_DIR}/.forge-status.yml` already exists, never re-initialize it —
-merge only the keys above (runtime §2.9 step 4), keeping its gate trail and any
-phase a real run already completed.
+`release_readiness` stays `pending`: a backfilled feature has not been through
+release-readiness, and the user can run it retroactively.
 
----
+An existing `{FEATURE_DIR}/.forge-status.yml` is never re-initialized: merge only
+the keys above (runtime §2.9 step 4), keeping its gate trail and every phase a
+real run already completed.
 
-## Step 5: Gaps Report
+## Step 5: Gaps report
 
-Write `{FEATURE_DIR}/gaps-report.md`. This is the primary
-decision-driver for the user — it tells them what they are inheriting.
+Write `{FEATURE_DIR}/gaps-report.md` — the user's main decision input. Sections:
 
-Sections (required):
-
-1. **Summary verdict.** One of: "Low gap" / "Medium gap" / "High gap".
-   Heuristic:
+1. **Summary verdict** — "Low gap" / "Medium gap" / "High gap":
    - Low: tests ≥70% coverage estimate, auth present, logging present.
    - Medium: tests <70%, some observability present.
    - High: tests absent, no tracking, no error handling evident.
-2. **Missing artifacts.** List every artifact a modern Product Forge run
-   would have produced but is absent:
-   - `research/` — competitor / UX / metrics research.
-   - `product-spec/` clarifications (NEEDS-CLARIFICATION items).
-   - ADRs in `plan.md`.
-   - Unit / integration / E2E tests below thresholds.
-   - Tracking plan entries.
-   - Feature flag registry entries.
-   - Release-readiness checklist evidence (monitoring dashboard, alerts).
-3. **Inferred vs observed.** Table listing each inferred claim in the
-   retro-spec and the confidence level (HIGH / MEDIUM / LOW).
-4. **Recommended next actions.** Ordered, including the specific Product
-   Forge commands to run to close each gap.
+2. **Missing artifacts** — everything a modern run would have produced but is
+   absent: `research/` (competitor / UX / metrics), `product-spec/`
+   clarifications (NEEDS-CLARIFICATION items), ADRs in `plan.md`, unit /
+   integration / E2E tests below thresholds, tracking-plan entries, feature-flag
+   registry entries, release-readiness evidence (monitoring dashboard, alerts),
+   and the empty `task_log[]`.
+3. **Inferred vs observed** — each inferred claim in the retro artifacts with its
+   confidence (HIGH / MEDIUM / LOW).
+4. **Recommended next actions** — ordered, each naming the Product Forge command
+   that closes the gap.
 
----
-
-## Step 6: Present to User
+## Step 6: Present
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  📜 Backfilled: {slug}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Backfilled: {slug}
 
   Source:      {source path}
   Feature dir: {FEATURE_DIR}
@@ -253,23 +212,22 @@ Sections (required):
     1. Review `product-spec/README.md` — fix NEEDS-CLARIFICATION items.
     2. Read `gaps-report.md` — decide which gaps to close now.
     3. Run the commands in `gaps-report.md §4` to backfill the rest.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Ask: *"Open the gaps report?"* — do not auto-open.
+Ask whether to open the gaps report; open it only on a yes.
 
----
+## Done when
 
-## Operating Principles
-
-1. **Never pretend this is original intent.** Every artifact has a
-   `BACKFILLED ARTIFACT` banner; the status file sets `backfilled: true`.
-2. **Conservative inference.** When unsure, mark a claim as
-   NEEDS-CLARIFICATION rather than inventing a plausible-sounding fact.
-3. **No code changes.** Backfill is strictly read-only against the source.
-   It writes only to `{FEATURE_DIR}` (plus initial canonical `specs/`).
-4. **Respect the digest rule.** Even skipped/completed phases get a
-   minimal digest so the runtime rule is honored uniformly.
-5. **Do not mark `release_readiness` completed.** A backfilled feature has
-   not been through release-readiness in the Product Forge sense; leave
-   that phase `pending` so the user can run it retroactively.
+- Every generated artifact (3A–3E, digests, gaps report) carries the
+  `BACKFILLED ARTIFACT` banner; every shaky inference is a NEEDS-CLARIFICATION item.
+- `tasks.md` lists every existing component as `[x]`; `task_log` is `[]`.
+- A digest exists for product-spec, plan, tasks, implement and verify before
+  their `completed` status.
+- `.forge-status.yml` has `backfilled: true`, `feature_mode: "standard"` and an
+  entry for every phase-map phase as in Step 4 (`release_readiness` pending); an
+  existing file was merged, not replaced.
+- Canonical `specs/<domain>/spec.md` holds the inferred `REQ-*` requirements
+  (new ids only, existing requirements untouched).
+- `gaps-report.md` has all four sections; the summary was shown and the
+  open-report question asked.
+- No source file changed.

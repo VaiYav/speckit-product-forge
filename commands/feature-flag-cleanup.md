@@ -1,91 +1,71 @@
 ---
 name: speckit.product-forge.feature-flag-cleanup
 description: >
-  Cross-cutting stale-flag audit. Scans every `flags/registry.yml` produced
-  by release-readiness across all features, cross-checks against the actual
-  codebase, and produces a cleanup plan for flags whose `cleanup_after`
-  date has passed. Wraps the installed `feature-flag-manager` skill.
-  Safe to run on any schedule; read-only by default.
-  Use: "clean up flags", "stale flags", "/speckit.product-forge.feature-flag-cleanup"
+  Audit feature flags across every feature's `flags/registry.yml`, cross-check
+  them against the code, and write a cleanup plan for flags past their
+  `cleanup_after` date. Report-only; safe on any schedule.
 ---
 
 # Product Forge — Feature Flag Cleanup
 
-You are the **Flag Archivist** for Product Forge.
-Your job: find feature flags whose time is up — they have been fully
-rolled out, the experiment has ended, or the team forgot about them —
-and produce an actionable cleanup plan.
+You are the **Flag Archivist**. Find feature flags whose time is up — fully
+rolled out, experiment ended, or forgotten — and write an actionable cleanup
+plan. The report is the only output: source code and flag-provider state stay
+unchanged, and every removal, even of a clearly dead branch, is written out for
+the user to apply.
 
-This command is **cross-cutting** (not a phase) and **read-only** unless
-the user explicitly approves the removal plan.
-
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Parse for:
-- `--feature=<slug>` — optional scope to a single feature.
-- `--after=<ISO date>` — override "today" as the stale threshold (useful
-  for dry-runs).
-- `--include-non-registry` — also scan the codebase for flags not tracked
-  in any `flags/registry.yml`.
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+- **Phase key:** none — cross-cutting
+- **Config keys:** `features_dir`, `storage_strategy` (for `enumerate()`), `codebase_path`
+- **Writes:** `{features_dir}/_portfolio/flag-cleanup-{date}.md`
+- **Contract deltas:** no feature slug is resolved; all features are scanned.
+  Flags: `--feature=<slug>` limits the scan to one feature; `--after=<ISO date>`
+  replaces "today" as the stale threshold; `--include-non-registry` also scans
+  the codebase for flags no registry tracks. `--apply` is reserved and not
+  available yet — this command is report-only. There is no `FEATURE_DIR`, so
+  `--dry-run` prints the would-be report to the console and writes nothing.
 
----
+## Step 1: Gather the flag registries
 
-## Step 0: Load Config
-
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
-keys used: `features_dir`, `storage_strategy` (for `enumerate()`, Step 1), `codebase_path`.
-
----
-
-## Step 1: Gather Flag Registry
-
-Enumerate feature roots via the Path-Resolution Contract `enumerate()`
-([docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) and
-collect each root's `flags/registry.yml` (depth-tolerant over `flat` and
-`domain-nested`; the old `{features_dir}/*/flags/` glob only saw flat features).
-Build a unified view:
+Walk feature roots with `enumerate()`
+([runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) — `flat` and
+`domain-nested` alike — and collect each root's `flags/registry.yml` into one view:
 
 | Flag key | Feature | Default | Owner | cleanup_after | Source file |
 |----------|---------|:-------:|-------|:-------------:|-------------|
 | `new_onboarding` | onboarding-v2 | off | @alice | 2026-03-01 | {features_dir}/onboarding-v2/flags/registry.yml |
-| ... |
 
-If no registries exist, report: *"No registered flags found. If your
-project has flags not registered through release-readiness, re-run with
-`--include-non-registry` to scan the codebase."*
+No registries → report *"No registered flags found. If your project has flags
+not registered through release-readiness, re-run with `--include-non-registry`
+to scan the codebase."*
 
----
-
-## Step 2: Classify Each Flag
-
-For every flag, classify into one of:
+## Step 2: Classify each flag
 
 | Class | Criteria |
 |-------|----------|
-| **Stale** | `cleanup_after` < today (or `--after` override). |
+| **Stale** | `cleanup_after` < today (or `--after`). |
 | **Approaching** | `cleanup_after` ≤ today + 14 days. |
-| **Active** | `cleanup_after` > today + 14 days OR not set. |
-| **Orphan** | In codebase but not in any registry (requires `--include-non-registry`). |
+| **Active** | `cleanup_after` > today + 14 days, or not set. |
+| **Orphan** | In the codebase but in no registry (needs `--include-non-registry`). |
 
----
+The registry is the source of truth. Orphans are not errors — some are
+intentional long-lived kill switches — so list them without judgement.
 
-## Step 3: Cross-Check with Codebase
+## Step 3: Cross-check with the codebase
 
-Delegate to `feature-flag-manager` (if installed) to check each flag's
-actual usage:
+Delegate to `feature-flag-manager` when installed, asking per flag: still
+referenced in code? either branch dead (never taken)? is the flag's default
+still the project default?
 
-- Is the flag still referenced in code?
-- Is either branch dead (never taken)?
-- Is the flag's default still the project default?
-
-Without the skill, fall back to a grep-based scan using these patterns
-(combine with an OR):
+Without the skill, grep the configured codebase paths with these patterns
+(OR-combined) and collect hits per flag as `file:line`:
 
 ```
 # Direct references to the flag key
@@ -106,104 +86,32 @@ Without the skill, fall back to a grep-based scan using these patterns
 \bgrowthbook\.isOn\s*\(\s*["']{KEY}["']             # GrowthBook
 ```
 
-Where `{KEY}` is the flag key as written in the registry and
-`{KEY_UPPER}` is its upper-snake-case form. Run on the configured
-codebase paths; collect hits per flag with file:line.
+`{KEY}` is the flag key as written in the registry; `{KEY_UPPER}` is its
+upper-snake-case form. A custom predicate these patterns miss becomes the action
+item *"Unknown flag reference pattern — extend cleanup patterns."*
 
-If the codebase uses a custom predicate not covered above, surface this
-as an action item: *"Unknown flag reference pattern — extend cleanup
-patterns."*
-
-Produce a per-flag row:
+Result — one row per flag:
 
 | Flag | Class | Code refs | Dead branch | Default matches rollout | Notes |
 |------|-------|:---------:|:-----------:|:----------------------:|-------|
 | `new_onboarding` | Stale | 12 | control branch | `off` in code, 100% rolled out | Ready to remove — keep treatment |
 
----
+## Step 4: Build the cleanup plan
 
-## Step 4: Build Cleanup Plan
+From [docs/templates/feature-flag-cleanup-report.md](../docs/templates/feature-flag-cleanup-report.md):
+a removal recipe for every Stale flag (owner, rollout date, steps, diff size,
+risk, test impact), a short reminder for every Approaching flag, and an orphan
+section for every Orphan.
 
-For each Stale flag, produce a removal recipe:
+## Step 5: Write the report
 
-```markdown
-### {flag-key}
+Write `{features_dir}/_portfolio/flag-cleanup-{date}.md` from the same template.
+The date stamp keeps earlier passes as history under `_portfolio/`.
 
-- **Owner:** @alice
-- **Rolled out since:** 2026-02-14
-- **Cleanup plan:**
-  1. Inline the `treatment` branch at {path}:{line}.
-  2. Remove the `control` branch and the flag check.
-  3. Delete flag definition at {flag-config-path}.
-  4. Update `{FEATURE_DIR}/flags/registry.yml` (the feature root `enumerate()` returned) — mark `removed_at: {today}`.
-  5. Delete the flag in the provider dashboard (manual step).
-- **Expected diff size:** ~{N} lines.
-- **Risk:** {LOW | MEDIUM | HIGH — e.g. HIGH if branch is deeply nested}.
-- **Test impact:** {N} test files reference the flag.
-```
-
-For Approaching flags, produce a lighter reminder:
-
-```markdown
-### {flag-key}
-
-- `cleanup_after` in {N} days. Owner @alice, consider scheduling removal.
-```
-
-For Orphan flags (if `--include-non-registry`):
-
-```markdown
-### {flag-key} (orphan)
-
-Not tracked in any registry. First reference at {path}:{line}. Ask:
-- When was this flag added?
-- Is it still experimental or was it intended to ship?
-- Should it be retroactively registered?
-```
-
----
-
-## Step 5: Write Report
-
-Write `{features_dir}/_portfolio/flag-cleanup-{date}.md`:
-
-```markdown
-# Feature Flag Cleanup — {YYYY-MM-DD}
-
-## Summary
-
-| Class | Count |
-|-------|------:|
-| Stale | {N} |
-| Approaching | {N} |
-| Active | {N} |
-| Orphan | {N} |
-
-## Stale flags ready to remove
-{per-flag recipes from Step 4}
-
-## Approaching (14 days)
-{light reminders}
-
-## Orphans
-{orphan sections}
-
-## Next steps
-1. Review Stale flags with their owners.
-2. For approved removals, run `/speckit.product-forge.feature-flag-cleanup --apply` (future wave; until then, apply removal diffs manually or via `feature-flag-manager`).
-3. For Orphans: either register retroactively or schedule cleanup.
-```
-
-`--apply` is reserved for a later wave. This version is **report-only**.
-
----
-
-## Step 6: Present to User
+## Step 6: Present
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🧹 Flag Cleanup — {date}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Flag Cleanup — {date}
 
   Stale:        {N}  ({N} low risk, {N} medium, {N} high)
   Approaching:  {N}
@@ -211,26 +119,17 @@ Write `{features_dir}/_portfolio/flag-cleanup-{date}.md`:
   Orphan:       {N}
 
   Report: {features_dir}/_portfolio/flag-cleanup-{date}.md
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Ask: *"Open the report? Tag stale flag owners?"* — do not auto-open, do
-not auto-message anyone.
+Then ask whether to open the report and whether to tag stale-flag owners; open
+or message only on the user's answer.
 
----
+## Done when
 
-## Operating Principles
-
-1. **Read-only.** This command never modifies source code or flag
-   provider state. Removal is a manual step initiated from
-   the report.
-2. **Registry is the source of truth.** Flags not in a registry are
-   *orphans* — not errors. They may be intentional (long-lived kill
-   switches). Surface them without judgement.
-3. **Owner accountability.** Every stale flag entry names the owner so
-   the cleanup conversation has a target.
-4. **No silent deletions.** Even when a branch is clearly dead, the
-   recommendation is written out; the user decides when to apply.
-5. **Portfolio output.** The report lives under `_portfolio/` so
-   multiple cleanup passes accumulate, and the date stamp in the
-   filename makes history visible.
+- Every registered flag (and, with `--include-non-registry`, every orphan) is
+  classified and has a code-reference row.
+- Every Stale flag has a removal recipe naming its owner; every Approaching flag
+  a reminder; every Orphan its questions.
+- The dated report is written under `{features_dir}/_portfolio/`; no source
+  file, registry or provider state changed.
+- The summary was shown and the open / tag question asked.

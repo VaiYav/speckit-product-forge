@@ -1,153 +1,119 @@
 ---
 name: speckit.product-forge.portfolio
 description: >
-  Cross-cutting portfolio view over every feature managed by Product Forge.
-  Reads every feature's `.forge-status.yml` (via the Path-Resolution Contract's
-  `enumerate()`, so flat and domain-nested layouts both work) plus optional `tasks.md`, and produces
-  a consolidated report covering feature status, file/module conflicts between
-  in-flight features, a dependency graph, and a suggested merge order.
-  Use: "show portfolio", "feature portfolio", "what's blocked", "/speckit.product-forge.portfolio"
+  Report across every Product Forge feature: status table, file / module
+  conflicts between in-flight features, dependency graph and suggested merge
+  order. Use to see what is blocked, what collides, and what to merge first.
 ---
 
-# Product Forge — Portfolio View
+# Product Forge — Portfolio
 
-You are the **Portfolio Analyst** for Product Forge.
-Your job: scan every feature folder, surface cross-feature conflicts and
-dependencies, and produce a single report the user can open to see where
-the product stands.
+You are the **Portfolio Analyst**. Scan every feature folder, surface
+cross-feature conflicts and dependencies, and write one report that shows where
+the product stands. Feature files (`.forge-status.yml`, `plan.md`, `tasks.md`,
+digests) are only read; the report is the only file written.
 
-This command is **read-only** by default. It never mutates individual
-feature status files. The only file it writes is the portfolio report itself.
-
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Parse for optional flags:
-- `--features-dir=<path>` — override default `features/` (from config).
-- `--include-archived` — include `features/_archived/*` in the scan.
-- `--format=markdown|html` — output format. `markdown` is default; `html`
-  is a future wave and may fall back to markdown.
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** none
+- **Config keys:** `features_dir` (default `features`), `project_name` (report
+  header), `codebase.paths` (monorepo grouping)
+- **Writes:** `{features_dir}/_portfolio/portfolio.md`
+- **Contract deltas:** read-only over feature folders, but not purely
+  read-only: it writes `portfolio.md`. No feature slug is resolved; all features
+  are scanned. There is no `FEATURE_DIR`, so `--dry-run` prints the would-be
+  report to the console and writes nothing.
+  Flags: `--features-dir=<path>` overrides `features_dir`; `--include-archived`
+  adds archived features; `--format=markdown|html` (`markdown` default; `html`
+  falls back to markdown).
 
-## Step 0: Load Config
+## Step 1: Discover features
 
-Read `.product-forge/config.yml`:
-- `features_dir` (default `features`)
-- `project_name` (for report header)
+Walk feature roots with `enumerate()`
+([runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)): descend
+from `{features_dir}/`, treat the first directory holding a `.forge-status.yml`
+as a feature root (stop descending into it), skip `_`-prefixed top-level dirs —
+`flat` (depth 1) and `domain-nested` (depth 2) alike. Directories without a
+`.forge-status.yml` are not features. Per root, read digest-first:
 
----
+1. `.forge-status.yml` (lock-free read).
+2. `tasks.md` when present (plain-text scan, no LLM).
+3. `<phase>/digest.md` where `digest_path` is set; open full artifacts only when
+   a digest cannot answer a conflict question.
 
-## Step 1: Discover Features
+`--include-archived` → run a **second, explicit pass** over
+`_archived/<…>/.forge-status.yml` (outside `enumerate()`, which never returns
+them) and fold those features in, flagged archived.
 
-Enumerate feature roots via `enumerate()` — the **Path-Resolution Contract**
-([docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)):
-descend from `{features_dir}/`, treat the first directory that contains a
-`.forge-status.yml` as a feature root (then stop descending into it), and skip
-`_`-prefixed top-level dirs. This covers `flat` (depth 1) and `domain-nested`
-(depth 2) alike. For each feature root:
-
-1. Read `.forge-status.yml` (lock-free read; writer-safe).
-2. Read `tasks.md` if it exists (plain-text scan, no LLM required).
-3. Read `<phase>/digest.md` files where `digest_path` is set.
-
-Directories to skip:
-- `_`-prefixed top-level dirs (e.g. `_portfolio`, `_archived`) are **always**
-  excluded by `enumerate()`. When `--include-archived` is given, run a **second,
-  explicit pass** over `_archived/<…>/.forge-status.yml` (outside `enumerate()`)
-  and fold those features in, flagged as archived — `enumerate()` itself never
-  returns them.
-- Directories with no `.forge-status.yml` (not yet under Product Forge).
-
-### Fast path: the catalog carrier (optional)
-
-If `{features_dir}/_portfolio/catalog.yml` exists, prefer it as the source for the
-per-feature **scalar** fields in Step 2 (slug, name, summary, `feature_mode`, status,
-phase progress, code path, IDs — shape in [docs/schema/catalog.yml](../docs/schema/catalog.yml)) instead of re-reading every `.forge-status.yml`. It is the
-machine-readable carrier produced by [`catalog`](./catalog.md) (`scripts/build-catalog.js`)
-from this same `enumerate()` walk — one small file rather than a full re-scan. Before
-trusting it, confirm freshness:
+**Fast path — the catalog carrier.** When `{features_dir}/_portfolio/catalog.yml`
+exists, take the per-feature **scalar** fields for Step 2 (slug, name, summary,
+`feature_mode`, status, phase progress, code path, IDs — shape in
+[docs/schema/catalog.yml](../docs/schema/catalog.yml)) from it instead of
+re-reading every status file. It is the carrier [`catalog`](./catalog.md) builds
+from the same walk. Confirm freshness first:
 
 ```bash
 node ${PLUGIN_ROOT}/scripts/build-catalog.js --features-dir {features_dir} --check
 ```
 
-If `--check` reports `catalog.yml` STALE (or the file is absent), fall back to the direct
-`enumerate()` + `.forge-status.yml` scan above and advise the user to run
-`/speckit.product-forge.catalog` to refresh it. Conflict detection (Step 3) and
-dependency analysis **always** read the live `.forge-status.yml` / `tasks.md`, never the
-cached summary.
+STALE or absent → use the direct scan above and advise
+`/speckit.product-forge.catalog`. Conflict detection (Step 3) and dependency
+analysis (Step 4) always read the live `.forge-status.yml` / `tasks.md`.
 
----
+Failure modes: no features dir → report *"No features found under
+`{features_dir}`. Start one with `/speckit.product-forge.forge`."* and exit 0. A
+malformed `.forge-status.yml` → record the CRITICAL action item "feature <slug>:
+unreadable status file" and continue with the rest.
 
-## Step 2: Build Feature Table
-
-Columns:
+## Step 2: Feature table
 
 | feature | mode | current phase | status | days in phase | backfilled | blocked_by |
 |---------|------|---------------|--------|---------------|------------|-----------|
 
 - `current phase` = first non-completed, non-skipped phase in the feature's mode map.
-- `days in phase` = `now - phases[<current>].started_at`, or `now - last_updated` if unset.
-- `backfilled` = `backfilled` field from status file.
-- `blocked_by` = `dependencies.depends_on` filtered to features not yet at `release_readiness.completed`.
+- `days in phase` = `now - phases[<current>].started_at`, else `now - last_updated`.
+- `backfilled` = the status file's `backfilled` field.
+- `blocked_by` = `dependencies.depends_on` filtered to features not yet at
+  `release_readiness.completed`.
 
----
+## Step 3: File conflicts
 
-## Step 3: Compute File Conflicts
+Only in-flight features take part — features whose current phase is `completed`
+or `release_readiness.completed` are excluded from the pairs.
 
-Only in-flight features contribute to conflict detection — features whose
-`current phase` is `completed` or `release_readiness.completed` are
-excluded from pairwise comparisons.
-
-For each in-flight feature, extract a **touched files set** using the
-following sources in priority order:
-
-1. **Primary: `task_log[].paths` on `.forge-status.yml`.** Populated by
-   the `implement` phase from the `Paths:` line of each task in
-   `tasks.md`. This is the canonical source.
-2. **Fallback: `Paths:` lines in `tasks.md` directly.** Used when
-   `task_log` is empty (feature has not started implement yet).
-3. **Last resort: module names from `plan.md`'s Data Model and
-   Architecture sections.** Coarser — classifies accuracy level as
-   "module-level" for the report.
-
-For each feature, record the extraction accuracy:
+Touched-files set per feature, first available source wins, with its accuracy:
 
 | Accuracy level | Source used |
 |----------------|-------------|
-| exact | `task_log[].paths` |
-| pre-implementation | `tasks.md` `Paths:` lines |
-| module-level | `plan.md` module names |
-| unknown | no source available — feature appears in report without conflict rows |
+| exact | `task_log[].paths` on `.forge-status.yml` (from each task's `Paths:` line, written by `implement`) |
+| pre-implementation | `Paths:` lines in `tasks.md` (implement not started) |
+| module-level | module names from `plan.md`'s Data Model and Architecture sections |
+| unknown | no source — the feature appears without conflict rows |
 
-For every pair of in-flight features `(A, B)`:
+For every pair `(A, B)`:
 
-- Intersection set `A ∩ B` = files or modules touched by both, normalized
-  to repository-relative paths.
-- **In monorepo mode**, paths are compared as `<workspace>:<path>`.
-  Two features touching `backend:src/users.ts` overlap; a feature on
-  `backend:src/users.ts` vs one on `frontend:src/users.ts` do NOT.
+- `A ∩ B` = files or modules touched by both, as repository-relative paths. In
+  monorepo mode compare `<workspace>:<path>`: `backend:src/users.ts` vs
+  `backend:src/users.ts` overlaps; `backend:src/users.ts` vs
+  `frontend:src/users.ts` does not.
 - Severity:
-  - **HIGH** — ≥3 overlapping paths OR any overlapping path is a
-    config/schema file (`*.schema.*`, `migrations/*`, `*.config.*`,
-    `*.env*`, `docker-compose*.yml`).
+  - **HIGH** — ≥3 overlapping paths, or any overlapping config/schema file
+    (`*.schema.*`, `migrations/*`, `*.config.*`, `*.env*`, `docker-compose*.yml`).
   - **MEDIUM** — 1–2 overlapping paths.
-  - **LOW** — no direct overlap but shared parent module (module-level
-    accuracy only).
+  - **LOW** — no direct overlap but a shared parent module (module-level only).
+  - Both features at `module-level` → cap at MEDIUM.
+  - Use the LLM only when path heuristics leave the severity ambiguous; Steps
+    1–5 otherwise need none.
 - Record `(A, B, severity, overlapping_paths[], accuracy[A], accuracy[B], workspaces_touched)`.
-- If both features are at `module-level` accuracy, cap the severity at
-  MEDIUM — the data isn't precise enough to call it HIGH.
 
-### Monorepo workspace grouping
-
-When the project runs in monorepo mode (`codebase.paths` set), the
-conflict matrix is computed per workspace first, then an aggregated
-view groups conflicts under a "By workspace" heading so teams split
-by workspace can filter directly. Example:
+In monorepo mode (`codebase.paths` set), compute the matrix per workspace, then
+group it under a "By workspace" heading:
 
 ```
 By workspace
@@ -160,65 +126,43 @@ By workspace
     └── LOW: feature-E × feature-F (shared validation utility)
 ```
 
-In single-root mode the workspace grouping is omitted.
+Single-root mode omits the grouping.
 
----
+## Step 4: Dependency graph
 
-## Step 4: Dependency Graph
+Edges from `dependencies.depends_on`: `A depends_on B` → edge `B → A`. Topologically
+sort; a cycle becomes a CRITICAL conflict row, and ordering continues best-effort
+for the non-cyclic remainder.
 
-Build a directed graph from `dependencies.depends_on`:
+## Step 5: Suggested merge order
 
-```
-A depends_on B   →   edge B → A
-```
+From the graph, take features ready to merge (`release_readiness.completed` or
+`verify.completed`) and order them so each follows all its dependencies; break
+ties by `last_updated` ascending (oldest first).
 
-Run a topological sort. If a cycle is detected, emit a CRITICAL conflict
-row and continue with best-effort ordering.
+## Step 6: Write the report
 
----
-
-## Step 5: Suggested Merge Order
-
-Input: the dependency graph (Step 4) filtered to features ready to merge
-(status `release_readiness.completed` or `verify.completed`).
-
-Output: ordered list where every feature appears after all its dependencies.
-Ties are broken by `last_updated` ascending (older first, so nothing rots).
-
----
-
-## Step 6: Write Report
-
-Create the output directory if it does not exist:
-
-```
-{features_dir}/_portfolio/
-```
-
-Write `{features_dir}/_portfolio/portfolio.md` using the template at
-[`docs/templates/portfolio-report.md`](../docs/templates/portfolio-report.md).
-
-Sections (fill every one, even if empty):
+Create `{features_dir}/_portfolio/` when absent and write
+`{features_dir}/_portfolio/portfolio.md` from
+[docs/templates/portfolio-report.md](../docs/templates/portfolio-report.md),
+filling every section, even when empty:
 
 1. Header — project name, generated timestamp, feature counts.
 2. Feature table (Step 2).
-3. Conflict matrix (Step 3) — list rows for HIGH and MEDIUM severity.
-4. Dependency graph — Mermaid `graph LR` diagram from Step 4.
+3. Conflict matrix (Step 3) — HIGH and MEDIUM rows.
+4. Dependency graph — Mermaid `graph LR` from Step 4.
 5. Suggested merge order (Step 5).
-6. In-flight summary — counts per phase, counts per mode.
-7. Open action items — CRITICAL conflicts, cycles, stale features
-   (no update >14 days).
+6. In-flight summary — counts per phase and per mode.
+7. Open action items — CRITICAL conflicts, cycles, unreadable status files,
+   stale features (no update > 14 days).
 
----
+When `tasks.md` has no path annotations, say so in the report's "Conflict
+detection accuracy" note instead of inventing data.
 
-## Step 7: Present to User
-
-Console output example:
+## Step 7: Present
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  📋 Portfolio: {Project Name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Portfolio: {Project Name}
 
   Features:      {N total} ({N in-flight}, {N completed}, {N archived})
   Conflicts:     {N HIGH}, {N MEDIUM}
@@ -226,35 +170,18 @@ Console output example:
   Stale (>14d):  {N}
 
   Report: {features_dir}/_portfolio/portfolio.md
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Ask: *"Open the portfolio report?"* — do not auto-open.
+Ask whether to open the report; open it only on a yes.
 
----
+## Done when
 
-## Operating Principles
-
-1. **Read-only by default.** Only writes the report file. Never modifies
-   a feature's `.forge-status.yml`, `plan.md`, `tasks.md`, or digests.
-2. **Digest-first.** Prefer `digest.md` over full artifacts when scanning.
-   Full artifacts are read only when conflict detection cannot be answered
-   from digests.
-3. **Cheap to re-run.** No LLM required for Steps 1–5. LLM is used only to
-   classify conflict severity when path heuristics are ambiguous.
-4. **Honest about gaps.** When `tasks.md` has no path annotations, surface
-   the limitation in the "Conflict detection accuracy" note of the report
-   rather than inventing data.
-5. **Idempotent.** Running twice produces the same output (up to the
-   generated timestamp).
-
----
-
-## Failure modes and graceful degradation
-
-- No features dir → report "No features found under `{features_dir}`. Start
-  one with `/speckit.product-forge.forge`." and exit 0.
-- Malformed `.forge-status.yml` in a feature → record a CRITICAL action item
-  "feature <slug>: unreadable status file" and continue with the rest.
-- Circular dependency → CRITICAL row in the report; best-effort order for
-  the non-cyclic remainder.
+- Every feature root (plus archived ones with `--include-archived`) has a
+  feature-table row, or a CRITICAL "unreadable status file" action item.
+- Every in-flight pair with an overlap has a conflict row with severity and both
+  accuracy levels; monorepo conflicts are grouped by workspace.
+- Every cycle is a CRITICAL row; the merge order lists every ready feature after
+  its dependencies.
+- `portfolio.md` has all seven sections and is identical on a re-run except for
+  the timestamp; no feature file changed.
+- The summary was shown and the open-report question asked.

@@ -91,7 +91,7 @@ suggest one file per screen.
 **2E. Mockups** — grounded in the project's real, in-code design system and decomposed
 into real components so they transfer cleanly into code.
 1. **Harvest** (UI features) — delegate to
-   [`speckit.product-forge.design-system-harvest`](./design-system-harvest.md). It
+   [`speckit.product-forge.design-system-harvest`](./design-system-harvest.md) with `--nested`. It
    emits `design-system/manifest.yml` (components with `CMP-` ids, props, variants,
    stable selectors, in-code token references). The design system stays in code as
    the single source of truth; the manifest only indexes it.

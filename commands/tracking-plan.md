@@ -1,55 +1,51 @@
 ---
 name: speckit.product-forge.tracking-plan
 description: >
-  Generates an analytics tracking plan from user journeys and product-spec.
-  Creates event taxonomy, property schemas, funnel definitions, and ready-to-paste
-  code snippets for your analytics SDK. Links each event to a user story and success metric.
-  Use after product-spec: "tracking plan", "/speckit.product-forge.tracking-plan"
+  Generate an analytics tracking plan from user journeys and the product spec:
+  event taxonomy, property schemas, funnels and ready-to-paste SDK snippets,
+  each event linked to a user story and success metric. Use after Product Spec.
 ---
 
 # Product Forge — Analytics Tracking Plan
 
-You are the **Analytics Architect** for Product Forge.
-Your goal: generate a complete, implementation-ready tracking plan from the feature's
-user journeys and success metrics — so analytics is wired correctly from day one.
+You are the **Analytics Architect**. Generate a complete, implementation-ready
+tracking plan from the feature's user journeys and success metrics, so analytics
+is wired correctly from day one.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** `tracking_plan` (supporting command — not in the phase map)
+- **Config keys:** `codebase_path` (or monorepo `codebase.paths`), `features_dir`,
+  `storage_strategy`
+- **Writes:** `tracking/tracking-plan.md`, `tracking/snippets.md`, the `events`
+  column of `traceability.yml` (only when the matrix exists), `phases.tracking_plan.*`
+- **Contract deltas:** no gate — the run ends with the summary, and
+  `release-readiness` consolidates this command's status at its own gate.
 
-## Step 1: Validate Prerequisites
+## Step 1: Check inputs
 
-1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
-   keys used: `codebase_path` (or monorepo `codebase.paths`, scanned in Step 2),
-   `features_dir` + `storage_strategy` (to resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
-   Every Markdown document this command writes follows `max_tokens_per_doc`
-   ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)).
-2. Read `.forge-status.yml` — `phases.product_spec.status` must be `completed` (Phase 2 done)
-3. Read `product-spec/product-spec.md` → success metrics, user stories
-4. Read `product-spec/journeys/journeys.yml` → all journeys (JRN/STEP/EDGE) and decision points; give each event a stable `EVT-*` id and map it to journey steps
-5. Read `research/metrics-roi.md` (if exists) → predicted KPIs
+`phases.product_spec.status` must be `completed`. Otherwise stop with:
 
-If not ready:
 > ⚠️ Product spec (Phase 2) must be completed before generating a tracking plan.
 > Run: `/speckit.product-forge.product-spec`
 
----
+Then read:
 
-## Step 2: Detect Analytics Stack
+1. `product-spec/product-spec.md` → success metrics, user stories.
+2. `product-spec/journeys/journeys.yml` → every journey (`JRN` / `STEP` / `EDGE`)
+   and decision point.
+3. `research/metrics-roi.md` (when present) → predicted KPIs.
 
-Scan the codebase to identify the analytics SDK in use:
+## Step 2: Detect the analytics stack
 
-```
-🔍 Detecting analytics stack...
-```
+Scan the codebase for the SDK in use:
 
-Look for:
 - **Mixpanel:** `mixpanel-browser`, `mixpanel.track(`, `import Mixpanel`
 - **Amplitude:** `@amplitude/analytics-browser`, `amplitude.track(`
 - **Segment:** `@segment/analytics-next`, `analytics.track(`
@@ -57,314 +53,66 @@ Look for:
 - **Firebase Analytics:** `firebase/analytics`, `logEvent(`
 - **Custom / none:** no SDK found
 
-Ask the user to confirm:
-```
-Analytics SDK detected: {SDK name or "None found"}
+Then ask three questions, one prompt each:
 
-1. Is this correct, or are you using a different SDK?
-   (e.g., Mixpanel, Amplitude, Segment, PostHog, Firebase, Heap, custom)
+1. **SDK** — confirm the detected SDK (or "None found") or name another
+   (Mixpanel, Amplitude, Segment, PostHog, Firebase, Heap, custom).
+2. **Layer** — where tracking calls go: frontend only (Vue / React / mobile),
+   backend only (server-side events), or both.
+3. **Naming** — an existing event naming convention (e.g. `object_action`,
+   `OBJECT_ACTION`, `Object Action`) with an example event name, or none (use
+   the default `{object}_{action}` snake_case).
 
-2. Where should tracking calls be placed?
-   - [ ] Frontend only (Vue/React/mobile)
-   - [ ] Backend only (server-side events)
-   - [ ] Both (frontend + backend)
+Result: `ANALYTICS_SDK`, `TRACKING_LAYER`, `NAMING_CONVENTION`.
 
-3. Do you have an existing event naming convention?
-   (e.g., "object_action", "OBJECT_ACTION", "Object Action")
-   If yes, paste an example event name.
-```
+## Step 3: Extract events from the journeys
 
-Store: `ANALYTICS_SDK`, `TRACKING_LAYER`, `NAMING_CONVENTION`.
+Walk every step of every journey. Create an event when:
 
----
+- the user navigates to a key screen / view;
+- the user performs a primary action (clicks a CTA, submits a form, completes a step);
+- the user meets an error state;
+- the system completes an async operation (notification received, data loaded);
+- the user abandons a flow (rage click, exit without completing);
+- the user reaches a conversion point.
 
-## Step 3: Extract Events from User Journeys
+Track only events that can influence a product decision — skip mouse moves,
+trivial navigation and internal implementation details.
 
-Read every step in every user journey file. For each meaningful user action or system event:
+Give each event a stable `EVT-*` id and map it to its journey step(s) and user
+story. A typical journey yields, e.g., `{feature}_viewed`,
+`{feature}_action_started`, `{feature}_form_submitted`, `{feature}_completed`,
+`{feature}_error_shown`, `{feature}_abandoned`; the summary counts view /
+complete / error / abandon events as core and the rest as extended.
 
-**Trigger event when:**
-- User navigates to a key screen / view
-- User performs a primary action (clicks CTA, submits form, completes step)
-- User encounters an error state
-- System completes an async operation (notification received, data loaded)
-- User abandons a flow (rage click, exit without completing)
-- User reaches a conversion point
+## Step 4: Write `tracking/tracking-plan.md`
 
-**Do NOT track:**
-- Every mouse move or trivial navigation
-- Internal implementation details
-- Events that won't influence product decisions
+Write `{FEATURE_DIR}/tracking/tracking-plan.md` from
+[docs/templates/tracking-plan-tracking-plan.md](../docs/templates/tracking-plan-tracking-plan.md):
+naming convention, one section per event (trigger, story, success metric,
+property table), funnels, coverage matrix, predicted metrics.
 
-Build the event list:
+## Step 5: Write `tracking/snippets.md`
 
-```
-📊 Events extracted from user journeys:
+Write `{FEATURE_DIR}/tracking/snippets.md` — ready-to-paste tracking calls for
+`ANALYTICS_SDK` — from
+[docs/templates/tracking-plan-snippets.md](../docs/templates/tracking-plan-snippets.md).
 
-Journey: {Journey Name}
-  1. {Feature}_viewed              → User opens the feature screen
-  2. {Feature}_action_started      → User initiates primary action
-  3. {Feature}_form_submitted      → User submits the form
-  4. {Feature}_completed           → Flow completed successfully
-  5. {Feature}_error_shown         → Error state displayed
-  6. {Feature}_abandoned           → User left without completing
-
-Journey: {Journey 2 Name}
-  ...
-```
-
----
-
-## Step 4: Generate Tracking Plan Document
-
-Create `{FEATURE_DIR}/tracking/tracking-plan.md`:
-
-````markdown
-# Analytics Tracking Plan: {Feature Name}
-
-> Created: {date} | SDK: {ANALYTICS_SDK}
-> Feature: `{feature-slug}` | Layer: {frontend/backend/both}
-
-## Event Naming Convention
-
-`{object}_{action}` — snake_case, past tense for completed actions, present tense for states.
-
-Examples:
-- `{feature}_viewed` — screen/page view
-- `{feature}_completed` — successful completion
-- `{feature}_{action}_clicked` — button interaction
-
-## Events
-
-### {Feature Name} — Core Flow
-
----
-
-#### `{feature_slug}_viewed`
-
-| Property | | |
-|----------|--|--|
-| **Trigger** | User opens the {feature} screen | |
-| **Story** | {US-NNN} | |
-| **Success metric** | Session start, funnel entry | |
-
-**Properties:**
-
-| Property | Type | Required | Description | Example |
-|----------|------|----------|-------------|---------|
-| `source` | string | ✅ | Where user came from | `"home_tab"`, `"push_notification"`, `"deep_link"` |
-| `user_id` | string | ✅ | User identifier | `"usr_123"` |
-| `session_id` | string | ✅ | Session identifier | `"ses_abc"` |
-| `feature_version` | string | ✅ | Feature version for A/B tracking | `"1.0"` |
-| `is_first_view` | boolean | ✅ | First time user sees this feature | `true` |
-
----
-
-#### `{feature_slug}_completed`
-
-| Property | | |
-|----------|--|--|
-| **Trigger** | User successfully completes the primary action | |
-| **Story** | {US-NNN} | |
-| **Success metric** | Primary conversion — maps to "{success metric from product-spec}" | |
-
-**Properties:**
-
-| Property | Type | Required | Description | Example |
-|----------|------|----------|-------------|---------|
-| `user_id` | string | ✅ | | `"usr_123"` |
-| `time_to_complete_ms` | number | ✅ | Time from view to completion | `4500` |
-| `steps_taken` | number | ✅ | How many steps user went through | `3` |
-| `{feature_attribute}` | {type} | ✅ | Key attribute of what was completed | `{example}` |
-
----
-
-#### `{feature_slug}_error_shown`
-
-| Property | | |
-|----------|--|--|
-| **Trigger** | Any error state is displayed to the user | |
-| **Story** | {US-NNN} — error handling AC | |
-| **Success metric** | Error rate — should decrease after fixes | |
-
-**Properties:**
-
-| Property | Type | Required | Description | Example |
-|----------|------|----------|-------------|---------|
-| `user_id` | string | ✅ | | |
-| `error_code` | string | ✅ | Machine-readable error type | `"network_timeout"`, `"validation_failed"` |
-| `error_message` | string | ✅ | User-facing error message shown | `"Something went wrong"` |
-| `context` | string | ✅ | Which step triggered the error | `"form_submit"`, `"data_load"` |
-
----
-
-#### `{feature_slug}_abandoned`
-
-| Property | | |
-|----------|--|--|
-| **Trigger** | User leaves the flow without completing | |
-| **Story** | All stories — retention signal | |
-| **Success metric** | Abandonment rate — target: <{N}% | |
-
-**Properties:**
-
-| Property | Type | Required | Description | Example |
-|----------|------|----------|-------------|---------|
-| `user_id` | string | ✅ | | |
-| `last_step` | string | ✅ | Which step user was on when they left | `"step_2_form"` |
-| `time_spent_ms` | number | ✅ | Time from entry to exit | `12000` |
-| `reason` | string | ❌ | If determinable (back button, app background) | `"back_button"` |
-
----
-
-## Funnels
-
-### Primary Conversion Funnel
-
-```
-{feature_slug}_viewed
-  → {feature_slug}_action_started
-    → {feature_slug}_form_submitted
-      → {feature_slug}_completed
-
-Target conversion rate: {N}% (from metrics-roi.md)
-```
-
-### Error Recovery Funnel
-
-```
-{feature_slug}_error_shown
-  → {feature_slug}_retry_clicked
-    → {feature_slug}_completed (recovery)
-    OR {feature_slug}_abandoned (drop-off)
-```
-
-## Coverage Matrix
-
-| User Story | Key Event | Metric |
-|------------|-----------|--------|
-| {US-001}: {title} | `{event_name}` | {success metric} |
-| {US-002}: {title} | `{event_name}` | {success metric} |
-
-## Predicted Metrics (from research/metrics-roi.md)
-
-| Metric | Target | Measured by |
-|--------|--------|-------------|
-| {metric from product-spec} | {target} | `{event_name}` count/rate |
-| Adoption rate | {N}% of users in 30 days | `{feature}_viewed` unique users |
-| Completion rate | {N}% | `{feature}_completed` / `{feature}_viewed` |
-````
-
----
-
-## Step 5: Generate Code Snippets
-
-Create `{FEATURE_DIR}/tracking/snippets.md` — ready-to-paste tracking calls.
-
-Generate for the detected SDK:
-
-### Mixpanel
-
-```typescript
-// tracking/{feature-slug}.tracking.ts
-import mixpanel from 'mixpanel-browser';
-
-export const {FeatureName}Tracking = {
-  viewed(props: { source: string; isFirstView: boolean }) {
-    mixpanel.track('{feature_slug}_viewed', {
-      source: props.source,
-      user_id: mixpanel.get_distinct_id(),
-      session_id: mixpanel.get_session_id?.() ?? null,
-      feature_version: '1.0',
-      is_first_view: props.isFirstView,
-    });
-  },
-
-  completed(props: { timeToCompleteMs: number; stepsTaken: number }) {
-    mixpanel.track('{feature_slug}_completed', {
-      user_id: mixpanel.get_distinct_id(),
-      time_to_complete_ms: props.timeToCompleteMs,
-      steps_taken: props.stepsTaken,
-    });
-  },
-
-  errorShown(props: { errorCode: string; errorMessage: string; context: string }) {
-    mixpanel.track('{feature_slug}_error_shown', {
-      user_id: mixpanel.get_distinct_id(),
-      error_code: props.errorCode,
-      error_message: props.errorMessage,
-      context: props.context,
-    });
-  },
-
-  abandoned(props: { lastStep: string; timeSpentMs: number }) {
-    mixpanel.track('{feature_slug}_abandoned', {
-      user_id: mixpanel.get_distinct_id(),
-      last_step: props.lastStep,
-      time_spent_ms: props.timeSpentMs,
-    });
-  },
-};
-```
-
-### Amplitude
-
-```typescript
-// tracking/{feature-slug}.tracking.ts
-import { track } from '@amplitude/analytics-browser';
-
-export const {FeatureName}Tracking = {
-  viewed(props: { source: string; isFirstView: boolean }) {
-    track('{feature_slug}_viewed', {
-      source: props.source,
-      feature_version: '1.0',
-      is_first_view: props.isFirstView,
-    });
-  },
-  // ... same pattern for other events
-};
-```
-
-### PostHog
-
-```typescript
-import posthog from 'posthog-js';
-
-export const {FeatureName}Tracking = {
-  viewed(props: { source: string; isFirstView: boolean }) {
-    posthog.capture('{feature_slug}_viewed', {
-      source: props.source,
-      feature_version: '1.0',
-      is_first_view: props.isFirstView,
-    });
-  },
-  // ... same pattern
-};
-```
-
----
-
-## Step 6: Update Status & Present Results
-
-### Write the `events:` column of the traceability matrix (Theme C)
+## Step 6: Fill the traceability `events` column
 
 `tracking-plan` is the registered writer of the `events` column in
-`{FEATURE_DIR}/traceability.yml` (see
-[docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md)).
-**If the matrix already exists** (seeded by `tasks` in Phase 5), update it:
+`{FEATURE_DIR}/traceability.yml` ([traceability matrix](../docs/templates/traceability-matrix.md)).
+When the matrix exists (seeded by `tasks` in Phase 5), set `events: [EVT-*]` on
+each requirement row to the events that cover it, matched through the row's
+`story` (`US-*`) / `journeys` (`JRN-*`) keys and each event's story / journey
+step. Change only the `events` column.
 
-- For each requirement row, set `events: [EVT-*]` to the telemetry events that
-  cover it, matched via the row's `story` (`US-*`) / `journeys` (`JRN-*`) keys and
-  each event's mapped story / journey step.
-- Do not touch `status` or any other column.
+When the matrix does not exist yet (this command can run right after
+product-spec), skip this step; a later run fills the column once rows are seeded.
 
-If the matrix does not yet exist (tracking-plan can run as early as after
-product-spec, before `tasks`), skip this write — the `events` column fills in on a
-later run once the rows have been seeded.
+## Step 7: Status
 
-### Update status
-
-Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-The run summary lives under the phase key (never a top-level `tracking:` block):
+Run summary under the phase key (never a top-level `tracking:` block):
 
 ```yaml
 phases:
@@ -378,8 +126,10 @@ phases:
       - "tracking/snippets.md"
 ```
 
+## Step 8: Present
+
 ```
-📊 Tracking Plan Created: {Feature Name}
+Tracking Plan Created: {Feature Name}
 
 Analytics SDK: {SDK}
 Events defined: {N}
@@ -396,3 +146,16 @@ Files created:
 Next: Wire the snippets into your Vue components / NestJS services
   then verify events appear in {SDK} after /speckit.product-forge.test-run
 ```
+
+## Done when
+
+- Every journey step that meets a Step 3 trigger has an event with an `EVT-*`
+  id, a story, a success metric and a property table.
+- Every user story appears in the coverage matrix with at least one event (or
+  is reported as uncovered in the summary).
+- The primary-conversion and error-recovery funnels are defined.
+- `snippets.md` covers every event for `ANALYTICS_SDK`.
+- When `traceability.yml` exists, every row's `events` is set and no other
+  column changed.
+- `phases.tracking_plan` holds `completed`, the SDK, event / funnel counts and
+  both file paths; the summary was shown.

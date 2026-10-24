@@ -1,86 +1,58 @@
 ---
 name: speckit.product-forge.monitoring-setup
 description: >
-  Phase 9.5 (optional): produce real monitoring artifacts for a feature — a
-  dashboard, alert rules, and SLI/SLO definitions derived from plan NFRs and
-  tracking-plan events. Targets the configured backend (`telemetry.dashboards`:
-  PostHog / Sentry; NewRelic optional via the `newrelic-dashboard-builder`
-  skill). When the matching MCP is connected, creates the dashboard/alerts
-  directly; otherwise writes provider-neutral artifact stubs. Runs after
-  release-readiness, before deploy.
-  Use: "monitoring setup", "build dashboard", "/speckit.product-forge.monitoring-setup"
+  Produce a feature's monitoring artifacts — dashboard, alert rules, SLI/SLO
+  doc — from plan NFRs and tracking-plan events, creating them live when the
+  PostHog or Sentry MCP is connected. Use after Release Readiness, before deploy.
 ---
 
-# Product Forge — Monitoring Setup (Phase 9.5)
+# Product Forge — Phase 9.5: Monitoring Setup
 
-You are the **Observability Architect** for Product Forge.
-Your job: turn the NFRs in `plan.md`, the success metrics in `spec.md`, and
-the events in `tracking/tracking-plan.md` into concrete monitoring artifacts
-that can be applied to the project's monitoring system.
+You are the **Observability Architect**. Turn the NFRs in `plan.md`, the success
+metrics in `spec.md` and the events in `tracking/tracking-plan.md` into concrete
+monitoring artifacts for the project's monitoring system. You write files under
+`{FEATURE_DIR}/monitoring/`; applying them to the provider is a manual step,
+except what a connected PostHog / Sentry MCP creates live.
 
-This phase is **opt-in**. It produces artifacts; it does not push them to
-the provider. Pushing is a manual step the user performs with the
-generated JSON in hand.
-
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Parse for:
-- Feature slug (required) — resolved to `FEATURE_DIR` via the Path-Resolution
-  Contract `resolve(slug)` ([docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract));
-  under the default `flat` strategy this is `{features_dir}/<slug>`.
-- `--provider=<name>` — resolves from `telemetry.dashboards` in config
-  (`posthog` / `sentry` / `newrelic`; `grafana`, `datadog` also accepted).
-  An explicit `--provider` overrides config. If `telemetry.dashboards` is
-  `none` or unset and no `--provider` is given, there is **no** default
-  backend: produce provider-neutral templated stubs and note the gap (do
-  **not** silently assume NewRelic).
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
-> **Real backends (v1.6, Theme D):** when the resolved provider is `posthog` or
-> `sentry` and the matching MCP is connected, create the dashboard/alerts directly
-> via that MCP (PostHog insights/dashboards + alerts, Sentry alerts/dashboards) in
-> addition to writing the artifact files. Map `EVT-*` ids to real event names first.
-> NewRelic remains a supported option via the installed skill; unresolved or unwired
-> providers produce provider-neutral templated stubs.
+- **Phase key:** `monitoring_setup` (Phase 9.5)
+- **Config keys:** `telemetry.dashboards`, `features_dir`, `storage_strategy`
+- **Writes:** `monitoring/dashboard.json`, `monitoring/alerts.yml`,
+  `monitoring/slo.md`, `monitoring/digest.md`, `phases.monitoring_setup.*`;
+  live dashboards / alerts via a connected MCP after approval (Step 7). A re-run overwrites only
+  `monitoring/*`; tracking-plan, spec and plan stay untouched.
+- **Contract deltas:**
+  - `--provider=<name>` overrides `telemetry.dashboards` (`posthog` / `sentry` /
+    `newrelic`; `grafana`, `datadog` also accepted).
+  - With `telemetry.dashboards` `none` or unset and no `--provider`, there is no
+    default backend: write provider-neutral templated stubs and note the gap
+    (never assume NewRelic).
+  - `--dry-run` creates no dashboard or alert via MCP.
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics)
-(no dashboards/alerts are created via MCP in a dry-run).
+## Step 0: Check inputs
 
----
+1. `phases.release_readiness.status` is `completed` or `skipped` (Phase 9 decided).
+2. `plan.md` and `spec.md` exist.
+3. `tracking/tracking-plan.md` is optional — when missing, work from plan NFRs
+   and note the gap.
 
-## Step 0: Prerequisites
+A required artifact missing → stop with a clear error; metrics come only from
+these inputs.
 
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
-keys used: `telemetry.dashboards`, `features_dir` + `storage_strategy` (to resolve
-`{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+## Step 1: Extract SLI candidates
 
-Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+Sources, in priority order:
 
-1. `.forge-status.yml` exists and `phases.release_readiness.status` is
-   `completed` or `skipped` (the user has at least decided on Phase 9).
-2. `plan.md` exists.
-3. `spec.md` exists (for NFRs and success metrics).
-4. `tracking/tracking-plan.md` may or may not exist — if missing, work
-   with plan NFRs only and note the gap.
-
-If any required artifact is missing, abort with a clear error rather
-than inventing metrics.
-
----
-
-## Step 1: Extract SLI Candidates
-
-Build the SLI list from three sources, in priority order:
-
-1. **NFRs in plan.md** — explicit latency/error-rate/availability targets.
+1. **NFRs in plan.md** — explicit latency / error-rate / availability targets.
 2. **Success metrics in spec.md** — user-facing metrics that imply technical SLIs.
-3. **Events in tracking-plan.md** — business metrics that can be turned
-   into rate/latency SLIs.
-
-Produce a table:
+3. **Events in tracking-plan.md** — business metrics that become rate / latency SLIs.
 
 | SLI | Source | Target (SLO) | Measurement window |
 |-----|--------|--------------|--------------------|
@@ -88,78 +60,36 @@ Produce a table:
 | error rate | plan.md NFR | ≤ 0.5 % | 5-minute rolling |
 | session start → first event | tracking-plan | ≤ 2 s | 1-hour rolling |
 
-If a candidate lacks a numeric target, mark it `UNDEFINED` and include
-it as an action item instead of inventing a number.
+A candidate without a numeric target is marked `UNDEFINED` and becomes an action
+item; never fill in a default number.
 
----
+## Step 2: Build the dashboard
 
-## Step 2: Build Dashboard
+Every branch writes `{FEATURE_DIR}/monitoring/dashboard.json`; the MCP branches
+prepare the live dashboard, which Step 7 creates after approval. A missing MCP
+or skill degrades to a stub with a note — the phase continues.
 
-Branch on the resolved provider. Every branch also writes the artifact file
-`{FEATURE_DIR}/monitoring/dashboard.json` so the output is consistent across
-backends; the MCP branches additionally create the live dashboard.
+- **`posthog`** — with the PostHog MCP connected: map the Step 1 SLIs and the
+  tracking plan's `EVT-*` events to real PostHog event / insight names
+  (discover them; never guess), define one insight per SLI / funnel / trend
+  (rate, latency, adoption funnel across `JRN` / `STEP` events) grouped into a
+  PostHog dashboard, and write the definitions into `dashboard.json`. MCP not
+  connected → stub, note the gap.
+- **`sentry`** — with the Sentry MCP connected: resolve the Sentry project, define
+  error-rate / regression / latency widgets scoped to the feature's release and
+  code paths, and write them into `dashboard.json`. MCP not connected → stub,
+  note the gap.
+- **`newrelic`** — delegate to `newrelic-dashboard-builder` with the SLI table,
+  the panels proposed in `release-readiness.md` Step 3C, and the NewRelic app /
+  account IDs from project config when available; `dashboard.json` is
+  NerdGraph-compatible. Skill not installed → templated JSON with TODOs and the
+  note *"Provider skill missing — dashboard is a stub."*
+- **Unresolved / other** — provider-neutral templated `dashboard.json` with TODOs
+  and the note *"No monitoring backend resolved — dashboard is a stub."*
 
-### 2A: PostHog (provider is `posthog`)
+## Step 3: Build alerts
 
-When the PostHog MCP is connected, create the dashboard directly via the MCP:
-
-- Map the SLI table from Step 1 and the `EVT-*` events from the tracking plan
-  to real PostHog event/insight names first (discover names; never guess).
-- Create one PostHog insight per SLI/funnel/trend (rate, latency, adoption
-  funnel across `JRN`/`STEP` events) and group them into a PostHog dashboard.
-- Mirror the resulting insight/dashboard definitions into
-  `{FEATURE_DIR}/monitoring/dashboard.json` for review and replay.
-
-If the MCP is not connected, write the artifact stub and note the gap.
-
-### 2B: Sentry (provider is `sentry`)
-
-When the Sentry MCP is connected, create the dashboard directly via the MCP:
-
-- Build error-rate / regression / latency widgets scoped to the feature's
-  release and code paths (resolve the Sentry project first).
-- Mirror the widget definitions into `{FEATURE_DIR}/monitoring/dashboard.json`.
-
-If the MCP is not connected, write the artifact stub and note the gap.
-
-### 2C: NewRelic (provider is `newrelic`)
-
-Delegate to `newrelic-dashboard-builder` (if the skill is installed). Pass:
-
-- The SLI table from Step 1.
-- Panels proposed in `release-readiness.md` Step 3C.
-- Project-specific context (NewRelic app ID, account ID from project
-  config if available).
-
-Produce `{FEATURE_DIR}/monitoring/dashboard.json` — NerdGraph-compatible.
-
-If the skill is not installed, fall back to a templated JSON with TODOs and
-note: *"Provider skill missing — dashboard is a stub."*
-
-### 2D: Unresolved / other providers
-
-If no provider resolved (`telemetry.dashboards: none` / unset, no `--provider`)
-or the provider has no wired branch, produce a provider-neutral templated
-`dashboard.json` with TODOs and note: *"No monitoring backend resolved —
-dashboard is a stub."*
-
----
-
-## Step 3: Build Alerts
-
-Always generate the artifact file `{FEATURE_DIR}/monitoring/alerts.yml` (below).
-When the resolved provider's MCP is connected, also create the live alerts:
-
-- **PostHog** — create insight/threshold alerts on the Step-2A insights
-  (error-rate and latency conditions) via the PostHog MCP.
-- **Sentry** — create issue/metric alert rules scoped to the feature's
-  release and code paths via the Sentry MCP.
-- **NewRelic** — alert policies are applied manually from `alerts.yml` (or via
-  `newrelic-dashboard-builder` if it supports policy creation).
-- **Unresolved / other** — write `alerts.yml` only and note that policies must
-  be applied manually.
-
-Generate `{FEATURE_DIR}/monitoring/alerts.yml`:
+Always write `{FEATURE_DIR}/monitoring/alerts.yml`:
 
 ```yaml
 # Alert policies derived from plan NFRs and tracking-plan thresholds.
@@ -176,14 +106,21 @@ policies:
     notification_channels: ["{project default}"]
 ```
 
-Each alert references a runbook path; if the runbook does not exist,
-flag it as an action item (do not invent a runbook).
+Live alerts (created in Step 7, after approval) when the provider's MCP is connected:
 
----
+- **PostHog** — insight / threshold alerts on the Step 2 insights (error-rate and
+  latency conditions).
+- **Sentry** — issue / metric alert rules scoped to the feature's release and
+  code paths.
+- **NewRelic** — policies are applied manually from `alerts.yml` (or via
+  `newrelic-dashboard-builder` when it supports policy creation).
+- **Unresolved / other** — `alerts.yml` only, with a note that policies are
+  applied manually.
 
-## Step 4: Build SLI/SLO Doc
+Each alert names a runbook path; a runbook that does not exist becomes an action
+item (write none).
 
-Write `{FEATURE_DIR}/monitoring/slo.md`:
+## Step 4: Write `monitoring/slo.md`
 
 ```markdown
 # SLO for {Feature Name}
@@ -202,15 +139,10 @@ Write `{FEATURE_DIR}/monitoring/slo.md`:
 {SLIs intentionally excluded and why}
 ```
 
----
+## Step 5: Digest and status
 
-## Step 5: Update Status
-
-First produce a short `monitoring/digest.md` following the phase-digest
-template, consistent with the digest rule in
-[`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4); then update
-`.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-The run summary lives under the phase key (never a top-level `monitoring:` block):
+Write `monitoring/digest.md` from [docs/templates/phase-digest.md](../docs/templates/phase-digest.md),
+then the run summary under the phase key (never a top-level `monitoring:` block):
 
 ```yaml
 phases:
@@ -225,14 +157,14 @@ phases:
     provider: "{resolved telemetry.dashboards — posthog | sentry | newrelic | none}"
 ```
 
----
+`status` here is the standalone value: set it from the gate decision (approve →
+`completed`). Under `--from-forge`, write the digest and the data fields, leave
+`status` out, and return the outcome to forge.
 
-## Step 6: Present to User
+## Step 6: Present
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  📈 Monitoring Setup: {slug}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Monitoring Setup: {slug}
 
   Provider:    {name}
   SLIs:        {N} defined, {N} undefined (see action items)
@@ -241,21 +173,28 @@ phases:
   SLO doc:     monitoring/slo.md
 
   Next: apply dashboard.json and alerts.yml to the provider manually.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
----
+## Step 7: Live dashboard and alerts (after approval)
 
-## Operating Principles
+With the PostHog or Sentry MCP connected, create the Step 2 dashboard and the
+Step 3 live alerts through that MCP only after the plan is approved:
 
-1. **Artifact producer, not applier.** This command writes files; humans
-   apply them. Applying monitoring from an automated flow is a
-   separate capability outside Product Forge's scope.
-2. **No invented numbers.** SLIs without explicit targets are flagged
-   rather than filled with defaults.
-3. **MCP/skill delegation, graceful fallback.** Use the resolved provider's
-   MCP (PostHog / Sentry) or skill (`newrelic-dashboard-builder`) when wired;
-   if it is unavailable or no provider resolved, produce provider-neutral
-   stubs and note the gap; do not abort.
-4. **Idempotent.** Re-running overwrites only `monitoring/*` files; never
-   touches tracking-plan, spec, or plan.
+- **Standalone** — after an approving gate, offer to create them and do so on a yes.
+- **`--from-forge`** — create nothing; return "create live dashboard / alerts" as
+  an offer in the gate extras, for forge to act on after its gate.
+
+## Done when
+
+- Every SLI candidate from the three sources is in the table with a target, or
+  marked `UNDEFINED` as an action item.
+- `dashboard.json`, `alerts.yml` and `slo.md` exist; every alert names a runbook
+  (missing runbooks listed as action items).
+- Live dashboard / alerts were created only after an approving gate, when the
+  PostHog or Sentry MCP was connected (never under `--dry-run`); otherwise the
+  stub note for the provider was given.
+- Standalone: digest written, gate shown, decision recorded, status set from it.
+- `--from-forge`: digest and `monitoring_setup` data fields written; outcome
+  (provider, SLIs defined / undefined, alerts, live or stub) and, with a
+  connected MCP, the "create live dashboard / alerts" offer returned to forge;
+  no gate prompt, no status write, nothing created live.
