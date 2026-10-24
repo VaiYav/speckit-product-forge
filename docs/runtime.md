@@ -20,7 +20,7 @@ it disagrees with policy.md, schema.md or a command file, this file wins.
 [7 Dry-run](#7-dry-run-semantics) ·
 [8 Digests](#8-phase-digest-requirement-a4) ·
 [9 Monorepo](#9-monorepo-aware-operations-b15) ·
-[10 Context budget](#10-context-budget-behavior) ·
+[10 Context & document budget](#10-context-budget-behavior) (§10.1 [`max_tokens_per_doc`](#101-document-size-budget-max_tokens_per_doc)) ·
 [11 Phase prerequisites](#11-phase-prerequisites--fluid-mode-runnable-set) ·
 [12 Path resolution](#12-path-resolution-contract)
 
@@ -102,7 +102,6 @@ Extract (from the MERGED result):
 - `a11y_gate`
 - `telemetry.*`
 - `sync_verify.*`
-- `output_language`
 - `max_tokens_per_doc`
 
 **Missing identity:** if required project identity (name, tech stack, domain,
@@ -828,6 +827,37 @@ projected to exceed the active model's window during the next phase:
 
 The digest-first reading strategy keeps the baseline low. Full artifacts are
 read only when a specific cross-artifact check requires them.
+
+
+### 10.1 Document size budget (`max_tokens_per_doc`)
+
+`max_tokens_per_doc` (default `4000`; recommended `3000`–`6000`, never above `8000`)
+is the size budget for every Markdown document a command generates. Estimate size
+as English words × 1.33 (4000 tokens ≈ 3000 words). Before writing a document,
+project its size and apply the first rule that matches:
+
+1. **Per-type rules first.** Journeys, wireframes and mockups follow their fixed
+   layouts in [file-structure.md — Decomposition Rules](./file-structure.md#decomposition-rules).
+2. **Within budget** → write one file.
+3. **Over budget, single-file document** → never split it. These are the files a
+   downstream step reads by name: `spec.md`, `plan.md`, `tasks.md`,
+   `product-spec/product-spec.md`, `verify-report.md`, `gate-review.md`, every
+   `README.md` index, every `*.yml` carrier, and phase digests (their own limit,
+   §8). Tighten instead — drop restatement, link to the upstream artifact rather
+   than copying it — and if it is still over budget, add one line under the title:
+   `> Over the max_tokens_per_doc budget ({N} ≈ tokens).`
+4. **Over budget, any other document** → split it. The document keeps its path as
+   the **index** (purpose, summary, key decisions, and a linked contents table);
+   each major section moves to `{doc-stem}/NN-{section-slug}.md` next to it (e.g.
+   `research/competitors.md` → `research/competitors/01-pricing.md`). Every part
+   stays within the budget, opens with a back-link to the index, and keeps its IDs
+   (`FR-*`, `JRN-*`, `TC-*`, …) unchanged. Present the proposed file list as a
+   structured prompt ([interaction.md](./interaction.md)): **Split as proposed**
+   (recommended) · **Keep one file** · custom. Under `--ci` take the recommended
+   option without prompting.
+
+Under `--dry-run` the split is planned and written under `.forge-dry-run/` like
+any other write (§7).
 
 ---
 

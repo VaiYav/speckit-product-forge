@@ -41,6 +41,8 @@ Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--l
 keys used: `project_tech_stack`, `features_dir` + `storage_strategy` (to resolve
 `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 1. `plan.md` exists AND its Data Model section is non-empty.
 2. Identify the DB kind:
    - From the effective config's `project_tech_stack` if clear.

@@ -28,6 +28,8 @@ Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semant
 1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
    keys used: `codebase_path` (or monorepo `codebase.paths`, scanned in Step 2),
    `features_dir` + `storage_strategy` (to resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+   Every Markdown document this command writes follows `max_tokens_per_doc`
+   ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)).
 2. Read `.forge-status.yml` — `phases.product_spec.status` must be `completed` (Phase 2 done)
 3. Read `product-spec/product-spec.md` → success metrics, user stories
 4. Read `product-spec/journeys/journeys.yml` → all journeys (JRN/STEP/EDGE) and decision points; give each event a stable `EVT-*` id and map it to journey steps

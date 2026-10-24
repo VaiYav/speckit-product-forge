@@ -35,6 +35,8 @@ and read: `features_dir`, `codebase.paths` (monorepo workspaces, Step 4.1),
 `require_pre_impl_review`, `require_skip_reason`. Resolve `FEATURE_DIR` via
 [docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract).
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 1. Read `.forge-status.yml` — if `feature_mode` is `express` or `lite`, stop: *"Tasks is
    not in scope for {mode} features — the plan carries an inline `## Tasks` list
    ([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts))."*

@@ -42,6 +42,8 @@ archived, and no status, gate or `change_requests[]` entry is written.
 1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
    Keys used: `features_dir`, `storage_strategy`. Resolve `FEATURE_DIR` via
    `resolve(slug)` ([docs/runtime.md §12.2](../docs/runtime.md#122-resolveslug--feature_dir)).
+   Every Markdown document this command writes follows `max_tokens_per_doc`
+   ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)).
 2. Read `{FEATURE_DIR}/.forge-status.yml` — determine current lifecycle phase
 3. **Phase 6 guard** ([docs/policy.md §8](../docs/policy.md#8-change-management)): if
    `phases.implement.status == in_progress` **and** a `task_log[]` entry has

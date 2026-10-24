@@ -57,6 +57,8 @@ Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--l
 Keys used: `e2e_runner`, `a11y_gate`, `codebase_path` / `codebase.paths`,
 `require_testing`, `require_skip_reason`.
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 1. Read `{FEATURE_DIR}/.forge-status.yml` — `phases.verify.status` must be `completed` (Phase 7 done)
 2. Verify `spec.md` and `product-spec/product-spec.md` exist
 3. Verify all implementation tasks in `tasks.md` are `[x]`

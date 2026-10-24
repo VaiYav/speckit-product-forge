@@ -1,6 +1,6 @@
 # Design Note — Documentation Overhaul (v1.8.0)
 
-> **Status:** IMPLEMENTED (except the open items under *Deferred*) → ships inside v1.8.0 "Venusaur" (no separate version).
+> **Status:** IMPLEMENTED (open items only under *Deferred*) → ships inside v1.8.0 "Venusaur" (no separate version).
 > Decided in a structured design interview (2026-10-24) after three independent
 > read-only audits of `docs/`, `commands/` and the entry-point files.
 
@@ -33,7 +33,7 @@
 | D1 | Optimise for the **LLM executor** first, contributor second, end user third. |
 | D2 | Fix + dedup + restructure (no ground-up rewrite). Wording-neutral by default; every normative change below was approved explicitly. |
 | D3 | New drift classes get a `lint-docs` rule with a selftest when cheap. |
-| D4 | Config: wire the four `default_*` research / wireframe keys (pre-fill, ask only when unset); remove the CONFIG-READER exemption list. *Removing* `max_tokens_per_doc` / `output_language` is **on hold**: both turned out to have readers (the decomposition threshold in `file-structure.md`; a personal language preference), so the keys stay until the owner decides. |
+| D4 | Config: wire the four `default_*` research / wireframe keys (pre-fill, ask only when unset); remove the CONFIG-READER exemption list. Owner decision (revised): **keep** `max_tokens_per_doc` and wire it into every document-authoring command via the size-budget procedure in runtime §10.1 (index + parts when over budget; parser-read files are tightened, never split); **remove** `output_language` — generated artifacts are always English. |
 | D5 | README becomes a ~200-line landing page; history moves to CHANGELOG, diagrams/trees to `docs/`. |
 | D6 | Implemented `docs/improvements/` notes move to `docs/improvements/archive/`; open roadmap items move to root `ROADMAP.md`. |
 | D7 | Catalog: canonical `docs/schema/catalog.yml`; `build-catalog.js` reads v3 fields (legacy fallback); record field `mode` → `kind` and `retrieve --mode` → `--kind` (no tag yet, so free); `bounded_context` from `domains.yml` when present; fixture + `doctor` run `--check` (makes the v1.8 CHANGELOG claim true). |
@@ -56,6 +56,5 @@ CHANGELOG [1.8.0] `### Fixed`.
 
 ## Deferred
 
-- `max_tokens_per_doc` / `output_language` removal (D4) — owner decision pending.
 - Generic forge transition table (D13).
 - Issue-tracker bridge, cron nudges, messaging delivery — see `ROADMAP.md`.

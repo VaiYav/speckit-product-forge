@@ -30,6 +30,8 @@ do **not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
 Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
 and read: `features_dir`, `storage_strategy`, `default_feature_mode`.
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 Resolve `FEATURE_DIR` via the Path-Resolution Contract `resolve(slug)`
 ([docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)).
 

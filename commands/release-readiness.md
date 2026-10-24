@@ -32,6 +32,8 @@ registration happens, and no status or gate entry is written.
 1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
    Keys used: `codebase_path`, `telemetry.dashboards`, `supply_chain.license_allowlist`,
    `require_skip_reason`.
+   Every Markdown document this command writes follows `max_tokens_per_doc`
+   ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)).
 2. Read `{FEATURE_DIR}/.forge-status.yml` — verify `phases.verify.status` is `completed`
 3. If verify is not completed: **STOP** — "Phase 7 (Verification) must pass first."
 

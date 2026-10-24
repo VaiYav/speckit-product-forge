@@ -36,6 +36,8 @@ keys used: `telemetry.*` (`product_analytics`, `error_tracking`, `dashboards`),
 `skill_category`), `features_dir` + `storage_strategy` (to resolve `{FEATURE_DIR}`,
 [§12](../docs/runtime.md#12-path-resolution-contract)).
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 1. Read `.forge-status.yml` — find the feature slug and launch date
 2. Check that the feature was shipped: `phases.verify` is `completed` (minimum requirement).
    Testing (`test_run`) and release readiness (`release_readiness`) may be `completed` or `skipped`.

@@ -486,21 +486,19 @@ projects).
 ```yaml
 max_tokens_per_doc: 4000
 ```
-Maximum approximate token budget per generated document.
-When a document would exceed this, Product Forge will:
-1. Suggest decomposing into multiple files
-2. Ask the user how many files/sections to create
-3. Create individual files with cross-links
+Size budget (approximate tokens, ≈ English words × 1.33) for every generated
+Markdown document. Every document-authoring command applies
+[runtime.md §10.1](./runtime.md#101-document-size-budget-max_tokens_per_doc):
+over budget, a splittable document becomes an index plus
+`{doc-stem}/NN-{section}.md` parts (after a Split / Keep prompt); single-file
+documents that downstream steps read by name (`spec.md`, `plan.md`, `tasks.md`,
+`product-spec.md`, reports, `README.md` indexes, `*.yml`) are tightened instead.
 
 Recommended range: `3000` (concise) to `6000` (exhaustive).
 Do not set above `8000` — this risks hitting context limits in downstream agents.
 
-```yaml
-output_language: "en"
-```
-Language for all generated documents.
-Supported values: any BCP-47 language code (`"en"`, `"ru"`, `"de"`, `"fr"`, etc.)
-Note: Research agents use web search, so results may mix languages regardless of this setting.
+Generated artifacts are always written in **English**; there is no output-language
+setting (an `output_language` key from older configs is ignored).
 
 ---
 
@@ -560,7 +558,6 @@ per-repo. `either` = both valid (personal default OR team-pinned per repo).
 | `supply_chain.license_allowlist` | either | Personal default allowlist OR team policy. A LIST: replaced, not appended. |
 | `supported_locales` | project | The locale set THIS repo ships. |
 | `max_tokens_per_doc` | global | Personal sizing preference for generated docs. |
-| `output_language` | global | Personal language preference; canonical global-eligible setting. |
 
 ## Per-Feature Config Override
 
@@ -573,7 +570,7 @@ feature: "push-notifications"
 config_override:
   default_wireframe_detail: "detailed-html"
   default_mockup_style: "project-styled"
-  output_language: "ru"
+  max_tokens_per_doc: 6000
 ```
 
 ## Environment Variable Overrides

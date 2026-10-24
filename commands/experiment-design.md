@@ -50,6 +50,8 @@ Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--l
 keys used: `telemetry.product_analytics`, `features_dir` + `storage_strategy` (to
 resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 1. `.forge-status.yml` has `phases.release_readiness.status` `completed`.
 2. `flags/registry.yml` exists and contains the specified flag.
 3. `research/metrics-roi.md` exists (source of primary metric

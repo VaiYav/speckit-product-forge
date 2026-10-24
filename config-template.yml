@@ -326,11 +326,9 @@ supported_locales: []
 
 # ─── Advanced ──────────────────────────────────────────────────────────────────
 
-# Maximum token budget target per generated document (approximate)
-# Larger features will auto-decompose into multiple files
-# Recommended: 3000-6000 tokens per file
+# Size budget per generated Markdown document (approximate tokens; ≈ words × 1.33).
+# Over budget, splittable documents become an index + section files; single-file
+# documents (spec.md, plan.md, tasks.md, …) are tightened instead.
+# See docs/runtime.md §10.1. Recommended: 3000-6000; never above 8000.
+# Generated artifacts are always written in English (no language switch).
 max_tokens_per_doc: 4000
-
-# Language for all generated documents
-# Examples: "en", "ru", "de"
-output_language: "en"

@@ -234,9 +234,11 @@ Path-Resolution Contract. A starter registry template lives at
 
 ## Decomposition Rules
 
-Product Forge suggests decomposition when documents would be too large. The
-decomposition threshold is `max_tokens_per_doc` in config (default: 4000 tokens ≈
-3000 words).
+Product Forge decomposes documents that would be too large. The threshold is
+`max_tokens_per_doc` in config (default: 4000 tokens ≈ 3000 words); the general
+procedure — which documents split, how parts are named, which stay single files —
+is [runtime.md §10.1](./runtime.md#101-document-size-budget-max_tokens_per_doc).
+The table below holds the fixed per-type layouts that apply first.
 
 | Document | When to Decompose | How |
 |----------|------------------|-----|

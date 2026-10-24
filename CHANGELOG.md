@@ -83,6 +83,11 @@ _Nothing yet._
   `default_metrics_research`, `default_wireframe_detail` pre-fill answers; `require_*`,
   `require_skip_reason` and `auto_sync_between_phases` drive the Gate template;
   `require_problem_discovery` and `verify.ac_judge` declared in `config-template.yml`.
+  `max_tokens_per_doc` is now enforced by every document-authoring command through
+  the size-budget procedure in [runtime §10.1](docs/runtime.md#101-document-size-budget-max_tokens_per_doc)
+  (over budget: index + `{doc-stem}/NN-{section}.md` parts after a Split / Keep prompt;
+  `spec.md`, `plan.md`, `tasks.md`, reports, `README.md` indexes and `*.yml` are tightened,
+  never split).
   `docs/config.md` reorganised by topic, mirroring the template.
 - **`lint-docs`:** CLAUDE.md is linted; stale version pins / title stamps / versions in
   command descriptions are flagged; new **CONFIG-DECLARED** rule (documented
@@ -93,6 +98,11 @@ _Nothing yet._
   merged tree that points at the canonical schema; `phases.md` lists every phase in forge
   order; open roadmap items moved to [ROADMAP.md](ROADMAP.md); implemented design notes moved
   to `docs/improvements/archive/`.
+
+### Removed — documentation overhaul (2026-10)
+
+- **`output_language`** config key. Generated artifacts are always written in English;
+  an `output_language` value left in an existing config is ignored.
 
 ### Fixed — documentation overhaul (2026-10)
 

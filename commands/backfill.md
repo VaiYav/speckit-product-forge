@@ -53,6 +53,8 @@ Keys used:
 - `project_name`, `project_tech_stack`, `project_domain`, `codebase_path`,
   `features_dir`, `storage_strategy`.
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 ---
 
 ## Step 1: Validate Source

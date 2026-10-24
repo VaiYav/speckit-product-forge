@@ -44,6 +44,8 @@ Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--l
 and read: `codebase_path`, `constitution_path`, `features_dir`. Resolve `FEATURE_DIR`
 via [docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract).
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 1. Read `.forge-status.yml` → `feature_mode`, then check the upstream inputs for that
    mode ([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts)):
    - **standard / v-model:** `bridge` is `completed` and `spec.md` exists in FEATURE_DIR.

@@ -53,6 +53,8 @@ Load the effective config (5-layer merge, [docs/runtime.md §1](../docs/runtime.
   - `default_metrics_research` (bool) → pre-select **Metrics / ROI** in the
     research-scope multiSelect.
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 Resolve `FEATURE_DIR` via the Path-Resolution Contract `resolve(slug)`
 ([docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)) — under
 the default `flat` strategy this is `{features_dir}/{feature-slug}/`; under

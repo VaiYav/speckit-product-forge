@@ -32,6 +32,8 @@ SpecKit is not launched (Step 8).
 Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
 Keys used: `features_dir`, `default_speckit_mode`.
 
+Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+
 Check that Phase 3 was approved:
 1. Read `{FEATURE_DIR}/.forge-status.yml` — `phases.revalidation.status` must be
    `completed` (canonical) or the legacy literal `approved`
