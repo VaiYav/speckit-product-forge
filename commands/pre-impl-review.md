@@ -1,148 +1,96 @@
 ---
 name: speckit.product-forge.pre-impl-review
 description: >
-  Phase 5C: Combined design review, architecture review, and risk assessment gate
-  before writing any code. Loads wireframes, UX patterns, plan architecture, and
-  codebase analysis to produce a structured review with risk register.
-  Optional for features with <=5 tasks and no UI.
-  Use: "pre-impl review", "review before coding", "/speckit.product-forge.pre-impl-review"
+  Reviews a feature before coding (Phase 5C): design completeness, architecture
+  soundness and a risk register with rollout recommendation. Use after tasks; optional
+  for features with five or fewer tasks and no UI.
 ---
 
-# Product Forge — Pre-Implementation Review (Phase 5C)
+# Product Forge — Phase 5C: Pre-Implementation Review
 
-You are the **Pre-Implementation Reviewer** for Product Forge.
-Your goal: ensure the feature is ready for coding by checking design completeness,
-architecture soundness, and identifying risks — before a single line of code is written.
+You are the **Pre-Implementation Reviewer**. Before any code is written, you check
+design completeness, architecture soundness and risks, and write
+`pre-impl-review.md` with design / architecture findings, a risk register and the
+conditions for approval.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-the review report and any `tasks.md` additions go under
-`{FEATURE_DIR}/.forge-dry-run/pre_impl_review/`; no status or gate entry is written.
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** `pre_impl_review` (Phase 5C)
+- **Config keys:** `require_pre_impl_review`, `require_skip_reason`
+- **Writes:** `pre-impl-review.md`, `gate-review.md` (`F-NNN` rows), `tasks.md`
+  (accepted conditions, with confirmation), `phases.pre_impl_review.status`,
+  `phases.pre_impl_review.skip_reason`
+- **Contract deltas:**
+  - The phase may be skipped at its **start** (Step 1), not only at the previous gate.
+  - Gate extras: `conditions`, `risks_accepted` (Step 7).
 
-## Step 0: Load Context
+## Step 0: Load context
 
-1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
-   Keys used: `require_pre_impl_review`, `require_skip_reason`.
-2. Read `{FEATURE_DIR}/.forge-status.yml` — verify `phases.tasks.status: completed` (Phase 5B done)
-3. If tasks phase is not completed: **STOP** — "Phase 5B (Tasks) must be completed first."
+Require `phases.tasks.status: completed`; otherwise stop with
+*"Phase 5B (Tasks) must be completed first."*
 
-Load all required artifacts:
-- `{FEATURE_DIR}/spec.md` — requirements and acceptance criteria
-- `{FEATURE_DIR}/plan.md` — technical architecture and data model
-- `{FEATURE_DIR}/tasks.md` — task breakdown and file paths
-- `{FEATURE_DIR}/product-spec/product-spec.md` — product context
-- `{FEATURE_DIR}/product-spec/journeys/journeys.yml` — structured journeys (JRN/STEP/EDGE)
-- `{FEATURE_DIR}/product-spec/wireframes*` — UI designs (if exist)
-- `{FEATURE_DIR}/product-spec/mockups/` — high-fidelity UI (if exist)
-- `{FEATURE_DIR}/research/ux-patterns.md` — UX best practices
-- `{FEATURE_DIR}/research/codebase-analysis.md` — integration points
-- `{FEATURE_DIR}/research/README.md` — the **"Prior lessons that apply"** section
-  (already selected by `research` Step 2.5 from `.product-forge/lessons.md`); feeds
-  the risk register in Step 4 (v1.6, W5-D1). If the file or the section is absent,
-  proceed with no lesson-derived risks — do not re-score or re-read `lessons.md` here.
+Read from `{FEATURE_DIR}`:
 
----
+- `spec.md` — requirements, acceptance criteria, NFRs
+- `plan.md` — architecture and data model
+- `tasks.md` — task breakdown and file paths
+- `product-spec/product-spec.md` — product context
+- `product-spec/journeys/journeys.yml` — structured journeys (JRN/STEP/EDGE)
+- `product-spec/wireframes*`, `product-spec/mockups/` — UI designs (if present)
+- `research/ux-patterns.md` — UX best practices
+- `research/codebase-analysis.md` — integration points, reusable components
+- `research/README.md` — its **"Prior lessons that apply"** section (selected by
+  `research` Step 2.5 from `.product-forge/lessons.md`). Use that section as the only
+  lessons input; when it is absent, there are no lesson-derived risks.
 
-> **Interaction (normative):** the skip offer (Step 1), the approval gate (Step 6),
-> and any condition decision use the structured convention in
-> [docs/interaction.md](../docs/interaction.md) (ready snippets in
-> [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
-> Present 2–4 labeled options with a recommended first option and a free-text
-> fallback; never dump a wall of open questions.
+## Step 1: Determine the review scope
 
-## Step 1: Determine Review Scope
+Count the tasks in `tasks.md` and classify them:
 
-Count tasks in `tasks.md` and check for UI-related tasks.
+- **UI tasks** — reference `.vue`, `.tsx`, `.jsx`, `.html`, `.css`, `.scss`, or
+  "component", "screen", "page", "view"
+- **API tasks** — reference controllers, endpoints, routes
+- **Backend tasks** — reference services, repositories, models
+
+Sections: Architecture Review and Risk Assessment always run; Design Review runs only
+with UI tasks.
+
+When there are **≤ 5 tasks and no UI tasks** and `require_pre_impl_review` is not
+`true` (the phase is `opt` in [phase-map.yml](../docs/schema/phase-map.yml)), ask:
 
 ```
-Feature: {feature-name}
-Tasks: {N} total
-UI tasks: {N} (tasks referencing .vue, .tsx, .jsx, .html, .css, .scss, or "component", "screen", "page", "view")
-API tasks: {N} (tasks referencing controllers, endpoints, routes)
-Backend tasks: {N} (tasks referencing services, repositories, models)
+[Run Pre-Impl Review?] This feature has {N} tasks and no UI components. Pre-implementation
+review is optional for small backend features.
 
-Review sections:
-  ✅ Architecture Review — always included
-  {✅/⏭️} Design Review — {included / skipped: no UI tasks detected}
-  ✅ Risk Assessment — always included
+  1. Run review anyway (recommended for features with external API integrations)
+  2. Skip to implementation
+  (or type your own answer)
 ```
 
-If total tasks <= 5 AND no UI tasks, **and** `require_pre_impl_review` is not
-`true`, offer to skip (this phase is `opt` in
-[phase-map.yml](../docs/schema/phase-map.yml); when the config requires it, run
-the review without offering a skip):
-```
-This feature has {N} tasks and no UI components.
-Pre-implementation review is optional for small backend features.
+When the config requires the review, run it without asking. On **Skip**, collect
+`skip_reason` (ask for it when `require_skip_reason: true`; an empty answer is
+re-asked), then stop: standalone, set `phases.pre_impl_review.status: skipped` and
+`phases.pre_impl_review.skip_reason`, and append the Step 7 gate entry with `decision: skipped`; with `--from-forge`, return
+the skip and its reason to forge.
 
-  1. [Run review anyway] (recommended for features with external API integrations)
-  2. [Skip to implementation]
-```
+## Step 2: Design review (UI tasks only)
 
-Choosing Skip sets `phases.pre_impl_review.status: skipped` with `skip_reason`
-(ask for it when `require_skip_reason: true`; empty → re-ask), written via the
-status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)),
-with the gate entry handled as in Step 7.
+Run checks 2A–2D from
+[docs/reference/pre-impl-review-design-review.md](../docs/reference/pre-impl-review-design-review.md):
+state completeness, UX pattern compliance, accessibility pre-check, component reuse.
+Each gap is a `D-NNN` finding.
 
----
+## Step 3: Architecture review
 
-## Step 2: Design Review (if feature has UI)
+From the `plan.md` architecture and `research/codebase-analysis.md`:
 
-Load wireframes/mockups from `product-spec/` and UX recommendations from `research/ux-patterns.md`.
-
-### 2A: State Completeness Check
-
-For each screen/view identified in wireframes or user journeys:
-
-| Screen | Happy State | Empty State | Loading State | Error State | Partial State | Offline State |
-|--------|:-----------:|:-----------:|:-------------:|:-----------:|:-------------:|:------------:|
-| {screen} | {✅/❌} | {✅/❌} | {✅/❌} | {✅/❌} | {✅/❌/N-A} | {✅/❌/N-A} |
-
-**Missing states are flagged as findings.**
-
-### 2B: UX Pattern Compliance
-
-Compare wireframes against `research/ux-patterns.md` recommendations:
-
-| UX Recommendation | Addressed in Wireframes? | Notes |
-|-------------------|:------------------------:|-------|
-| {recommendation from ux-patterns.md} | {✅/❌/Partially} | {details} |
-
-### 2C: Accessibility Pre-Check
-
-| Check | Status | Notes |
-|-------|:------:|-------|
-| Color contrast (text on backgrounds) | {✅/⚠️/❌} | |
-| Touch target sizes (≥44×44px mobile) | {✅/⚠️/❌} | |
-| Focus order logical | {✅/⚠️/❌} | |
-| Screen reader landmarks defined | {✅/⚠️/❌} | |
-| Error messages descriptive | {✅/⚠️/❌} | |
-| Form labels present | {✅/⚠️/❌} | |
-
-### 2D: Component Reuse Check
-
-From `research/codebase-analysis.md`, identify existing components that should be reused:
-
-| Existing Component | Applicable For | Reuse Planned? |
-|-------------------|---------------|:--------------:|
-| {component from codebase-analysis} | {where in this feature} | {✅/❌} |
-
-Flag if new components are planned where reusable ones exist.
-
----
-
-## Step 3: Architecture Review
-
-Load `plan.md` architecture section and `research/codebase-analysis.md`.
-
-### 3A: Structural Checks
+**3A: Structural checks**
 
 | Check | Status | Evidence |
 |-------|:------:|---------|
@@ -155,250 +103,107 @@ Load `plan.md` architecture section and `research/codebase-analysis.md`.
 | Authentication/authorization approach defined | {✅/⚠️/❌/N-A} | |
 | Caching strategy defined (if needed) | {✅/⚠️/❌/N-A} | |
 
-### 3B: Integration Point Validation
-
-From `research/codebase-analysis.md`, verify each integration point has a plan:
+**3B: Integration points** — each integration point in `codebase-analysis.md` has a plan:
 
 | Integration Point | Plan Coverage | Risk Level |
 |------------------|:------------:|:----------:|
 | {integration from codebase-analysis} | {✅ Covered / ⚠️ Partial / ❌ Missing} | {H/M/L} |
 
-### 3C: NFR Coverage
-
-From `spec.md` non-functional requirements:
+**3C: NFR coverage** — each `spec.md` NFR has an adequate plan approach:
 
 | NFR | Plan Approach | Adequate? |
 |-----|:-------------|:---------:|
 | {NFR from spec.md} | {approach from plan.md} | {✅/⚠️/❌} |
 
----
+Each gap is an `A-NNN` finding.
 
-## Step 4: Risk Assessment
+## Step 4: Risk assessment
 
-Analyze all loaded artifacts to build a risk register.
+Build a risk register from all loaded artifacts. Look for:
 
-### Risk Categories
+- **Technical** — a library or technology new to the codebase, complex data
+  migrations, performance-sensitive work without targets, unreliable external APIs.
+- **Scope** — ambiguous acceptance criteria, > 15 tasks, task dependencies that form
+  a critical-path bottleneck.
+- **Integration** — external API availability / rate limits / breaking changes,
+  third-party compatibility, schema changes affecting existing features, shared
+  state or cache invalidation.
+- **Rollback** — irreversible migrations, breaking API changes for existing clients,
+  a needed feature flag that is not planned, persistent data-format changes.
 
-**Technical Risks:**
-- New technology/library being introduced for the first time
-- Complex data migrations
-- Performance-sensitive operations without defined targets
-- External API dependencies with uncertain reliability
+**Prior lessons.** For each lesson under "Prior lessons that apply":
 
-**Scope Risks:**
-- Ambiguous acceptance criteria in spec.md
-- Large number of tasks (>15) increasing coordination complexity
-- Dependencies between tasks creating critical path bottleneck
+1. Treat it as a candidate risk for this feature.
+2. Add a row: **Category** = the closest of the four; **Risk** = the lesson restated
+   as a forward-looking risk, citing `(lesson: "{title}", {date})`; Likelihood /
+   Impact / Severity assessed for *this* feature (a recurring lesson is not
+   automatically High); **Mitigation** = the corrective action, concrete for this plan.
+3. When the lesson does not apply to this feature's surface, drop it and note the
+   omission in one line under the register.
 
-**Integration Risks:**
-- External API dependencies (availability, rate limits, breaking changes)
-- Third-party library compatibility
-- Database schema changes affecting existing features
-- Shared state/cache invalidation
+**Adversarial pass** — fold the results into the register as rows:
 
-**Rollback Risks:**
-- Database migrations that can't be reversed
-- Breaking API changes for existing clients
-- Feature flag needed but not planned
-- Data format changes in persistent storage
+1. **Contradictions.** Compare `spec.md` requirements and acceptance criteria
+   pairwise, and against `plan.md` decisions and `journeys.yml` steps. Each genuine
+   conflict is a **Scope** row citing both ids (e.g. `FR-012 vs AC-3`), mitigation
+   "resolve before coding".
+2. **Determinism.** For each acceptance criterion ask: *"Would two competent
+   implementers build different things from this criterion?"* Each yes is a
+   **Scope** row quoting the criterion id and the divergence, mitigation "tighten the
+   criterion to one observable outcome".
 
-### Prior Lessons as Candidate Risks (v1.6, W5-D1)
+With neither, state *"No contradictions; all criteria deterministic"*.
 
-The `research` phase already selected the relevant prior lessons (tag-overlap scored
-in `research` Step 2.5) and wrote them to the **"Prior lessons that apply"** section of
-`{FEATURE_DIR}/research/README.md`. Consume that section here — do **not** re-read or
-re-score `.product-forge/lessons.md`.
-
-For **each** lesson block listed under "Prior lessons that apply":
-
-1. Treat the lesson as a candidate risk for *this* feature (a thing that bit a prior
-   feature and could recur here).
-2. Emit a row into the Risk Register below, deriving fields from the lesson:
-   - **Category** — the closest of Technical / Scope / Integration / Rollback.
-   - **Risk** — restate the lesson as a forward-looking risk, and cite the source
-     inline as `(lesson: "{title}", {date})`.
-   - **Likelihood / Impact / Severity** — assess for *this* feature using the matrix
-     below (a recurring lesson is not automatically High).
-   - **Mitigation** — the corrective action the lesson implies, made concrete for this plan.
-3. If the lesson clearly does not apply to this feature's surface, **drop it** and note
-   the omission in one line under the register (no false positives — Operating Principle 1).
-
-If the "Prior lessons that apply" section is absent or empty, skip this subsection.
-
-### Risk Register Format
+Register format and severity:
 
 | ID | Category | Risk | Likelihood | Impact | Severity | Mitigation |
 |----|----------|------|:----------:|:------:|:--------:|-----------|
 | R-001 | Technical | {description} | H/M/L | H/M/L | {H×H=Critical, etc.} | {strategy} |
-| R-002 | Integration | {description} | H/M/L | H/M/L | {severity} | {strategy} |
 
-Severity matrix:
-- **Critical** (H×H): Must have mitigation before coding
-- **High** (H×M, M×H): Should have mitigation planned
-- **Medium** (M×M, H×L, L×H): Document and monitor
-- **Low** (M×L, L×M, L×L): Acknowledge
+- **Critical** (H×H) — mitigation required before coding
+- **High** (H×M, M×H) — mitigation planned
+- **Medium** (M×M, H×L, L×H) — document and monitor
+- **Low** (M×L, L×M, L×L) — acknowledge
 
-### Rollout Strategy Recommendation
+Rollout recommendation:
 
-Based on risk profile:
-
-| Risk Profile | Recommended Rollout |
-|-------------|-------------------|
-| ≥1 Critical risk | Feature flag + canary (1% → 10% → 50% → 100%) |
-| ≥3 High risks | Feature flag + staged rollout (10% → 50% → 100%) |
-| Mostly Medium/Low | Feature flag recommended but not required |
+| Risk profile | Recommended rollout |
+|--------------|---------------------|
+| ≥ 1 Critical | Feature flag + canary (1% → 10% → 50% → 100%) |
+| ≥ 3 High | Feature flag + staged rollout (10% → 50% → 100%) |
+| Mostly Medium / Low | Feature flag recommended, not required |
 | All Low | Direct release acceptable |
 
-### Adversarial Pass: Contradictions & Determinism (v1.6, W5-E1)
+## Step 5: Write `pre-impl-review.md`
 
-A short self-critique before closing the register — fold the findings back into it as
-rows; do **not** add a separate critic phase.
+Write `{FEATURE_DIR}/pre-impl-review.md` from
+[docs/templates/pre-impl-review-report.md](../docs/templates/pre-impl-review-report.md).
+Every finding cites its source artifact (and line or requirement id) and carries a
+specific recommendation; flag only concerns the artifacts evidence. Keep the
+review proportional: a small feature gets a lightweight review, a large one a
+thorough review.
 
-1. **Contradictions check.** Scan `spec.md` requirements and acceptance criteria
-   pairwise for conflict: do any two requirements/criteria contradict each other, or
-   contradict a `plan.md` decision or a `journeys.yml` step? For each genuine conflict,
-   emit a **Scope**-category `R-NNN` row citing both clashing items by id (e.g.
-   `FR-012 vs AC-3`), severity per the matrix, mitigation = "resolve before coding".
-2. **Determinism counterfactual.** For each acceptance criterion ask:
-   *"Would two competent implementers build different things from this criterion?"*
-   If yes, the criterion is under-specified — emit a **Scope**-category `R-NNN` row
-   (this is the existing "Ambiguous acceptance criteria" Scope risk made concrete),
-   quoting the criterion id and the divergence, mitigation = "tighten the criterion to
-   one observable outcome".
+Append each design, architecture and risk finding to `{FEATURE_DIR}/gate-review.md`
+in the single `F-NNN` namespace with `source: pre-impl-review`,
+`dimension: design|architecture|risk` and `raised@{git-sha}`, continuing from the
+current max `F-NNN`. `D-/A-/R-NNN` stay the in-document labels
+([template](../docs/templates/gate-review.md)).
 
-If no contradictions and no divergent criteria are found, state *"No contradictions;
-all criteria deterministic"* and add no rows.
+## Step 6: Present and gate
 
----
-
-## Step 5: Generate pre-impl-review.md
-
-Write `{FEATURE_DIR}/pre-impl-review.md`:
-
-```markdown
-# Pre-Implementation Review: {Feature Name}
-
-> Feature: {slug} | Date: {today}
-> Reviewer: Product Forge Pre-Impl Review Agent
-> Status: {APPROVED / APPROVED WITH CONDITIONS / NEEDS REVISION}
-
-## Summary
-
-| Section | Findings |
-|---------|----------|
-| Design Review | {N} issues ({N} critical, {N} warning) {or "Skipped — no UI"} |
-| Architecture Review | {N} issues ({N} critical, {N} warning) |
-| Risk Assessment | {N} risks ({N} critical, {N} high, {N} medium, {N} low) |
-
-**Recommendation:** {PROCEED / PROCEED WITH CONDITIONS / REVISE PLAN}
-
----
-
-## Design Review
-
-### State Completeness
-{table from Step 2A}
-
-### UX Pattern Compliance
-{table from Step 2B}
-
-### Accessibility Pre-Check
-{table from Step 2C}
-
-### Component Reuse
-{table from Step 2D}
-
-> **Emit into the unified gate surface (W5-A3).** Append each design /
-> architecture / risk finding below to `{FEATURE_DIR}/gate-review.md` under the
-> single `F-NNN` namespace with `source: pre-impl-review` +
-> `dimension: design|architecture|risk` and `raised@{git-sha}` (read the current
-> max `F-NNN` first). The `D-/A-/R-NNN` ids stay as in-document local labels.
-> See [docs/templates/gate-review.md](../docs/templates/gate-review.md).
-
-### Design Findings
-
-| ID | Severity | Finding | Recommendation |
-|----|:--------:|---------|---------------|
-| D-001 | {CRITICAL/WARNING/INFO} | {finding} | {recommendation} |
-
----
-
-## Architecture Review
-
-### Structural Checks
-{table from Step 3A}
-
-### Integration Points
-{table from Step 3B}
-
-### NFR Coverage
-{table from Step 3C}
-
-### Architecture Findings
-
-| ID | Severity | Finding | Recommendation |
-|----|:--------:|---------|---------------|
-| A-001 | {CRITICAL/WARNING/INFO} | {finding} | {recommendation} |
-
----
-
-## Risk Assessment
-
-### Risk Register
-{table from Step 4}
-
-### Rollout Strategy
-{recommendation from Step 4}
-
-### Risk Mitigations Required Before Coding
-
-{List of mitigations that must be addressed before Phase 6 begins}
-
----
-
-## Conditions for Approval
-
-{List of conditions that must be met — e.g., "Add loading state to settings screen wireframe",
-"Define retry strategy for external API calls", "Add feature flag task to tasks.md"}
-
-## Pre-Implementation Checklist
-
-- [ ] All CRITICAL design findings resolved
-- [ ] All CRITICAL architecture findings resolved
-- [ ] All Critical-severity risks have documented mitigations
-- [ ] Rollout strategy agreed upon
-- [ ] tasks.md updated with any new tasks from this review
-```
-
----
-
-## Step 6: Present to User
+Show design, architecture and risk counts (critical / high) and the recommendation.
+For each condition, ask:
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  📋 Pre-Implementation Review: {Feature Name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Condition {N}] {condition} — affects {artifact path}; required before Phase 6.
 
-  Design:       {N} findings ({status})
-  Architecture: {N} findings ({status})
-  Risks:        {N} total ({N} critical, {N} high)
-
-  Recommendation: {PROCEED / PROCEED WITH CONDITIONS / REVISE PLAN}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. Accept condition (recommended)
+  2. Reject — proceed anyway
+  3. Discuss
+  (or type your own answer)
 ```
 
-If conditions exist, present each:
-
-```
-Condition 1: Add loading state to settings screen wireframe
-  → This affects: product-spec/wireframe-settings.html
-  → Required before: Phase 6 (Implementation)
-
-  [Accept condition] [Reject — proceed anyway] [Discuss]
-```
-
-Gate (structured — see [interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)):
+Standalone, show the gate (no Skip — Implement is required in every mode):
 
 ```
 [Gate] Pre-implementation review complete — {one-line outcome}. How do you want to proceed?
@@ -410,38 +215,20 @@ Gate (structured — see [interaction-prompts.md](../docs/templates/interaction-
   (or type your own answer)
 ```
 
-No Skip at this gate: the next phase (Implement) is required in every mode
-([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)). Accepting open risks is an
-**Approve** with the accepted counts recorded in `risks_accepted`.
-
-Map the answer to a decision and status per
-[runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+Accepting open risks is an **Approve** with the accepted counts in `risks_accepted`.
 
 | Option | Decision | `phases.pre_impl_review.status` |
 |--------|----------|---------------------------------|
 | Approve, nothing deferred | `approved` | `completed` |
 | Approve, conditions tracked as tasks rather than resolved now | `approved_with_conditions` (list `conditions`) | `completed` |
 | Revise | `revised` | `in_progress` (the review re-runs) |
-| Rollback | `rolled_back` + `rolled_back_to` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
+| Rollback | `rolled_back` + `rolled_back_to` | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
 | Abort | `aborted` | unchanged |
 
----
+## Step 7: Status and gate entry
 
-## Step 7: Update Status
-
-Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-Set `phases.pre_impl_review.status` from the Step 6 table:
-
-```yaml
-phases:
-  pre_impl_review:
-    status: "{completed | in_progress | skipped}"   # per the decision; pending on rollback, unchanged on abort
-```
-
-Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
-run only**. When `$ARGUMENTS` contains `--from-forge`, do **not** show the Gate prompt,
-set the phase `status`, or append; return the findings summary, `conditions` and `risks_accepted` to the orchestrator, which writes
-the entry. On a standalone run, append:
+Standalone, set `phases.pre_impl_review.status` from the table (or `skipped` from
+Step 1) and append:
 
 ```yaml
 gates:
@@ -452,21 +239,34 @@ gates:
     notes: "{user's decision context}"
     conditions:
       - "{condition 1}"
-      - "{condition 2}"
     skip_reason: "{reason}"     # only when decision is skipped (Step 1)
-    risks_accepted:             # map — counts of accepted open risks by severity
+    risks_accepted:             # counts of accepted open risks by severity
       critical: {N}
       high: {N}
 ```
 
-If conditions were accepted, add corresponding tasks to `tasks.md` (with user confirmation).
+With `--from-forge`, return the findings summary, `conditions` and `risks_accepted`
+(or the Step 1 skip and its reason) to forge.
 
----
+For each accepted condition, propose a task for `tasks.md` and add it once the user
+confirms.
 
-## Operating Principles
+Hand-off: `Next step: /speckit.product-forge.implement` (Phase 6).
 
-1. **No false positives.** Only flag genuine concerns backed by evidence from artifacts.
-2. **Proportional.** Small features get lightweight reviews. Large features get thorough reviews.
-3. **Actionable.** Every finding has a specific recommendation, not just "this might be a problem."
-4. **Non-blocking by default.** The review is optional for small features. Conditions can be accepted without resolution.
-5. **Connected.** Findings reference specific artifacts, line numbers, and requirements.
+## Done when
+
+- The scope classification is shown; the skip offer appeared only for ≤ 5 tasks, no
+  UI and `require_pre_impl_review` not `true`, and a skip recorded `skipped` with its
+  reason.
+- Otherwise `pre-impl-review.md` is written from the template, with Design Review
+  (2A–2D) for UI features or "Skipped — no UI", all three architecture tables, and a
+  risk register covering the four categories, every applicable prior lesson, and the
+  contradiction and determinism results.
+- Every design / architecture / risk finding is in `gate-review.md` as a new `F-NNN`
+  continuing the existing numbering.
+- Every condition has the user's answer; each accepted condition the user confirmed
+  is a task in `tasks.md`.
+- Standalone: the gate was shown, its decision appended to `gates[]` with
+  `conditions` and `risks_accepted`, and `phases.pre_impl_review.status` set from it.
+- `--from-forge`: the findings summary, `conditions` and `risks_accepted` were
+  returned to forge with no gate prompt and no status or `gates[]` write.

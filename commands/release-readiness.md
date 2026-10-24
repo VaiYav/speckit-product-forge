@@ -1,95 +1,71 @@
 ---
 name: speckit.product-forge.release-readiness
 description: >
-  Phase 9: Pre-ship readiness checklist. Covers feature flags, rollout strategy,
-  rollback plan, documentation, monitoring, analytics, and deployment dependencies.
-  Consolidates api-docs, tracking-plan, and security-check status into one gate.
-  Optional for internal/backend-only features.
-  Use: "release readiness", "ready to ship?", "/speckit.product-forge.release-readiness"
+  Checks a verified feature is safe to ship (Phase 9): flags, rollout and rollback,
+  docs, monitoring, analytics, deployment and supply chain, consolidating api-docs,
+  tracking-plan and security-check status into one gate. Optional for
+  internal/backend-only features.
 ---
 
-# Product Forge — Release Readiness (Phase 9)
+# Product Forge — Phase 9: Release Readiness
 
-You are the **Release Readiness Analyst** for Product Forge.
-Your goal: ensure the feature is truly ready for production — not just "code works" but
-"safe to ship, observable, rollbackable, documented, and measurable."
+You are the **Release Readiness Analyst**. You establish that the feature is safe to
+ship, observable, rollbackable, documented and measurable — producing the flag
+registry, monitoring and supply-chain artifacts rather than only checking for them —
+and write `release-readiness.md` with a verdict.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-`release-readiness.md`, `flags/`, `monitoring/` and `supply-chain/` outputs go
-under `{FEATURE_DIR}/.forge-dry-run/release_readiness/`, no provider-side flag
-registration happens, and no status or gate entry is written.
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** `release_readiness` (Phase 9)
+- **Config keys:** `codebase_path`, `telemetry.dashboards`,
+  `supply_chain.license_allowlist`, `require_skip_reason`
+- **Writes:** `release-readiness.md`, `flags/registry.yml`,
+  `monitoring/` (`dashboard.json`, `alerts.yml`, `slo.md`), `supply-chain/`,
+  `phases.release_readiness.status`, `release_readiness.supply_chain_paths`,
+  `traceability.yml` (`status: verified` on approval)
+- **Contract deltas:**
+  - `--dry-run` also skips provider-side flag registration.
+  - Gate extras: `conditions`, `action_items` (Step 8).
+  - A missing tool, skill or provider becomes an action item; it never aborts the gate.
 
-## Step 0: Load Context
+## Step 0: Load context
 
-1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
-   Keys used: `codebase_path`, `telemetry.dashboards`, `supply_chain.license_allowlist`,
-   `require_skip_reason`.
-   Every Markdown document this command writes follows `max_tokens_per_doc`
-   ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)).
-2. Read `{FEATURE_DIR}/.forge-status.yml` — verify `phases.verify.status` is `completed`
-3. If verify is not completed: **STOP** — "Phase 7 (Verification) must pass first."
+Require `phases.verify.status: completed`; otherwise stop with
+*"Phase 7 (Verification) must pass first."*
 
-Load artifacts:
-- `{FEATURE_DIR}/spec.md` — requirements, NFRs, success metrics
-- `{FEATURE_DIR}/plan.md` — architecture, data model, migrations
-- `{FEATURE_DIR}/tasks.md` — implementation scope
-- `{FEATURE_DIR}/verify-report.md` — verification status
-- `{FEATURE_DIR}/code-review.md` — code review status (if exists)
-- `{FEATURE_DIR}/pre-impl-review.md` — risk assessment (if exists)
-- `{FEATURE_DIR}/test-report.md` — test results (if exists)
-- `{FEATURE_DIR}/research/metrics-roi.md` — predicted KPIs (if exists)
-- `{FEATURE_DIR}/product-spec/product-spec.md` — user stories
-- `codebase_path` — scan for feature flags, env vars, migrations
+Read from `{FEATURE_DIR}`: `spec.md` (requirements, NFRs, success metrics), `plan.md`
+(architecture, data model, migrations), `tasks.md`, `verify-report.md`,
+`product-spec/product-spec.md`, and when present `code-review.md`,
+`pre-impl-review.md`, `test-report.md`, `research/metrics-roi.md`. Scan
+`codebase_path` for feature flags, env vars and migrations.
 
----
+This phase consolidates the status of `api-docs`, `tracking-plan` and
+`security-check`: check whether each ran and surface its result; re-run none of them.
 
-> **Interaction (normative):** the readiness gate in this phase uses the structured
-> convention in [docs/interaction.md](../docs/interaction.md) (ready snippets in
-> [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
-> Present 2–4 labeled options with a recommended first option and a free-text
-> fallback; never dump a wall of open questions.
+## Step 1: Feature flags, rollout and rollback
 
----
+One scan → build flow. Its only outputs are `flags/registry.yml` and the Rollout /
+Rollback sections of `release-readiness.md`.
 
-## Step 1: Feature Flags, Rollout, and Rollback
+**1A: Scan for flag candidates.** Search the codebase for:
 
-This step consolidates scanning, strategy, and artifact production into
-one pipeline. It replaces the previous scan-then-report-then-create
-structure with a single scan → build → verify flow.
+- SDK imports: `LaunchDarkly`, `Unleash`, `GrowthBook`, `flagsmith`
+- predicates: `isFeatureEnabled(...)`, `flags.get(...)`, `useFlag(...)`, `featureFlags.*`
+- env vars matching `FEATURE_*`, `ENABLE_*`, `*_ENABLED`
+- any reference inside the files in `task_log[].paths`
 
-### 1A: Scan for flag candidates (input)
+Record each candidate's key, reference locations, inferred default and the branch
+that is the treatment.
 
-Search the codebase for feature-flag patterns. The results feed Step 1D.
-No standalone report is produced — this is the input to the registry
-builder.
-
-Patterns searched:
-- Framework SDK imports: `LaunchDarkly`, `Unleash`, `GrowthBook`, `flagsmith`.
-- Custom predicates: `isFeatureEnabled(...)`, `flags.get(...)`,
-  `useFlag(...)`, `featureFlags.*`.
-- Environment variables matching `FEATURE_*`, `ENABLE_*`, `*_ENABLED`.
-- Any reference inside files listed in `task_log[].paths`.
-
-Record every candidate with: key, reference locations, inferred default,
-branch that represents the treatment.
-
-### 1B: Build rollout strategy (input)
-
-Derive from:
-- `pre-impl-review.md` risk level (if present).
-- `plan.md` — data migrations, breaking API changes.
-- `spec.md` — user-facing surface area, success metrics.
-
-Produce a rollout plan object (feeds into Step 1D and into
-`release-readiness.md` §Rollout Plan):
+**1B: Rollout strategy.** Derive from the `pre-impl-review.md` risk level (if
+present), `plan.md` (data migrations, breaking API changes) and `spec.md`
+(user-facing surface, success metrics):
 
 ```yaml
 strategy: "{canary | percentage | internal-first | big-bang}"
@@ -104,10 +80,8 @@ rollback_triggers:
   - "<custom metric from spec>"
 ```
 
-### 1C: Build rollback plan (input)
-
-Derive from plan, data migration plan (if Phase 5.5 ran), and flag
-strategy. Produce:
+**1C: Rollback plan.** Derive from the plan, the data migration plan (if Phase 5.5
+ran) and the flag strategy:
 
 ```yaml
 reversible: true | conditional | false
@@ -121,15 +95,10 @@ steps:
   - "Monitor error rate for 10m"
 ```
 
-### 1D: Produce flag registry (active)
-
-Actively build `{FEATURE_DIR}/flags/registry.yml` from the scan in Step 1A
-and the strategy in Step 1B. If a `feature-flag-manager` skill is
-installed, delegate the provider-side registration (create-only, no
-production toggling). If not, write the registry file only and mark
-"manual registration" as an action item.
-
-Registry shape:
+**1D: Flag registry.** Build `{FEATURE_DIR}/flags/registry.yml` from 1A and 1B. When
+a `feature-flag-manager` skill is installed, delegate provider-side registration to
+it (create-only, never toggling production); otherwise write the registry only and
+add a "manual registration" action item.
 
 ```yaml
 # {FEATURE_DIR}/flags/registry.yml
@@ -141,65 +110,37 @@ flags:
     rollout_plan: "{strategy from Step 1B}"
     cleanup_after: "{ISO date — when the flag becomes dead code}"
     kill_switch: true
-    experiment: false     # set to true to trigger Phase 9B experiment-design
+    experiment: false     # true triggers Phase 9B experiment-design
 ```
 
-The registry lives at the fixed path `flags/registry.yml` (read from there by
-experiment-design and feature-flag-cleanup); it is not recorded in the status file.
-
-No standalone "Feature Flag Detection" or "Rollback Plan" report tables.
-The artifacts produced in 1D and the sections later compiled into
-`release-readiness.md` are the only outputs of Step 1.
-
----
+The registry lives at the fixed path `flags/registry.yml` (read there by
+`experiment-design` and `feature-flag-cleanup`); it is not recorded in the status file.
 
 ## Step 2: Documentation
 
-### 2A: User-Facing Documentation
+| Area | Check | Status / action |
+|------|-------|-----------------|
+| User-facing | Feature user-facing? | {Yes/No} |
+| | User docs | {✅ Exists / ❌ Missing / N-A} — what to write |
+| | In-app help / tooltips | {✅/❌/N-A} — screens needing help text |
+| | Changelog entry drafted | {✅/❌} |
+| | Migration guide (breaking change for users) | {✅/❌/N-A} |
+| Developer | API docs | {✅ api-docs/ exists / ❌ Run /speckit.product-forge.api-docs} |
+| | README updated | {✅/❌/N-A} |
+| | Architecture decision recorded | {✅/❌} — from plan.md |
+| | Environment variables documented | {✅/❌} — new env vars from implementation |
+| Operational | Runbook entry | {✅ Exists / ❌ Write / N-A} |
+| | On-call context documented | {✅/❌/N-A} |
+| | Known limitations documented | {✅/❌} |
 
-Analyze spec.md user stories — does this feature need user docs?
+## Step 3: Monitoring and observability
 
-| Check | Status | Action Needed |
-|-------|:------:|--------------|
-| User-facing feature? | {Yes/No} | |
-| User docs needed? | {✅ Exists / ❌ Missing / N-A} | {what to write} |
-| In-app help/tooltips needed? | {✅/❌/N-A} | {screens needing help text} |
-| Changelog entry drafted? | {✅/❌} | |
-| Migration guide needed? | {✅/❌/N-A} | {if breaking change for users} |
+**3A: SLI candidates** — deduplicated from `spec.md` NFRs (latency, error rate,
+availability), `research/metrics-roi.md` predicted KPIs and
+`tracking/tracking-plan.md` events that imply rate / latency SLIs. Each has a name,
+target, measurement window and source.
 
-### 2B: Developer Documentation
-
-| Check | Status | Action Needed |
-|-------|:------:|--------------|
-| API docs generated? | {✅ api-docs/ exists / ❌ Run /speckit.product-forge.api-docs} | |
-| README updated? | {✅/❌/N-A} | |
-| Architecture decision recorded? | {✅/❌} | {from plan.md} |
-| Environment variables documented? | {✅/❌} | {new env vars from implementation} |
-
-### 2C: Operational Documentation
-
-| Check | Status | Action Needed |
-|-------|:------:|--------------|
-| Runbook entry needed? | {✅ Exists / ❌ Write / N-A} | |
-| On-call context documented? | {✅/❌/N-A} | |
-| Known limitations documented? | {✅/❌} | |
-
----
-
-## Step 3: Monitoring & Observability (scan + build in one pass)
-
-### 3A: Derive SLI candidates (input)
-
-Extract SLI candidates from three sources, deduplicated:
-- `spec.md` NFRs (latency targets, error-rate bounds, availability).
-- `research/metrics-roi.md` predicted KPIs.
-- `tracking/tracking-plan.md` events that imply rate/latency SLIs.
-
-Each SLI candidate has: name, target, measurement window, source.
-
-### 3B: Derive alert candidates (input)
-
-From the SLI list above, propose alert rules:
+**3B: Alert candidates** from the SLIs:
 
 | Alert | Condition | Severity | Channel |
 |-------|-----------|:--------:|---------|
@@ -207,49 +148,33 @@ From the SLI list above, propose alert rules:
 | Latency degradation | `p95_ms > <target> for 10m` | P2 | {project default} |
 | {feature-specific} | ... | ... | ... |
 
-### 3C: Build monitoring artifacts (active)
-
-Actively produce, targeting the **configured backend** (`telemetry.dashboards`:
+**3C: Monitoring artifacts** for the configured backend (`telemetry.dashboards`:
 PostHog / Sentry; NewRelic optional):
 
-- `{FEATURE_DIR}/monitoring/dashboard.json` — dashboard for the configured
-  provider (PostHog insights / Sentry dashboard via the connected MCP, or a
-  NerdGraph-compatible JSON via `newrelic-dashboard-builder` when
-  `telemetry.dashboards: newrelic`).
-- `{FEATURE_DIR}/monitoring/alerts.yml` — alert policies from Step 3B.
+- `{FEATURE_DIR}/monitoring/dashboard.json` — PostHog insights / Sentry dashboard via
+  the connected MCP, or NerdGraph-compatible JSON via `newrelic-dashboard-builder`
+  when `telemetry.dashboards: newrelic`.
+- `{FEATURE_DIR}/monitoring/alerts.yml` — alert policies from 3B.
 - `{FEATURE_DIR}/monitoring/slo.md` — SLI/SLO doc with error budget.
 
-Read-only output — do not push the dashboard to the provider automatically. The
-user applies it after review, or invokes
-`/speckit.product-forge.monitoring-setup` (Phase 9.5) to extend it.
-
-If the configured provider's MCP/skill is unavailable, write `alerts.yml` and
-`slo.md` and mark "dashboard.json: provider unavailable" as an action item.
-
-These live at the fixed `monitoring/` paths above; they are not recorded in the
-status file.
-
-No standalone scan-and-report tables. Steps 3A and 3B are inputs; Step 3C
-is the only output.
-
----
+These are files for review: the user applies the dashboard, or runs
+`/speckit.product-forge.monitoring-setup` (Phase 9.5) to extend it. When the
+provider's MCP / skill is unavailable, write `alerts.yml` and `slo.md` and add the
+action item "dashboard.json: provider unavailable". The fixed `monitoring/` paths are
+not recorded in the status file. 3A and 3B are inputs; 3C is the only output.
 
 ## Step 4: Analytics
 
-### 4A: Tracking Plan Status
-
-| Check | Status | Action Needed |
-|-------|:------:|--------------|
+| Check | Status | Action needed |
+|-------|:------:|---------------|
 | Tracking plan exists? | {✅ tracking/ exists / ❌ Run /speckit.product-forge.tracking-plan} | |
 | Key events instrumented? | {✅/❌} | {events to add} |
 | Funnel defined? | {✅/❌/N-A} | |
-| Success metrics measurable? | {✅/❌} | {which metrics can't be measured yet} |
+| Success metrics measurable? | {✅/❌} | {metrics not yet measurable} |
 
----
+## Step 5: Deployment dependencies
 
-## Step 5: Deployment Dependencies
-
-### 5A: Environment Readiness
+### 5A: Environment readiness
 
 | Environment | Ready? | Blockers |
 |-------------|:------:|---------|
@@ -267,7 +192,7 @@ is the only output.
 | CI/CD pipeline updated? | {✅/❌/N-A} | {new build steps, test stages} |
 | Resource scaling needed? | {✅/❌/N-A} | {memory, CPU, storage} |
 
-### 5C: Security Status
+### 5C: Security status
 
 | Check | Status | Details |
 |-------|:------:|---------|
@@ -276,18 +201,13 @@ is the only output.
 | Secrets management OK? | {✅/❌} | |
 | Permissions/RBAC configured? | {✅/❌/N-A} | |
 
-### 5C-bis: Supply chain (active) (v1.6, W5-B3)
+### 5C-bis: Supply chain
 
-Supply-chain readiness is **artifact-producing**, not a checkbox. Run the four
-carriers below against `codebase_path`, write the outputs under
-`{FEATURE_DIR}/supply-chain/`, and feed findings into the Step 6 Action Items
-table. This is the same SCA tool named in [code-review.md](./code-review.md)'s
-Step 1.5 machine-gate row (OSV-Scanner) — release-readiness runs it in
-**PR-diff mode** so the gate blocks only on *newly introduced* high/critical
-findings (delta philosophy: a feature isn't penalised for pre-existing debt).
-
-Each carrier follows the **graceful-degradation** guard of Operating Principle
-7 — a missing tool becomes a MUST action item, never an aborted gate:
+Run the four carriers against `codebase_path`, write their outputs under
+`{FEATURE_DIR}/supply-chain/`, and feed the findings into the Step 6 action items.
+The SCA tool is the OSV-Scanner of the [code-review](./code-review.md) Step 1.5
+machine gate, here in **PR-diff mode**: only findings *new* in this change gate the
+verdict. A missing tool becomes a MUST action item.
 
 **(a) SBOM — Syft (CycloneDX):**
 
@@ -298,13 +218,8 @@ command -v syft >/dev/null 2>&1 \
   || echo "ACTION ITEM (MUST): syft not installed — generate SBOM before ship (https://github.com/anchore/syft)"
 ```
 
-The SBOM path is recorded with the other supply-chain paths at the end of this
-step (`release_readiness.supply_chain_paths.sbom`).
-
-**(b) SCA — OSV-Scanner in PR-diff mode (block only on NEW high/critical):**
-
-Scan the merge base and HEAD, then take the *new* findings as the set
-difference. Only NEW high/critical findings gate the verdict.
+**(b) SCA — OSV-Scanner, new high/critical only.** Scan the merge base and HEAD; the
+new findings are the set difference.
 
 ```bash
 if command -v osv-scanner >/dev/null 2>&1; then
@@ -325,17 +240,13 @@ else
 fi
 ```
 
-CI variant: where this runs in a PR pipeline, use the reusable
-`google/osv-scanner-action` PR workflow, which natively reports only
-PR-introduced vulnerabilities — no baseline scan needed. (`--ci` routing of
-this gate is W5-B1's bundle; this phase stays a human gate at every risk per
-[policy §9.3](../docs/policy.md).)
+In a PR pipeline, the reusable `google/osv-scanner-action` PR workflow reports only
+PR-introduced vulnerabilities, so no baseline scan is needed. This phase stays a
+human gate at every risk level
+([policy.md §9.3](../docs/policy.md#93-risk-routing-a4--auto-recommend-never-auto-approve)).
 
-**(c) License allowlist — OSV-Scanner against an SPDX allowlist:**
-
-Read the allowlist from the effective config (Step 0) key
-`supply_chain.license_allowlist` (literal default below if unset). Any package
-with a license outside the set is a violation.
+**(c) License allowlist** — `supply_chain.license_allowlist` from the effective
+config (default below). Any package licensed outside the set is a violation.
 
 ```bash
 ALLOW="${PRODUCT_FORGE_SUPPLY_CHAIN_LICENSE_ALLOWLIST:-MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,0BSD,Unlicense}"
@@ -345,10 +256,8 @@ command -v osv-scanner >/dev/null 2>&1 \
   || echo "ACTION ITEM (MUST): osv-scanner not installed — run license check before ship"
 ```
 
-**(d) Build provenance — GitHub `actions/attest-build-provenance`:**
-
-Provenance is produced by a CI workflow, not a local CLI. Confirm (or add) a
-job step that attests the built artifact:
+**(d) Build provenance** — produced in CI. Confirm (or propose) a release-workflow
+step:
 
 ```yaml
 # .github/workflows/release.yml (job needs: id-token: write, attestations: write, contents: read)
@@ -358,110 +267,32 @@ job step that attests the built artifact:
     subject-path: "dist/**"   # the shipped build artifact(s)
 ```
 
-If no attestation step exists, log a SHOULD action item ("add
-attest-build-provenance to the release workflow").
+Without it, add the SHOULD action item "add attest-build-provenance to the release
+workflow".
 
-**Wire into the gate.** Translate the carriers into Step 6 Action Items and the
-Security category verdict:
+**Wire into the verdict:**
 
-| Carrier finding | Action item priority | Verdict effect |
-|-----------------|:--------------------:|----------------|
-| NEW critical CVE (from `osv-new-ids.txt`) | MUST | NOT READY until resolved or accepted as a documented condition |
-| NEW high CVE | MUST | CONDITIONALLY READY (record as accepted risk) or fix |
+| Carrier finding | Action item | Verdict effect |
+|-----------------|:-----------:|----------------|
+| NEW critical CVE (`osv-new-ids.txt`) | MUST | NOT READY until resolved or accepted as a documented condition |
+| NEW high CVE | MUST | CONDITIONALLY READY (accepted risk) or fix |
 | Disallowed license | MUST | NOT READY / documented exception |
-| Missing SBOM / SCA tool | MUST | action item; do not block the gate on tool absence |
+| Missing SBOM / SCA tool | MUST | action item only; the gate is not blocked |
 | Missing provenance step | SHOULD | recorded, non-blocking |
 
-Record paths on `.forge-status.yml` under
-`release_readiness.supply_chain_paths` (sbom / sca / licenses) in the Step 8 write.
+## Step 6: Write `release-readiness.md`
 
----
+Write `{FEATURE_DIR}/release-readiness.md` from
+[docs/templates/release-readiness-report.md](../docs/templates/release-readiness-report.md).
+Every "ready" claim names its evidence (alert exists, flag configured, docs written);
+known limitations are documented rather than blocking; the checklist depth matches
+the risk (a config change needs less than a new payment flow), and the release
+coordination items (team notified, release notes) are listed.
 
-## Step 6: Generate release-readiness.md
+## Step 7: Present and gate
 
-Write `{FEATURE_DIR}/release-readiness.md`:
-
-```markdown
-# Release Readiness: {Feature Name}
-
-> Feature: {slug} | Date: {today}
-> Verdict: {READY TO SHIP / CONDITIONALLY READY / NOT READY}
-
-## Summary
-
-| Category | Status | Action Items |
-|----------|:------:|:------------:|
-| Feature Flags & Rollout | {✅/⚠️/❌} | {N} |
-| Documentation | {✅/⚠️/❌} | {N} |
-| Monitoring & Observability | {✅/⚠️/❌} | {N} |
-| Analytics | {✅/⚠️/❌} | {N} |
-| Deployment Dependencies | {✅/⚠️/❌} | {N} |
-| Security | {✅/⚠️/❌} | {N} |
-
-## Prior Quality Gates
-
-| Gate | Status | Date |
-|------|:------:|------|
-| Pre-Impl Review | {result from pre-impl-review.md or "Skipped"} | {date} |
-| Code Review | {result from code-review.md or "Skipped"} | {date} |
-| Verification | {result from verify-report.md} | {date} |
-| Test Run | {result from test-report.md or "Skipped"} | {date} |
-
-## Rollout Plan
-
-{Rollout strategy from Step 1B}
-
-## Rollback Plan
-
-{Rollback plan from Step 1C}
-
-## Action Items Before Ship
-
-| # | Category | Action | Priority | Status |
-|---|----------|--------|:--------:|:------:|
-| 1 | {cat} | {action} | {MUST/SHOULD/NICE-TO-HAVE} | {TODO/DONE} |
-
-## Ship Checklist
-
-- [ ] All MUST-priority action items completed
-- [ ] Feature flag configured and defaulting to OFF
-- [ ] Monitoring alerts configured
-- [ ] Rollback plan tested or documented
-- [ ] Team notified of upcoming release
-- [ ] Release notes drafted
-
-## Verdict
-
-**{READY TO SHIP / CONDITIONALLY READY / NOT READY}**
-
-{If CONDITIONALLY READY: list the conditions}
-{If NOT READY: list the blockers}
-```
-
----
-
-## Step 7: Present to User
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🚀 Release Readiness: {Feature Name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  Feature Flags:  {✅/⚠️/❌}
-  Documentation:  {✅/⚠️/❌}
-  Monitoring:     {✅/⚠️/❌}
-  Analytics:      {✅/⚠️/❌}
-  Dependencies:   {✅/⚠️/❌}
-  Security:       {✅/⚠️/❌}
-
-  Action items: {N} MUST, {N} SHOULD, {N} NICE-TO-HAVE
-
-  Verdict: {READY TO SHIP / CONDITIONALLY READY / NOT READY}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-Gate (structured — see [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase), recommended option first, free-text fallback):
+Show the six category statuses, the action-item counts (MUST / SHOULD /
+NICE-TO-HAVE) and the verdict. Standalone, show the gate:
 
 ```
 [Gate] Release Readiness complete — verdict: {READY TO SHIP / CONDITIONALLY READY / NOT READY}. How do you want to proceed?
@@ -474,39 +305,25 @@ Gate (structured — see [docs/templates/interaction-prompts.md](../docs/templat
   (or type your own answer)
 ```
 
-Option 3 follows the computed Skip rule ([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)):
-it names the **next** phase (9.5 Monitoring Setup, `opt`); release readiness
-itself is never skipped at its own gate (that choice is made at the test-run
-gate). Maps to `gates[].decision` (Step 8). The readiness verdict drives the
-recommended option: READY TO SHIP / CONDITIONALLY READY recommend **Approve**;
-NOT READY recommends **Revise** or **Abort**.
+- The verdict picks the recommended option: READY TO SHIP / CONDITIONALLY READY →
+  **Approve**; NOT READY → **Revise** or **Abort**.
+- Option 3 follows the computed Skip rule
+  ([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)): it names the next phase,
+  9.5 Monitoring Setup (`opt`). Release readiness itself is skipped only at the
+  test-run gate.
 
-**Next step (on Approve):** the post-ship phases follow
-[phase-map](../docs/schema/phase-map.yml) order, each optional and offered in turn:
+## Step 8: Status and gate entry
 
-1. **9.5 Monitoring Setup** — `/speckit.product-forge.monitoring-setup` (extends `monitoring/`)
-2. **9B Experiment Design** — `/speckit.product-forge.experiment-design` (offered when
-   `flags/registry.yml` has a flag with `experiment: true`)
-3. **10 Spec Merge** — `/speckit.product-forge.spec-merge` (folds the shipped delta
-   back into canonical `specs/`)
-
----
-
-## Step 8: Update Status
-
-Map the Step 7 choice onto exactly one decision literal, and set status from it
-per [runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
-
-| Step 7 choice | Verdict that recommends it | `decision` literal | Status |
-|---------------|----------------------------|--------------------|--------|
+| Step 7 choice | Verdict that recommends it | `decision` | Status |
+|---------------|----------------------------|------------|--------|
 | Approve (ship it) | READY TO SHIP | `approved` | `phases.release_readiness.status: completed` |
 | Approve (ship with known issues) | CONDITIONALLY READY | `approved_with_conditions` — populate `conditions[]` | `phases.release_readiness.status: completed` |
 | Skip Monitoring Setup | READY / CONDITIONALLY READY | `skipped` + `skip_reason` (ask when `require_skip_reason: true`) | `phases.release_readiness.status: completed`; `phases.monitoring_setup.status: skipped` + `skip_reason` |
 | Revise (fix and re-check) | NOT READY | `revised` | `phases.release_readiness.status: in_progress` |
-| Rollback | any | `rolled_back` — set `rolled_back_to: "<phase>"` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
+| Rollback | any | `rolled_back` + `rolled_back_to: "<phase>"` | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
 | Abort (hold) | NOT READY | `aborted` | unchanged |
 
-Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
+Write on every run (standalone sets `status`; `--from-forge` leaves it to forge):
 
 ```yaml
 phases:
@@ -519,10 +336,7 @@ release_readiness:         # top-level block declared in the canonical schema
     licenses: "supply-chain/osv-licenses.json"
 ```
 
-Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
-run only**. When `$ARGUMENTS` contains `--from-forge`, do **not** show the Gate prompt,
-set the phase `status`, or append; return the findings summary, `conditions` and `action_items` to the orchestrator, which writes
-the entry. On a standalone run, append:
+Standalone, append:
 
 ```yaml
 gates:
@@ -534,30 +348,47 @@ gates:
       - "{accepted risk / known issue documented at ship time}"
     rolled_back_to: "{phase}"  # required when decision == rolled_back; omit otherwise
     skip_reason: "{reason}"    # required when decision == skipped; omit otherwise
-    action_items:              # map — must/should/nice tally
+    action_items:              # must/should/nice tally
       must: {N}
       must_completed: {N}
       should: {N}
       nice_to_have: {N}
 ```
 
-On **Approve** / **Approve with conditions**, release-readiness MAY promote
-traceability rows whose acceptance is confirmed to `status: verified` (the
+With `--from-forge`, return the findings summary, `conditions` and `action_items` to
+forge.
+
+On **Approve** / **Approve with conditions**, release-readiness may promote
+`traceability.yml` rows whose acceptance is confirmed to `status: verified` (the
 canonical producers of `verified` are release-readiness and spec-merge).
 
----
+Hand-off on Approve — the post-ship phases follow
+[phase-map](../docs/schema/phase-map.yml) order, each optional and offered in turn:
 
-## Operating Principles
+1. **9.5 Monitoring Setup** — `/speckit.product-forge.monitoring-setup` (extends `monitoring/`)
+2. **9B Experiment Design** — `/speckit.product-forge.experiment-design` (offered when
+   `flags/registry.yml` has a flag with `experiment: true`)
+3. **10 Spec Merge** — `/speckit.product-forge.spec-merge` (folds the shipped delta
+   back into canonical `specs/`)
 
-1. **Consolidator.** This phase ties together api-docs, security-check, tracking-plan status. Don't duplicate their work — check if they've been run and surface their results.
-2. **Artifact producer, not just checker.** Steps 1D and 3D produce real
-   flag-registry and monitoring artifacts. Don't fall back to "confirm a
-   dashboard exists somewhere" — either produce the artifact or log an
-   action item.
-3. **Practical.** Don't require perfection. Some features ship with known limitations — document them.
-4. **Risk-proportional.** A small config change needs a lighter checklist than a new payment flow.
-5. **Team-aware.** Consider that shipping involves coordination — other people need to know.
-6. **Measurable.** Every "ready" claim should be verifiable: alert exists, flag configured, docs written.
-7. **Graceful degradation.** If a required provider skill
-   (feature-flag-manager, newrelic-dashboard-builder) is missing, the step
-   is skipped with an action item rather than aborting the gate.
+## Done when
+
+- `flags/registry.yml` lists every flag candidate from the scan with its rollout
+  plan; provider registration was delegated or a "manual registration" action item
+  exists.
+- `monitoring/alerts.yml` and `monitoring/slo.md` exist, plus `dashboard.json` or the
+  "provider unavailable" action item.
+- Every supply-chain carrier produced its file under `supply-chain/`, or a missing
+  tool produced its MUST (provenance: SHOULD) action item; NEW critical / high CVEs
+  and disallowed licenses are reflected in the verdict.
+- `release-readiness.md` is written from the template with all six categories, the
+  prior-gate statuses (api-docs, tracking-plan and security-check surfaced), rollout
+  and rollback plans, every action item, and a verdict.
+- `release_readiness.supply_chain_paths` is recorded.
+- Standalone: the gate was shown with the verdict-driven recommendation, its decision
+  appended to `gates[]` with `action_items` (and `conditions` / `skip_reason` /
+  `rolled_back_to` as required), and the statuses set per the Step 8 table.
+- `--from-forge`: the findings summary, `conditions` and `action_items` were returned
+  to forge with no gate prompt and no `phases.release_readiness.status` or `gates[]`
+  write.
+- On Approve, the next step offered is 9.5 → 9B → 10, in that order.
