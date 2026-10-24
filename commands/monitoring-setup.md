@@ -46,9 +46,16 @@ Parse for:
 > NewRelic remains a supported option via the installed skill; unresolved or unwired
 > providers produce provider-neutral templated stubs.
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics)
+(no dashboards/alerts are created via MCP in a dry-run).
+
 ---
 
 ## Step 0: Prerequisites
+
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+keys used: `telemetry.dashboards`, `features_dir` + `storage_strategy` (to resolve
+`{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
 
 1. `.forge-status.yml` exists and `phases.release_readiness.status` is
    `completed` or `skipped` (the user has at least decided on Phase 9).
@@ -197,7 +204,11 @@ Write `{FEATURE_DIR}/monitoring/slo.md`:
 
 ## Step 5: Update Status
 
-Update `.forge-status.yml`:
+First produce a short `monitoring/digest.md` following the phase-digest
+template, consistent with the digest rule in
+[`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4); then update
+`.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+The run summary lives under the phase key (never a top-level `monitoring:` block):
 
 ```yaml
 phases:
@@ -206,16 +217,11 @@ phases:
     started_at: "{ISO}"
     completed_at: "{ISO}"
     digest_path: "monitoring/digest.md"
-monitoring:
-  dashboard_path: "monitoring/dashboard.json"
-  alerts_path: "monitoring/alerts.yml"
-  slo_path: "monitoring/slo.md"
-  provider: "{resolved telemetry.dashboards — posthog | sentry | newrelic | none}"
+    dashboard_path: "monitoring/dashboard.json"
+    alerts_path: "monitoring/alerts.yml"
+    slo_path: "monitoring/slo.md"
+    provider: "{resolved telemetry.dashboards — posthog | sentry | newrelic | none}"
 ```
-
-Also produce a short `monitoring/digest.md` following the phase-digest
-template to remain consistent with the digest rule in
-[`docs/runtime.md §8`](../docs/runtime.md#8-phase-digest-requirement-a4).
 
 ---
 

@@ -19,14 +19,19 @@ user journeys and success metrics — so analytics is wired correctly from day o
 $ARGUMENTS
 ```
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+
 ---
 
 ## Step 1: Validate Prerequisites
 
-1. Read `.forge-status.yml` — `product_spec` must be `completed` (Phase 2 done)
-2. Read `product-spec/product-spec.md` → success metrics, user stories
-3. Read `product-spec/journeys/journeys.yml` → all journeys (JRN/STEP/EDGE) and decision points; give each event a stable `EVT-*` id and map it to journey steps
-4. Read `research/metrics-roi.md` (if exists) → predicted KPIs
+1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+   keys used: `codebase_path` (or monorepo `codebase.paths`, scanned in Step 2),
+   `features_dir` + `storage_strategy` (to resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+2. Read `.forge-status.yml` — `phases.product_spec.status` must be `completed` (Phase 2 done)
+3. Read `product-spec/product-spec.md` → success metrics, user stories
+4. Read `product-spec/journeys/journeys.yml` → all journeys (JRN/STEP/EDGE) and decision points; give each event a stable `EVT-*` id and map it to journey steps
+5. Read `research/metrics-roi.md` (if exists) → predicted KPIs
 
 If not ready:
 > ⚠️ Product spec (Phase 2) must be completed before generating a tracking plan.
@@ -356,19 +361,19 @@ later run once the rows have been seeded.
 
 ### Update status
 
-Update `.forge-status.yml`:
+Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+The run summary lives under the phase key (never a top-level `tracking:` block):
 
 ```yaml
 phases:
-  tracking_plan: completed
-tracking:
-  sdk: "{ANALYTICS_SDK}"
-  events: {N}
-  funnels: {N}
-  files:
-    - "tracking/tracking-plan.md"
-    - "tracking/snippets.md"
-last_updated: "{ISO timestamp}"
+  tracking_plan:
+    status: completed
+    sdk: "{ANALYTICS_SDK}"
+    events: {N}
+    funnels: {N}
+    files:
+      - "tracking/tracking-plan.md"
+      - "tracking/snippets.md"
 ```
 
 ```

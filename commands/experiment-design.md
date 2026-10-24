@@ -39,11 +39,18 @@ Parse for:
 > user pre-registers the plan. The retrospective then reads this experiment's real
 > results. Without a connected MCP, produce the plan artifacts only.
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics)
+(no flag/experiment is created via MCP in a dry-run).
+
 ---
 
 ## Step 0: Prerequisites
 
-1. `.forge-status.yml` has `release_readiness.status` `completed`.
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+keys used: `telemetry.product_analytics`, `features_dir` + `storage_strategy` (to
+resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+
+1. `.forge-status.yml` has `phases.release_readiness.status` `completed`.
 2. `flags/registry.yml` exists and contains the specified flag.
 3. `research/metrics-roi.md` exists (source of primary metric
    expectations). If missing, ask the user for a primary metric; do not
@@ -242,7 +249,10 @@ guardrails:
 
 ## Step 7: Update Status
 
-Update `.forge-status.yml`:
+First write `experiment/digest.md` per the digest template
+([docs/templates/phase-digest.md](../docs/templates/phase-digest.md)), then update
+`.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+The run summary lives under the phase key (never a top-level `experiment:` block):
 
 ```yaml
 phases:
@@ -251,17 +261,14 @@ phases:
     started_at: "{ISO}"
     completed_at: "{ISO}"
     digest_path: "experiment/digest.md"
-experiment:
-  flag: "{flag-key}"
-  primary_metric: "{metric}"
-  sample_size_per_variant: {N}
-  expected_runtime_days: {N}
-  files:
-    design: "experiment/experiment-design.md"
-    spec:   "experiment/experiment.yml"
+    flag: "{flag-key}"
+    primary_metric: "{metric}"
+    sample_size_per_variant: {N}
+    expected_runtime_days: {N}
+    files:
+      design: "experiment/experiment-design.md"
+      spec:   "experiment/experiment.yml"
 ```
-
-Write `experiment/digest.md` per the digest template.
 
 ---
 

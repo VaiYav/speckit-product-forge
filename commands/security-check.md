@@ -19,13 +19,18 @@ does — not a generic checklist, but a threat-model-driven review of the implem
 $ARGUMENTS
 ```
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+
 ---
 
 ## Step 1: Validate Prerequisites
 
-1. Read `.forge-status.yml` — `implement` must be `completed`
-2. Read `plan.md` to understand what the feature does
-3. Read `product-spec/product-spec.md` for feature scope
+1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+   keys used: `codebase_path` (or monorepo `codebase.paths`), `features_dir` +
+   `storage_strategy` (to resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+2. Read `.forge-status.yml` — `phases.implement.status` must be `completed`
+3. Read `plan.md` to understand what the feature does
+4. Read `product-spec/product-spec.md` for feature scope
 
 ---
 
@@ -307,19 +312,19 @@ Skipped (not applicable): {list of skipped OWASP categories}
 
 ## Step 5: Update Status & Present Results
 
-Update `.forge-status.yml`:
+Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+The run counters live under the phase key (never a top-level `security:` block):
 
 ```yaml
 phases:
-  security_check: completed
-security:
-  critical: {N}
-  high: {N}
-  medium: {N}
-  low: {N}
-  passed: {N}
-  ship_ready: {true/false}
-last_updated: "{ISO timestamp}"
+  security_check:
+    status: completed
+    critical: {N}
+    high: {N}
+    medium: {N}
+    low: {N}
+    passed: {N}
+    ship_ready: {true/false}
 ```
 
 ```
@@ -338,7 +343,7 @@ Passed:        {N} checks ✅
 
 Ship readiness: {status}
 
-Full report: features/{slug}/security-check.md
+Full report: {FEATURE_DIR}/security-check.md
 ```
 
 If critical issues found:

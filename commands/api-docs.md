@@ -19,6 +19,8 @@ OpenAPI 3.1 spec and a Postman collection — automatically, with no manual writ
 $ARGUMENTS
 ```
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+
 ---
 
 > **Contract-first (v1.6, Theme F):** when `contracts/openapi.yaml` /
@@ -29,9 +31,12 @@ $ARGUMENTS
 
 ## Step 1: Validate Prerequisites
 
-1. Read `.forge-status.yml` — `implement` must be `completed` (Phase 6 done)
-2. Verify `plan.md` exists and contains API endpoint definitions
-3. Verify `spec.md` exists; load `contracts/openapi.yaml` + `contracts/asyncapi.yaml` if present
+1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+   keys used: `codebase_path` (or monorepo `codebase.paths`), `features_dir` +
+   `storage_strategy` (to resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+2. Read `.forge-status.yml` — `phases.implement.status` must be `completed` (Phase 6 done)
+3. Verify `plan.md` exists and contains API endpoint definitions
+4. Verify `spec.md` exists; load `contracts/openapi.yaml` + `contracts/asyncapi.yaml` if present
 
 If no API endpoints found in plan.md:
 > ℹ️ No API endpoints detected in plan.md. This command generates docs for backend APIs.
@@ -479,11 +484,13 @@ cp api-docs/openapi.yml {project swagger path}
 
 ## Step 8: Update Status & Present Results
 
-Update `.forge-status.yml`:
+Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+Keys this command writes:
 
 ```yaml
 phases:
-  api_docs: completed
+  api_docs:
+    status: completed
 # Top-level instrumentation block. Named `api_docs_report` (not `api_docs`) to avoid
 # the sibling collision with the `phases.api_docs` status entry — same rename pattern
 # the v3 schema applied to tasks → task_log.
@@ -494,7 +501,6 @@ api_docs_report:
   asyncapi_file: "api-docs/asyncapi.yml"   # omit if no contracts/asyncapi.yaml
   postman_file: "api-docs/postman-collection.json"
   drift_issues: {N}
-last_updated: "{ISO timestamp}"
 ```
 
 ```
@@ -516,5 +522,5 @@ Files created:
 Consistency: {N} operations clean ✅  {N} drift issues ⚠️
 
 To preview:
-  npx @stoplight/prism-cli mock features/{slug}/api-docs/openapi.yml
+  npx @stoplight/prism-cli mock {FEATURE_DIR}/api-docs/openapi.yml
 ```

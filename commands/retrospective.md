@@ -30,6 +30,12 @@ update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md` of what would change.
 
 ## Step 1: Validate Prerequisites
 
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+keys used: `telemetry.*` (`product_analytics`, `error_tracking`, `dashboards`),
+`learning.*` (`promote_to_skills`, `min_recurrence`, `require_confirmation`,
+`skill_category`), `features_dir` + `storage_strategy` (to resolve `{FEATURE_DIR}`,
+[§12](../docs/runtime.md#12-path-resolution-contract)).
+
 1. Read `.forge-status.yml` — find the feature slug and launch date
 2. Check that the feature was shipped: `phases.verify` is `completed` (minimum requirement).
    Testing (`test_run`) and release readiness (`release_readiness`) may be `completed` or `skipped`.
@@ -51,7 +57,7 @@ Days since launch: {N}
 1. How long has the feature been live?
    (Recommended: run after ≥14 days for meaningful data)
 
-2. Data sources available (auto-detected from config `telemetry:` block):
+2. Data sources available (auto-detected from the effective config's `telemetry:` block):
    - [ ] PostHog (connected MCP — query funnels, retention, experiments automatically)
    - [ ] Amplitude (connected MCP — query events, funnels, charts automatically)
    - [ ] Sentry (connected MCP — query error rates / regressions automatically)
@@ -61,9 +67,8 @@ Days since launch: {N}
    - [ ] I'll enter the metrics manually
 ```
 
-> **Use the connected MCPs (Theme D).** Read `telemetry:` from
-> `.product-forge/config.yml` (`product_analytics`, `error_tracking`, `dashboards`)
-> and pull real data via the matching MCP rather than asking for manual entry. Map
+> **Use the connected MCPs (Theme D).** Read `telemetry:` from the effective
+> config (`product_analytics`, `error_tracking`, `dashboards`) and pull real data via the matching MCP rather than asking for manual entry. Map
 > `EVT-*` ids from the tracking plan / `traceability.yml` to real event names before
 > querying (discover event names; never guess).
 
@@ -377,23 +382,24 @@ the only output. When `true` AND `skill_manage` is available in the host:
 
 ## Step 6: Update Status
 
-Update `.forge-status.yml`:
+Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+Everything lives under the phase key (never a top-level `retrospective:` block) —
+the same `phases.retrospective.*` location Steps 5 and 5B name:
 
 ```yaml
 phases:
-  retrospective: completed
-retrospective:
-  date: "{today}"
-  days_post_launch: {N}
-  adoption_actual: "{N}%"
-  adoption_predicted: "{N}%"
-  completion_rate: "{N}%"
-  error_rate: "{N}%"
-  open_issues: {N}
-  research_accuracy: "{N}/10"
-  lessons_added: {N}                  # number of blocks appended to lessons.md in Step 5
-  skills_promoted: []                 # v1.7 — Hermes skill names created/patched in Step 5B (empty unless learning.promote_to_skills)
-last_updated: "{ISO timestamp}"
+  retrospective:
+    status: completed
+    date: "{today}"
+    days_post_launch: {N}
+    adoption_actual: "{N}%"
+    adoption_predicted: "{N}%"
+    completion_rate: "{N}%"
+    error_rate: "{N}%"
+    open_issues: {N}
+    research_accuracy: "{N}/10"
+    lessons_added: {N}                # number of blocks appended to lessons.md in Step 5
+    skills_promoted: []               # v1.7 — Hermes skill names created/patched in Step 5B (empty unless learning.promote_to_skills)
 ```
 
 ---
@@ -418,7 +424,7 @@ Key learnings: {top learning}
 
 Open issues: {N} ({N} bugs, {N} enhancements)
 
-Full report: features/{slug}/retrospective.md
+Full report: {FEATURE_DIR}/retrospective.md
 ```
 
 This closes the Product Forge lifecycle loop:

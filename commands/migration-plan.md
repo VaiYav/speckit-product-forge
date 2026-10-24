@@ -31,13 +31,19 @@ Parse for:
 - `--db=<kind>` — `mongodb` | `postgres` | `mysql`. If omitted, detect
   from project config / plan.md hints.
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+
 ---
 
 ## Step 0: Prerequisites
 
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+keys used: `project_tech_stack`, `features_dir` + `storage_strategy` (to resolve
+`{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+
 1. `plan.md` exists AND its Data Model section is non-empty.
 2. Identify the DB kind:
-   - From `.product-forge/config.yml` `project_tech_stack` if clear.
+   - From the effective config's `project_tech_stack` if clear.
    - Otherwise from plan.md (Prisma schema ⇒ Postgres/MySQL; Mongoose
      schema ⇒ MongoDB; raw SQL ⇒ inspect).
 3. Confirm with the user before proceeding.
@@ -179,7 +185,10 @@ Top-level summary document:
 
 ## Step 7: Update Status
 
-Update `.forge-status.yml`:
+First write `migrations/digest.md` per the digest template
+([docs/templates/phase-digest.md](../docs/templates/phase-digest.md)), then update
+`.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+The run summary lives under the phase key (never a top-level `migration:` block):
 
 ```yaml
 phases:
@@ -188,18 +197,15 @@ phases:
     started_at: "{ISO}"
     completed_at: "{ISO}"
     digest_path: "migrations/digest.md"
-migration:
-  db_kind: "{postgres | mongodb | ...}"
-  strategy: "{primary}"
-  destructive_changes: {true | false}
-  files:
-    plan: "migrations/migration-plan.md"
-    forward: "migrations/forward.sql"
-    rollback: "migrations/rollback.sql"
-    validation: "migrations/validation.sql"
+    db_kind: "{postgres | mongodb | ...}"
+    strategy: "{primary}"
+    destructive_changes: {true | false}
+    files:
+      plan: "migrations/migration-plan.md"
+      forward: "migrations/forward.sql"
+      rollback: "migrations/rollback.sql"
+      validation: "migrations/validation.sql"
 ```
-
-Also write `migrations/digest.md` per the digest template.
 
 ---
 

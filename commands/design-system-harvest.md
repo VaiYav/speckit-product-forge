@@ -27,9 +27,14 @@ components, and verify the built UI uses the right components.
 $ARGUMENTS
 ```
 
-Inputs from the orchestrator: `FEATURE_DIR`, `codebase_path` (or monorepo
-`codebase.paths`), optional `design_system` config block (`components_path`,
-`tokens_path`, `storybook`).
+Inputs from the orchestrator: `FEATURE_DIR`. Build the effective config
+([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) — keys used:
+`codebase_path` (or monorepo `codebase.paths`), optional `design_system` block
+(`components_path`, `tokens_path`, `storybook`), and `features_dir` +
+`storage_strategy` to resolve `FEATURE_DIR` on a standalone run
+([§12](../docs/runtime.md#12-path-resolution-contract)).
+
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
 
 ---
 
@@ -113,9 +118,15 @@ Present a structured summary and a `Next step` prompt (see
 mockups (Phase 2), re-point at a different path, or skip design-system grounding
 for this feature. Record the choice.
 
-Update `.forge-status.yml`: set `phases.design_system_harvest.status = completed`
-(or `not_applicable` for backend-only features) and record
-`phases.design_system_harvest.digest_path` if a digest is produced.
+Update `.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+If a digest is produced, write it first and set `digest_path` in the same write:
+
+```yaml
+phases:
+  design_system_harvest:
+    status: completed            # or not_applicable for backend-only features
+    digest_path: "{digest path per runtime §8.1}"   # only when a digest was produced
+```
 
 ---
 

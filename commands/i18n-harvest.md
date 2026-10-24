@@ -28,18 +28,25 @@ $ARGUMENTS
 Parse for:
 - Feature slug (required).
 - `--locales=<list>` — comma-separated override. Default: read
-  `supported_locales` from project config or from the existing i18n folder
+  `supported_locales` from the effective config or from the existing i18n folder
   structure.
+
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics)
+(the Step 3 locale-file appends are listed in `DRY-RUN-REPORT.md`, not made).
 
 ---
 
 ## Step 0: Prerequisites
 
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+keys used: `supported_locales`, `codebase_path` (or monorepo `codebase.paths`),
+`features_dir` + `storage_strategy` (to resolve `{FEATURE_DIR}`, [§12](../docs/runtime.md#12-path-resolution-contract)).
+
 1. `spec.md` exists.
 2. At least one of: `product-spec/wireframes/`, `product-spec/user-stories.md`,
    `product-spec/README.md` is populated with user-facing text.
 3. Project is multi-locale. Detect by one of:
-   - `supported_locales` in `.product-forge/config.yml`.
+   - `supported_locales` in the effective config.
    - Existing `i18n/` or `locales/` directory in the codebase.
    - Framework signal (Nuxt i18n config, Vue-i18n, i18next).
 4. If project is English-only, exit with a note; do not create stub
@@ -157,7 +164,10 @@ Write `{FEATURE_DIR}/i18n/report.md`:
 
 ## Step 6: Update Status
 
-Update `.forge-status.yml`:
+First write `i18n/digest.md` per the digest template
+([docs/templates/phase-digest.md](../docs/templates/phase-digest.md)), then update
+`.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+The run summary lives under the phase key (never a top-level `i18n:` block):
 
 ```yaml
 phases:
@@ -166,16 +176,13 @@ phases:
     started_at: "{ISO}"
     completed_at: "{ISO}"
     digest_path: "i18n/digest.md"
-i18n:
-  primary_locale: "en"
-  keys_created: {N}
-  keys_reused: {N}
-  todos_per_locale:
-    es: {N}
-    fr: {N}
+    primary_locale: "en"
+    keys_created: {N}
+    keys_reused: {N}
+    todos_per_locale:
+      es: {N}
+      fr: {N}
 ```
-
-Write `i18n/digest.md` per the digest template.
 
 ---
 

@@ -32,11 +32,14 @@ Parse for:
 - `--include-non-registry` — also scan the codebase for flags not tracked
   in any `flags/registry.yml`.
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
+
 ---
 
 ## Step 0: Load Config
 
-Read `.product-forge/config.yml` → `features_dir`, `codebase_path`.
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)) —
+keys used: `features_dir`, `storage_strategy` (for `enumerate()`, Step 1), `codebase_path`.
 
 ---
 
@@ -50,7 +53,7 @@ Build a unified view:
 
 | Flag key | Feature | Default | Owner | cleanup_after | Source file |
 |----------|---------|:-------:|-------|:-------------:|-------------|
-| `new_onboarding` | onboarding-v2 | off | @alice | 2026-03-01 | features/onboarding-v2/flags/registry.yml |
+| `new_onboarding` | onboarding-v2 | off | @alice | 2026-03-01 | {features_dir}/onboarding-v2/flags/registry.yml |
 | ... |
 
 If no registries exist, report: *"No registered flags found. If your
@@ -132,7 +135,7 @@ For each Stale flag, produce a removal recipe:
   1. Inline the `treatment` branch at {path}:{line}.
   2. Remove the `control` branch and the flag check.
   3. Delete flag definition at {flag-config-path}.
-  4. Update `features/{slug}/flags/registry.yml` — mark `removed_at: {today}`.
+  4. Update `{FEATURE_DIR}/flags/registry.yml` (the feature root `enumerate()` returned) — mark `removed_at: {today}`.
   5. Delete the flag in the provider dashboard (manual step).
 - **Expected diff size:** ~{N} lines.
 - **Risk:** {LOW | MEDIUM | HIGH — e.g. HIGH if branch is deeply nested}.
