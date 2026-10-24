@@ -70,7 +70,7 @@ Bump `version` in `plugin.json` on every release (and match `extension.yml`). If
 
 ## Caching caveat
 
-When installed, the plugin is copied to `~/.claude/plugins/cache`, so commands must never reference files **above** the plugin root (no `../../`). This repo was audited: all 124 intra-plugin references (`../docs/`, `../scripts/`, `../config-template.yml`) resolve, and **zero** references escape the plugin root. The remaining relative paths in command prose (e.g. `./research/README.md`, `./spec.md`) point to **runtime artifacts the workflows generate inside a feature directory**, not to plugin files.
+When installed, the plugin is copied to `~/.claude/plugins/cache`, so commands must never reference files **above** the plugin root (no `../../`). `node scripts/doctor.js` enforces this on every push: every intra-plugin reference (`../docs/`, `../scripts/`, `../config-template.yml`) must resolve and none may escape the plugin root (`lint-docs` XREF rule). The remaining relative paths in command prose (e.g. `./research/README.md`, `./spec.md`) point to **runtime artifacts the workflows generate inside a feature directory**, not to plugin files.
 
 ## Runtime artifacts excluded from the plugin
 

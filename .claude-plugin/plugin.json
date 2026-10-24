@@ -1,7 +1,7 @@
 {
   "name": "speckit-product-forge",
   "version": "1.8.0",
-  "description": "Full product lifecycle orchestrator for SpecKit: research → product-spec → plan → tasks → implement → verify → test → release-readiness, across express/lite/standard/v-model modes with human-in-the-loop gates, cross-artifact sync-verify, a living/delta spec with a REQ→…→TEST→EVT traceability matrix, and brown-field backfill.",
+  "description": "Full product lifecycle orchestrator for SpecKit: research → product-spec → plan → tasks → implement → verify → test → release, across express/lite/standard/v-model modes with human-in-the-loop gates, cross-artifact sync-verify, a living/delta spec with a REQ→…→TEST→EVT traceability matrix, a feature catalog with deterministic retrieval, --dry-run previews, cross-model code review, and brown-field backfill.",
   "author": {
     "name": "Valentin Yakovlev"
   },
@@ -23,6 +23,11 @@
     "living-spec",
     "v-model",
     "backfill",
-    "workflow"
+    "workflow",
+    "catalog",
+    "retrieval",
+    "express-mode",
+    "dry-run",
+    "cross-model-review"
   ]
 }

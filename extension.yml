@@ -4,7 +4,7 @@ extension:
   id: "product-forge"
   name: "Product Forge"
   version: "1.8.0"
-  description: "Full product lifecycle orchestrator with research, spec, plan, implement, verify, test, and release-readiness phases. v1.8 adds a machine-readable feature catalog carrier (one index over every feature: slug, summary, status, code path, IDs) with a freshness gate, read first by agents and portfolio. v1.7 added normative --dry-run preview, cross-model code review, intra-phase parallel implementation, a constitution↔code drift layer (10-layer sync-verify), lessons→skills promotion, status --cost token rollups, and a phase-map single-source. Builds on v1.6 express mode, design-system-harvest, structured journeys → Playwright E2E, a living/delta spec with spec-merge and a REQ→…→TEST→EVT traceability matrix, FE↔BE contract-first OpenAPI/AsyncAPI, telemetry MCP wiring (PostHog/Sentry/Amplitude), a two-layer risk-scored gate review, and a WCAG-AA accessibility gate. See README for the complete feature list."
+  description: "Full product lifecycle orchestrator around SpecKit — problem discovery, research, product spec, plan, implement, verify, test, release and retrospective — across express/lite/standard/v-model modes with human gates, cross-artifact sync-verify, a living/delta spec with a REQ→…→TEST→EVT traceability matrix, a feature catalog with deterministic retrieval, --dry-run previews and cross-model code review. See README for the full feature list."
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"
   license: "MIT"
@@ -218,6 +218,11 @@ tags:
   - "testing-strategy"
   - "workspace-aware"
   - "optional-extensions"
+  - "catalog"
+  - "retrieval"
+  - "express-mode"
+  - "dry-run"
+  - "cross-model-review"
 
 # Project configuration
 #
