@@ -132,7 +132,7 @@ function resolveOrExit(slug, featuresDir) {
   return r.dir;
 }
 
-module.exports = { enumerateFeatures, resolveFeatureDir, resolveOrExit, hasStatus };
+module.exports = { enumerateFeatures, resolveFeatureDir, resolveOrExit, hasStatus, readDomainsRegistry };
 
 // ── Self-test (filesystem fixture) ──────────────────────────────────────────
 function selftest() {

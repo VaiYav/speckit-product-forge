@@ -12,7 +12,7 @@
 //   node scripts/retrieve-catalog.js --query "<text>" [--features-dir <path>] [--json] [--limit N]
 //   node scripts/retrieve-catalog.js --slug <slug>
 //   node scripts/retrieve-catalog.js --context <bounded_context>
-//   node scripts/retrieve-catalog.js --status <status> --mode <build|documentation-only>
+//   node scripts/retrieve-catalog.js --status <status> --kind <build|documentation-only>
 //   node scripts/retrieve-catalog.js --selftest
 
 "use strict";
@@ -58,7 +58,7 @@ function retrieve(features, opts) {
   if (opts.slug) rows = rows.filter((x) => x.f.slug === opts.slug || path.basename(x.f.slug) === opts.slug);
   if (opts.context) rows = rows.filter((x) => (x.f.bounded_context || "").toLowerCase() === opts.context.toLowerCase());
   if (opts.status) rows = rows.filter((x) => (x.f.status || "").toLowerCase() === opts.status.toLowerCase());
-  if (opts.mode) rows = rows.filter((x) => (x.f.mode || "").toLowerCase() === opts.mode.toLowerCase());
+  if (opts.kind) rows = rows.filter((x) => (x.f.kind || "").toLowerCase() === opts.kind.toLowerCase());
   rows.sort((a, b) => b.s - a.s || a.f.slug.localeCompare(b.f.slug));
   return rows.map((x) => x.f);
 }
@@ -71,7 +71,7 @@ function filesFor(f, featuresDir) {
 }
 
 function parseArgs(argv) {
-  const a = { featuresDir: "features", query: "", slug: "", context: "", status: "", mode: "", json: false, limit: 5, selftest: false };
+  const a = { featuresDir: "features", query: "", slug: "", context: "", status: "", kind: "", json: false, limit: 5, selftest: false };
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i];
     const val = () => (argv[i].includes("=") ? argv[i].split("=").slice(1).join("=") : argv[++i]);
@@ -81,7 +81,8 @@ function parseArgs(argv) {
     else if (t.startsWith("--slug")) a.slug = val();
     else if (t.startsWith("--context")) a.context = val();
     else if (t.startsWith("--status")) a.status = val();
-    else if (t.startsWith("--mode")) a.mode = val();
+    else if (t.startsWith("--kind")) a.kind = val();
+    else if (t.startsWith("--mode")) { console.error("--mode was renamed --kind (build | documentation-only)"); process.exit(2); }
     else if (t.startsWith("--limit")) a.limit = parseInt(val(), 10) || 5;
     else if (t.startsWith("--features-dir")) a.featuresDir = val();
     else if (!t.startsWith("--") && !a.query) a.query = t; // bare positional = query
@@ -99,7 +100,7 @@ function runCli(argv) {
   const all = retrieve(doc.features, a);
   const matches = all.slice(0, a.limit);
   const enrich = (f) => ({
-    slug: f.slug, name: f.name, summary: f.summary, status: f.status, mode: f.mode,
+    slug: f.slug, name: f.name, summary: f.summary, status: f.status, kind: f.kind, feature_mode: f.feature_mode,
     bounded_context: f.bounded_context, code_path: f.code_path, ids: f.ids,
     dir: `${a.featuresDir}/${f.slug}`, files: filesFor(f, a.featuresDir),
   });
@@ -107,14 +108,14 @@ function runCli(argv) {
   if (a.json) {
     console.log(JSON.stringify({
       query: a.query || null, slug: a.slug || null, context: a.context || null,
-      status: a.status || null, mode: a.mode || null,
+      status: a.status || null, kind: a.kind || null,
       total: all.length, shown: matches.length, matches: matches.map(enrich),
     }, null, 2));
     return 0;
   }
 
   const crit = a.query ? `"${a.query}"` : [a.slug && `slug=${a.slug}`, a.context && `context=${a.context}`,
-    a.status && `status=${a.status}`, a.mode && `mode=${a.mode}`].filter(Boolean).join(" ") || "(all)";
+    a.status && `status=${a.status}`, a.kind && `kind=${a.kind}`].filter(Boolean).join(" ") || "(all)";
   if (!matches.length) {
     console.log(`No feature matches ${crit}. Try a broader --query, or run /speckit.product-forge.catalog to (re)build the index.`);
     return 0;
@@ -122,7 +123,7 @@ function runCli(argv) {
   console.log(`${all.length} match(es) for ${crit}${all.length > matches.length ? ` (showing ${matches.length})` : ""}:\n`);
   for (const f of matches) {
     const e = enrich(f);
-    console.log(`▸ ${e.slug}   [${e.status}] ${e.mode}${e.bounded_context ? ` · ctx=${e.bounded_context}` : ""}`);
+    console.log(`▸ ${e.slug}   [${e.status}] ${e.kind}${e.feature_mode ? ` · ${e.feature_mode}` : ""}${e.bounded_context ? ` · ctx=${e.bounded_context}` : ""}`);
     if (e.summary && e.summary !== "(no summary found)") console.log(`  ${e.summary}`);
     if (e.code_path) console.log(`  code: ${e.code_path}`);
     if (e.files.length) console.log(`  open: ${e.files.join("  ")}`);
@@ -170,8 +171,8 @@ function selftest() {
     const byCtx = retrieve(feats, { context: "astrology" });
     assert(byCtx.length === 1 && byCtx[0].slug === "003-astrology", "filter by bounded context");
 
-    const byMode = retrieve(feats, { mode: "documentation-only" });
-    assert(byMode.length === 1 && byMode[0].slug === "003-astrology", "filter by mode");
+    const byKind = retrieve(feats, { kind: "documentation-only" });
+    assert(byKind.length === 1 && byKind[0].slug === "003-astrology", "filter by kind");
 
     const none = retrieve(feats, { query: "zzz-nonexistent-token" });
     assert(none.length === 0, "no false matches for an absent token");

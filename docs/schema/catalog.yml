@@ -1,0 +1,52 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# _portfolio/catalog.yml — CARRIER SCHEMA (record shape, schema: 1)
+# ──────────────────────────────────────────────────────────────────────────────
+# The canonical shape of the feature catalog carrier written by
+# scripts/build-catalog.js to `{features_dir}/_portfolio/catalog.yml`
+# (commands/catalog.md) and read by commands/portfolio.md and
+# scripts/retrieve-catalog.js (commands/retrieve.md).
+#
+# It is a DERIVED CACHE, never a source of truth: every field below is computed
+# from a feature's `.forge-status.yml` (v3 field names — see
+# forge-status-v3.schema.yml) and its markdown artifacts. Freshness contract and
+# refresh sites: docs/runtime.md §2.8. Reference document, not an executable
+# JSON Schema.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_generated:
+  by: "scripts/build-catalog.js"
+  at: "2026-10-24T10:00:00Z"        # ignored by --check (timestamps never make it stale)
+  schema: 1                         # this record shape
+  note: "AUTO-GENERATED carrier …"
+  feature_count: 12
+  with_status_file: 11
+  malformed_status_file: 0          # status files with duplicate mapping keys
+  missing_status_file: 1
+  no_summary: 2
+
+lint:
+  note: "…"
+  malformed_status_files:           # --check FAILS when non-empty
+    - slug: "042-bad"
+      file: ".forge-status.yml"
+      issue: "duplicate mapping key(s): status@L3, status@L4"
+
+collisions:                         # reported, never fail --check
+  duplicate_feature_numbers: { "005": ["005-one", "005-two"] }
+  duplicate_slugs: {}
+
+features:
+  - slug: "billing/001-checkout"    # path relative to features_dir (qualified under nested strategies)
+    name: "Checkout"                # spec.md / README.md H1 → legacy display_name|feature_name → prettified slug
+    summary: "One-line summary …"   # README/spec/product-spec overview paragraph, ≤220 chars; "(no summary found)" when none
+    kind: "build"                   # build | documentation-only (legacy status-file field `mode`; text marker fallback)
+    feature_mode: "standard"        # .forge-status.yml feature_mode; null when absent
+    speckit_mode: "classic"         # .forge-status.yml speckit_mode; null when absent
+    status: "plan"                  # key of the furthest completed phase; legacy top-level `status` only when no phase map; "unknown"
+    phases: "5/17"                  # completed-like phases / phases listed; null when no phase map
+    code_path: "back/src/modules/checkout"   # legacy source_code, else first back|front/src path in README/spec; null
+    bounded_context: "billing"      # features/domains.yml (ddd registry) → code-path `src/modules/<ctx>/` heuristic → null
+    ids: { REQ: 0, FR: 6, US: 3 }   # distinct IDs counted across spec.md, product-spec.md, plan.md
+    has: "spec,plan,tasks,product-spec,readme"   # which artifacts exist (drives retrieve's file list)
+    status_file: true               # true | false (missing) | "malformed"
+    created: "2026-06-01"           # created_at (legacy `created` fallback)

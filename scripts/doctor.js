@@ -86,6 +86,11 @@ function checkFixture() {
   let toks;
   try { toks = JSON.parse(cr.out).totals.tokens_in; } catch { /* */ }
   record("fixture cost-report rolls up", cr.code === 0 && typeof toks === "number" && toks > 0, toks ? `tokens_in=${toks}` : `exit ${cr.code}`);
+  // The committed fixture carrier must equal a fresh build (the same --check a
+  // project wires into CI). Regenerate: node scripts/build-catalog.js --features-dir fixtures/features
+  const cc = runNode("scripts/build-catalog.js", ["--features-dir", "fixtures/features", "--check"]);
+  record("fixture catalog --check (carrier fresh)", cc.code === 0,
+    cc.code === 0 ? "fresh" : cc.out.trim().split("\n")[0]);
 }
 
 // ── 2. doc-corpus lint ───────────────────────────────────────────────────────

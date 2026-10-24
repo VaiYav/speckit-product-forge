@@ -65,8 +65,8 @@ Directories to skip:
 ### Fast path: the catalog carrier (optional)
 
 If `{features_dir}/_portfolio/catalog.yml` exists, prefer it as the source for the
-per-feature **scalar** fields in Step 2 (slug, name, summary, mode, status, phase
-progress, code path, IDs) instead of re-reading every `.forge-status.yml`. It is the
+per-feature **scalar** fields in Step 2 (slug, name, summary, `feature_mode`, status,
+phase progress, code path, IDs — shape in [docs/schema/catalog.yml](../docs/schema/catalog.yml)) instead of re-reading every `.forge-status.yml`. It is the
 machine-readable carrier produced by [`catalog`](./catalog.md) (`scripts/build-catalog.js`)
 from this same `enumerate()` walk — one small file rather than a full re-scan. Before
 trusting it, confirm freshness:

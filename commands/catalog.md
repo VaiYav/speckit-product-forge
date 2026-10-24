@@ -31,8 +31,8 @@ Parse for optional flags:
 
 ## Step 0: Load Config
 
-Read `.product-forge/config.yml`:
-- `features_dir` (default `features`)
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
+→ `features_dir` (default `features`).
 
 ---
 
@@ -54,7 +54,11 @@ The builder enumerates feature roots via the Path-Resolution Contract `enumerate
 ([docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)), so `flat` and
 `domain-nested` layouts both work and `_`-prefixed dirs (including `_portfolio`) are skipped.
 Sources per feature, best-effort with fallbacks: `.forge-status.yml`, `spec.md`,
-`product-spec/product-spec.md`, `plan.md`, `README.md`.
+`product-spec/product-spec.md`, `plan.md`, `README.md`. The record shape (every field and
+where it comes from) is canonical in [docs/schema/catalog.yml](../docs/schema/catalog.yml).
+If the script is absent, follow the [§1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root)
+WARN-and-fallback rule: report that the catalog cannot be built without the script and stop
+— never hand-write `catalog.yml`.
 
 ---
 
@@ -88,8 +92,10 @@ If `--check` exited non-zero, tell the user **exactly which files to fix** — n
 catalog healthy while malformed status files remain.
 
 > **Freshness contract.** `catalog.yml` is a generated CARRIER — producer: this command via
-> `scripts/build-catalog.js`; consumer: [`portfolio.md`](./portfolio.md). Regenerate it
-> whenever a feature's `.forge-status.yml` changes; `--check` enforces it in CI and `doctor`.
+> `scripts/build-catalog.js`; consumers: [`portfolio.md`](./portfolio.md) and
+> [`retrieve.md`](./retrieve.md). Regenerate it whenever a feature's `.forge-status.yml`
+> changes; `--check` enforces it in your CI, and Product Forge's own `doctor` runs it against
+> the demo fixture.
 
 ---
 
@@ -99,23 +105,26 @@ The carrier only helps while it is fresh. In normal use the `forge` orchestrator
 regenerates it at every phase transition ([docs/runtime.md §2.8](../docs/runtime.md#28-carrier-refresh-catalog-freshness));
 the gate below is the backstop for status writes made outside the lifecycle.
 
+`${PLUGIN_ROOT}` is **not set** in CI or in a git hook — those run outside the agent host.
+Give the snippets a real path: either a pinned checkout of Product Forge in CI, or the
+SpecKit extension dir. Replace `features` with your `features_dir`.
+
 **CI** (run on every push) — fail the build on a stale or malformed catalog:
 
 ```yaml
+- uses: actions/checkout@v4
+  with: { repository: VaiYav/speckit-product-forge, ref: v1.8.0, path: .product-forge-plugin }
 - name: Catalog freshness
-  run: node ${PLUGIN_ROOT}/scripts/build-catalog.js --features-dir features --check
+  run: node .product-forge-plugin/scripts/build-catalog.js --features-dir features --check
 ```
 
 **git pre-commit hook** — keep the committed carrier fresh:
 
 ```bash
 # .git/hooks/pre-commit  (chmod +x)
-node ${PLUGIN_ROOT}/scripts/build-catalog.js --features-dir features
+PF="$(specify extension path product-forge 2>/dev/null)" || exit 0   # no plugin → skip, don't block
+node "$PF/scripts/build-catalog.js" --features-dir features
 git add features/_portfolio/catalog.yml
-```
-
-Resolve `${PLUGIN_ROOT}` per [docs/runtime.md §1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root)
-— the installed plugin path, the SpecKit extension dir, or the in-repo `scripts/` during
-development. `--check` exits non-zero when `_portfolio/catalog.yml` differs from a fresh
+``` `--check` exits non-zero when `_portfolio/catalog.yml` differs from a fresh
 build or any `.forge-status.yml` has duplicate keys, so a forgotten regenerate or a
 malformed status file blocks the merge.

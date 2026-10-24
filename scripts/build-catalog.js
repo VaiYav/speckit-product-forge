@@ -10,7 +10,9 @@
 // Source of truth per feature (best-effort, with fallbacks): .forge-status.yml,
 // spec.md, product-spec/product-spec.md, plan.md, README.md. Enumeration uses the
 // Path-Resolution Contract (docs/runtime.md §12) via lib-paths so flat and
-// domain-nested layouts both work.
+// domain-nested layouts both work. The record shape is canonical in
+// docs/schema/catalog.yml; status fields are read by their v3 names
+// (docs/schema/forge-status-v3.schema.yml) with legacy names as fallback only.
 //
 // Deterministic, zero-dependency (shares lib-paths + lib-yaml), no LLM, no network.
 //
@@ -26,7 +28,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { enumerateFeatures } = require("./lib-paths");
+const { enumerateFeatures, readDomainsRegistry } = require("./lib-paths");
 const { parseYaml } = require("./lib-yaml");
 
 const SCHEMA = 1;
@@ -162,7 +164,19 @@ function relcode(text) {
 }
 
 // ── Build ────────────────────────────────────────────────────────────────────
-function buildFeature(dir, featuresDir) {
+// bounded_context: the ddd registry (features/domains.yml, slug → context) is
+// authoritative; otherwise fall back to a best-effort code-path heuristic
+// (`<root>/src/modules/<context>/`). The nesting folder is NOT used — under
+// domain-nested / workspace it names a domain or workspace, not a context.
+function boundedContext(slug, codePath, registry) {
+  const base = path.basename(slug);
+  const fromReg = registry[slug] || registry[base];
+  if (typeof fromReg === "string" && fromReg) return fromReg;
+  const m = codePath && codePath.match(/\/src\/modules\/([\w-]+)/);
+  return m ? m[1] : null;
+}
+
+function buildFeature(dir, featuresDir, registry = {}) {
   const slug = path.relative(featuresDir, dir).split(path.sep).join("/");
   const st = loadStatus(path.join(dir, ".forge-status.yml"));
   const f = st.data || {};
@@ -181,35 +195,41 @@ function buildFeature(dir, featuresDir) {
   if (!summary) summary = firstParagraphAfter(readme, [/^---\s*$/]);
   summary = cleanSummary(summary);
 
-  let mode = "build";
-  if (typeof f.mode === "string" && f.mode) mode = f.mode;
-  else if (/documentation-only/i.test((spec || "") + (readme || ""))) mode = "documentation-only";
+  // kind: build vs documentation-only. Legacy status files carried it as `mode`
+  // (renamed `kind` here to stop colliding with feature_mode / forge --mode).
+  const legacyKind = ["build", "documentation-only"].includes(f.mode) ? f.mode : null;
+  const kind = legacyKind || (/documentation-only/i.test((spec || "") + (readme || "")) ? "documentation-only" : "build");
 
   const code_path = f.source_code || relcode(readme) || relcode(spec) || null;
-  const bc = code_path && code_path.match(/back\/src\/modules\/([\w-]+)/);
 
+  // status: the furthest completed phase (v3); a legacy top-level `status`
+  // string is used only when the file has no phase map.
   const ph = derivePhase(f.phases);
-  const status = (typeof f.status === "string" && f.status) ? f.status : (ph.stage || "unknown");
+  const status = ph.stage || ((typeof f.status === "string" && f.status) ? f.status : "unknown");
+
+  const v3Slug = (typeof f.feature === "string" && f.feature) ? f.feature
+    : (typeof f.slug === "string" && f.slug) ? f.slug : null;
 
   return {
     slug,
-    base_slug: (typeof f.slug === "string" && f.slug) ? f.slug : path.basename(slug).replace(/^\d{3}-/, ""),
+    base_slug: v3Slug || path.basename(slug).replace(/^\d{3}-/, ""),
     record: {
       slug,
       name,
       summary: summary || "(no summary found)",
-      mode,
+      kind,
+      feature_mode: (typeof f.feature_mode === "string" && f.feature_mode) ? f.feature_mode : null,
       speckit_mode: f.speckit_mode || null,
       status,
       phases: ph.total ? `${ph.done}/${ph.total}` : null,
       code_path,
-      bounded_context: bc ? bc[1] : null,
+      bounded_context: boundedContext(slug, code_path, registry),
       ids: countIds([spec, prodspec, plan]),
       has: [spec && "spec", plan && "plan",
         fs.existsSync(path.join(dir, "tasks.md")) && "tasks",
         prodspec && "product-spec", readme && "readme"].filter(Boolean).join(","),
       status_file: !st.present ? false : (st.dups.length ? "malformed" : true),
-      created: f.created || f.created_at || null,
+      created: f.created_at || f.created || null,
     },
     dups: st.dups,
   };
@@ -217,13 +237,14 @@ function buildFeature(dir, featuresDir) {
 
 function buildCatalog(featuresDir) {
   const dirs = enumerateFeatures(featuresDir);
+  const registry = readDomainsRegistry(featuresDir);
   const features = [];
   const numberMap = {};
   const slugMap = {};
   const malformed = [];
 
   for (const dir of dirs) {
-    const r = buildFeature(dir, featuresDir);
+    const r = buildFeature(dir, featuresDir, registry);
     features.push(r.record);
     const base = path.basename(r.slug);
     const num = /^(\d{3})-/.test(base) ? base.slice(0, 3) : null;
@@ -305,7 +326,8 @@ function emit(value, indent, lines) {
 const HEADER =
   "# ============================================================\n" +
   "# _portfolio/catalog.yml — AUTO-GENERATED carrier. Do not edit by hand.\n" +
-  "# Producer: scripts/build-catalog.js   Consumer: commands/portfolio.md\n" +
+  "# Producer: scripts/build-catalog.js   Consumers: commands/portfolio.md, commands/retrieve.md\n" +
+  "# Shape: docs/schema/catalog.yml (Product Forge plugin)\n" +
   "# Regenerate: node scripts/build-catalog.js   Verify: --check\n" +
   "# ============================================================\n";
 
@@ -387,25 +409,31 @@ function selftest() {
     for (const [name, body] of Object.entries(extra)) fs.writeFileSync(path.join(dir, name), body);
   };
   try {
-    mk("001-alpha", "schema_version: 3\nstatus: tasks\nphases:\n  research: completed\n  plan: completed\n",
+    mk("001-alpha", "schema_version: 3\nfeature: alpha\nfeature_mode: lite\ncreated_at: 2026-06-01\nphases:\n  research:\n    status: completed\n  plan:\n    status: completed\n",
       { "spec.md": "# Spec: Alpha\n\n## Feature Overview\n\nAlpha does the thing. REQ-001 and FR-001 and US-001.\n" });
     mk("005-one", "schema_version: 3\nstatus: plan\n");
     mk("005-two", "schema_version: 3\nstatus: research\n");      // dup number 005
     mk("009-doc", "schema_version: 3\nmode: documentation-only\nsource_code: back/src/modules/astro/\nphases:\n  research: completed\n");
+    mk("010-reg", "schema_version: 3\nsource_code: back/src/modules/wrong/\n");
+    fs.writeFileSync(path.join(F, "domains.yml"), "010-reg: billing\n");
     mk("042-bad", "schema_version: 3\nstatus: a\nstatus: b\nstatus: c\n"); // duplicate key
     mk("_archived", null); fs.mkdirSync(path.join(F, "_archived", "old"), { recursive: true });
     fs.writeFileSync(path.join(F, "_archived", "old", ".forge-status.yml"), "schema_version: 3\n");
 
     const doc = buildCatalog(F);
-    assert(doc.features.length === 5, "enumerates 5 features, excludes _archived (got " + doc.features.length + ")");
+    assert(doc.features.length === 6, "enumerates 6 features, excludes _archived (got " + doc.features.length + ")");
     const alpha = doc.features.find((f) => f.slug === "001-alpha");
     assert(alpha && alpha.name === "Alpha", "extracts H1 name");
     assert(alpha && /Alpha does the thing/.test(alpha.summary), "extracts summary from spec");
     assert(alpha && alpha.ids.REQ === 1 && alpha.ids.FR === 1 && alpha.ids.US === 1, "counts REQ/FR/US ids");
-    assert(alpha && alpha.phases === "2/2", "derives phase progress");
+    assert(alpha && alpha.phases === "2/2", "derives phase progress from object-form phases");
+    assert(alpha && alpha.feature_mode === "lite" && alpha.created === "2026-06-01" && alpha.status === "plan",
+      "reads v3 fields (feature_mode, created_at) and derives status from phases");
     const doc9 = doc.features.find((f) => f.slug === "009-doc");
-    assert(doc9 && doc9.mode === "documentation-only", "detects documentation-only mode");
+    assert(doc9 && doc9.kind === "documentation-only", "detects documentation-only kind (legacy `mode` field)");
     assert(doc9 && doc9.bounded_context === "astro", "derives bounded context from code path");
+    const reg = doc.features.find((f) => f.slug === "010-reg");
+    assert(reg && reg.bounded_context === "billing", "domains.yml registry wins over the code-path heuristic");
     assert(Object.keys(doc.collisions.duplicate_feature_numbers).includes("005"), "flags duplicate feature number 005");
     assert(doc.lint.malformed_status_files.some((m) => m.slug === "042-bad"), "flags malformed (duplicate-key) status file");
     assert(doc.features.find((f) => f.slug === "042-bad").status_file === "malformed", "marks malformed status_file");
@@ -414,7 +442,7 @@ function selftest() {
     const yamlText = serialize(doc);
     let reparsed = null;
     try { reparsed = parseYaml(yamlText.split("\n").filter((l) => !l.startsWith("#")).join("\n")); } catch (e) { reparsed = { __err: String(e.message) }; }
-    assert(reparsed && Array.isArray(reparsed.features) && reparsed.features.length === 5, "emitted YAML round-trips through lib-yaml");
+    assert(reparsed && Array.isArray(reparsed.features) && reparsed.features.length === 6, "emitted YAML round-trips through lib-yaml");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

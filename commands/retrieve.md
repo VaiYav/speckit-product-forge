@@ -24,14 +24,15 @@ $ARGUMENTS
 
 Parse for:
 - a free-text **query** (default; matches slug / name / summary / bounded-context), or
-- `--slug <slug>`, `--context <bounded_context>`, `--status <status>`, `--mode <build|documentation-only>`,
+- `--slug <slug>`, `--context <bounded_context>`, `--status <status>`, `--kind <build|documentation-only>`,
 - `--limit N` (default 5), `--json` (machine output).
 
 ---
 
 ## Step 0: Load Config
 
-Read `.product-forge/config.yml` → `features_dir` (default `features`).
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config))
+→ `features_dir` (default `features`).
 
 ---
 
@@ -40,18 +41,20 @@ Read `.product-forge/config.yml` → `features_dir` (default `features`).
 Locate the bundled script via `${PLUGIN_ROOT}`
 ([docs/runtime.md §1A](../docs/runtime.md#1a-locating-bundled-scripts-plugin_root)). It builds
 the catalog in-memory (so results are always fresh even if `_portfolio/catalog.yml` is stale)
-and filters it — deterministic, no LLM, no network:
+and filters it — deterministic, no LLM, no network. If the script is absent, follow the
+§1A WARN-and-fallback rule: read `_portfolio/catalog.yml` directly (warn if it may be stale)
+and filter it by hand:
 
 ```bash
 node ${PLUGIN_ROOT}/scripts/retrieve-catalog.js --query "{query}" --features-dir {features_dir}
-# or: --slug {slug} | --context {bounded_context} | --status {status} | --mode {mode}
+# or: --slug {slug} | --context {bounded_context} | --status {status} | --kind {kind}
 ```
 
 ---
 
 ## Step 2: Present the minimal slice
 
-Render the script's matches. For each, show: `slug`, status/mode, one-line summary, the
+Render the script's matches. For each, show: `slug`, status / kind / feature_mode, one-line summary, the
 source `code:` path, and the `open:` file list. Then **open only those files** to answer the
 user's question — do not read other feature folders.
 

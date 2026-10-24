@@ -1,0 +1,40 @@
+# ============================================================
+# _portfolio/catalog.yml — AUTO-GENERATED carrier. Do not edit by hand.
+# Producer: scripts/build-catalog.js   Consumers: commands/portfolio.md, commands/retrieve.md
+# Shape: docs/schema/catalog.yml (Product Forge plugin)
+# Regenerate: node scripts/build-catalog.js   Verify: --check
+# ============================================================
+_generated:
+  by: "scripts/build-catalog.js"
+  at: "2026-10-24T09:59:10.568Z"
+  schema: 1
+  note: "AUTO-GENERATED carrier over features/. Read this first; open feature folders only as needed. Regenerate: node scripts/build-catalog.js"
+  feature_count: 1
+  with_status_file: 1
+  malformed_status_file: 0
+  missing_status_file: 0
+  no_summary: 1
+lint:
+  note: "Status files with YAML problems (duplicate keys) — parsed leniently here, but they break strict tooling. Fix at source."
+  malformed_status_files: []
+collisions:
+  duplicate_feature_numbers: {}
+  duplicate_slugs: {}
+features:
+  - slug: "demo"
+    name: "Demo"
+    summary: "(no summary found)"
+    kind: "build"
+    feature_mode: "standard"
+    speckit_mode: "classic"
+    status: "test_run"
+    phases: "12/17"
+    code_path: null
+    bounded_context: null
+    ids:
+      REQ: 0
+      FR: 0
+      US: 0
+    has: ""
+    status_file: true
+    created: "2026-06-01"
