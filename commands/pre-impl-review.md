@@ -46,7 +46,7 @@ Read from `{FEATURE_DIR}`:
 - `research/ux-patterns.md` — UX best practices
 - `research/codebase-analysis.md` — integration points, reusable components
 - `research/README.md` — its **"Prior lessons that apply"** section (selected by
-  `research` Step 2.5 from `.product-forge/lessons.md`). Use that section as the only
+  `research` Step 3 from `.product-forge/lessons.md`). Use that section as the only
   lessons input; when it is absent, there are no lesson-derived risks.
 
 ## Step 1: Determine the review scope

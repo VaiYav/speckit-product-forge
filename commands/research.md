@@ -1,34 +1,46 @@
 ---
 name: speckit.product-forge.research
 description: >
-  Phase 1: Adaptive multi-dimensional feature research. Assesses input richness and
-  auto-adjusts interview depth — minimal input triggers full 7-question interview,
-  rich input skips to confirmation. Mandatory: competitors, UX/UI, codebase.
-  Optional: tech stack, metrics/ROI. Saves to {FEATURE_DIR}/research/.
-  Use with: "research feature", "/speckit.product-forge.research"
+  Researches a feature before its product spec (Phase 1): adaptive intake interview,
+  then parallel competitor, UX/UI and codebase analysis, plus optional tech-stack
+  and metrics/ROI. Use to start a standard or v-model feature.
 ---
 
 # Product Forge — Phase 1: Research
 
-You are the **Research Orchestrator** for Product Forge Phase 1.
-Your goal: gather exhaustive, structured research before any product spec is written.
-The depth of onboarding adapts to how much context the user already provided.
+You are the **Research Orchestrator**. You gather structured research before any
+product spec is written, adapting the intake interview to how much context the user
+already gave, and write it to `{FEATURE_DIR}/research/`.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-write the `research/` artifacts under `{FEATURE_DIR}/.forge-dry-run/research/`,
-do **not** update `.forge-status.yml`, and emit a `DRY-RUN-REPORT.md`.
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** `research` (Phase 1)
+- **Config keys:** `project_name`, `project_domain`, `project_tech_stack`, `codebase_path`,
+  `features_dir`, `default_competitors`, `default_tech_research`, `default_metrics_research`,
+  `default_feature_mode` (only when this phase creates the status file)
+- **Writes:** `research/` (`README.md`, `competitors.md`, `ux-patterns.md`,
+  `codebase-analysis.md`, optional `tech-stack.md` / `metrics-roi.md`, `digest.md`),
+  `phases.research.*`
+- **Optional input:** `problem-discovery/problem-statement.md` (Step 0).
+- **Contract deltas:** may create `.forge-status.yml` (Step 7). `RESEARCH_DIR` =
+  `{FEATURE_DIR}/research/`.
 
-## Step 1: Assess Input Richness
+## Step 0: Read Problem Discovery output
 
-Before asking any questions, score the provided input across 4 dimensions:
+When `{FEATURE_DIR}/problem-discovery/problem-statement.md` exists, read its problem
+statement, JTBD, user segment and the hypotheses H1–H3. Count them as input when
+scoring Step 1, and pass the hypotheses to the research agents in Step 4 so each agent
+checks the ones in its dimension. Absent → continue without them.
+
+## Step 1: Assess input richness
+
+Before asking anything, score the input on four dimensions:
 
 | Dimension | Score 0 | Score 1 | Score 2 |
 |-----------|---------|---------|---------|
@@ -37,540 +49,189 @@ Before asking any questions, score the provided input across 4 dimensions:
 | Technical context | Not mentioned | Tech stack hinted | Explicit tech stack + constraints |
 | Domain context | Implicit only | Domain stated | Domain + target user + market stated |
 
-Sum the scores → **Input Richness Score (0–8)**:
-- **0–2** → `FULL_INTERVIEW` mode — ask all 7 questions
-- **3–5** → `PARTIAL_INTERVIEW` mode — ask only gaps (skip answered dimensions)
-- **6–8** → `CONFIRM` mode — brief 1-message confirmation, then proceed
+Sum → **Input Richness Score (0–8)** and pick the interview mode:
 
-Load the effective config (5-layer merge, [docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)):
-- `project_name`, `project_domain`, `project_tech_stack`, `codebase_path`, `features_dir`,
-  `default_feature_mode` (only when this phase creates the status file)
-- Research defaults — these **pre-fill** interview answers; the user can still override:
-  - `default_competitors` (list) → if non-empty, use as the competitor list and skip
-    question 2 (show it in the plan instead). Empty → ask / auto-discover.
-  - `default_tech_research` (bool) → pre-select **Tech-stack comparison** in the
-    research-scope multiSelect.
-  - `default_metrics_research` (bool) → pre-select **Metrics / ROI** in the
-    research-scope multiSelect.
+- **0–2** → `FULL_INTERVIEW` — ask all 7 questions
+- **3–5** → `PARTIAL_INTERVIEW` — ask only the gaps
+- **6–8** → `CONFIRM` — one confirmation message, then proceed
 
-Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+Result: score and mode recorded (they go into `README.md` and the digest).
 
-Resolve `FEATURE_DIR` via the Path-Resolution Contract `resolve(slug)`
-([docs/runtime.md §12.2](../docs/runtime.md#12-path-resolution-contract)) — under
-the default `flat` strategy this is `{features_dir}/{feature-slug}/`; under
-`domain-nested` it locates/places the feature at `{features_dir}/<domain>/<slug>/`.
-Set `RESEARCH_DIR = {FEATURE_DIR}/research/`
+## Step 2: Adaptive interview
 
-If `.forge-status.yml` exists with `feature_mode` `express` or `lite`, stop:
-*"Research is not in scope for {mode} features
-([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts))."*
+Ask one question per prompt. Content questions are free text; research scope is the
+multiSelect prompt. The research defaults **pre-fill** answers the user can still
+override:
 
----
+- `default_competitors` non-empty → use it as the competitor list, skip question 2,
+  and show the list in the plan. Empty → ask, or auto-discover.
+- `default_tech_research: true` → pre-select **Tech-stack comparison** in the scope prompt.
+- `default_metrics_research: true` → pre-select **Metrics / ROI** in the scope prompt.
 
-> **Interaction (normative):** every question in this phase uses the structured
-> convention in [docs/interaction.md](../docs/interaction.md) (ready snippets in
-> [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md)).
-> Ask one decision at a time; the research-scope opt-in uses the multiSelect
-> prompt. Content-gathering questions (description, competitors, constraints, …)
-> are free-text — never dump a single wall of open questions.
+**FULL_INTERVIEW** (score 0–2) — the 7 questions:
 
-## Step 2: Adaptive Interview
+1. **Feature description** — *"What does this feature do? Who uses it and why?"*
+   (1–3 sentences: what it is, who benefits, what problem it solves)
+2. **Competitors** — *"Any specific apps or products I should analyze?"* (blank →
+   auto-discover 6–8). Skipped when `default_competitors` is set.
+3. **Tech stack** — *"What technology does your project use?"* (e.g. "Node.js +
+   Express + Postgres", or "use config")
+4. **Domain** — *"What industry/domain is this for?"* (e.g. "consumer productivity
+   app", "B2B SaaS fintech")
+5. **Constraints** — *"Any hard constraints I should know?"* (technical, budget,
+   timeline, legal, platform)
+6. **Research scope** — the *Research scope opt-ins (multiSelect)* prompt from
+   [interaction-prompts.md](../docs/templates/interaction-prompts.md#research-scope-opt-ins-multiselect):
+   Competitors, UX/UI patterns, Codebase analysis (default on); Tech-stack
+   comparison, Metrics / ROI (opt-in).
+7. **Existing materials** — *"Any links, docs, designs, or prior art to include?"*
+   (paste URLs or describe; they feed the research agents)
 
-### FULL_INTERVIEW mode (score 0–2)
+**PARTIAL_INTERVIEW** (score 3–5) — open with *"I have a good understanding of the
+feature. A few gaps before I start:"* and ask the questions whose dimension scored 0,
+plus the research-scope multiSelect (question 6) whenever the input did not already
+answer it.
 
-Ask the questions below as **discrete prompts**, one decision at a time — not as a
-single wall of text. Content questions are free-text; the research-scope opt-in is a
-multiSelect.
+**CONFIRM** (score 6–8) — show the plan and ask for corrections:
 
-1. **Feature description** (free text) — *"What does this feature do? Who uses it and
-   why?"* (1–3 sentences: what it is, who benefits, what problem it solves)
-2. **Competitors** (free text) — *"Any specific apps or products I should analyze?"*
-   (leave blank to auto-discover 6–8 competitors). **Skip** when `default_competitors`
-   is non-empty — those are used.
-3. **Tech stack** (free text) — *"What technology does your project use?"*
-   (e.g., "Node.js + Express + Postgres" — or say "use config")
-4. **Domain** (free text) — *"What industry/domain is this for?"*
-   (e.g., "consumer productivity app", "B2B SaaS fintech")
-5. **Constraints** (free text) — *"Any hard constraints I should know?"*
-   (technical, budget, timeline, legal, platform)
-6. **Research scope** — present the *Research scope opt-ins (multiSelect)* prompt
-   from [interaction-prompts.md](../docs/templates/interaction-prompts.md):
-
-   ```
-   [Research scope] Which research dimensions should run? (select all that apply)
-
-     - Competitors (default on)
-     - UX/UI patterns (default on)
-     - Codebase analysis (default on)
-     - Tech-stack comparison
-     - Metrics / ROI
-     (or type your own answer)
-   ```
-
-7. **Existing materials** (free text) — *"Any links, docs, designs, or prior art to
-   include?"* (paste URLs or describe — I'll incorporate them into the research)
-
-### PARTIAL_INTERVIEW mode (score 3–5)
-
-Ask ONLY the dimensions that scored 0, as discrete structured prompts. Lead with:
-*"I have a good understanding of the feature. A few gaps before I start:"*
-Then ask only the missing questions from the list above (free-text for content
-questions; the multiSelect for research scope).
-
-### CONFIRM mode (score 6–8)
-
-Show a brief confirmation:
 ```
-✅ Rich context provided. Here's my research plan:
+Rich context provided. Here's my research plan:
 
 Feature: {feature description}
 Competitors to research: {list or "auto-discover"}
 Domain: {domain}
 Tech stack: {stack}
-Dimensions: competitors ✅ · UX/UI ✅ · codebase ✅ {+ tech · metrics if opted-in}
+Dimensions: competitors ✅ · UX/UI ✅ · codebase ✅ {+ tech · metrics if opted in}
 
 Starting research now. Any corrections before I launch?
 ```
 
----
-
-## Step 2.5: Consult Prior Lessons
-
-Before launching parallel research, read the project-wide learning log at
-`.product-forge/lessons.md` (see [`docs/lessons-format.md`](../docs/lessons-format.md)).
-This is a lightweight no-LLM step.
-
-1. If the file does not exist → skip this step and note
-   *"No prior lessons log yet"* in the research index. Do not create the
-   file here; only retrospectives write to it.
-2. Read the file and extract all `Tags:` entries per block.
-3. Compute the new feature's implied tag set from:
-   - Project domain (from config).
-   - Tech stack elements mentioned in the feature description.
-   - Obvious domain keywords in the intake (push, payments, auth, schema, ...).
-4. Score each lesson block by tag overlap (number of matching tags).
-5. Select the top N blocks (default 5) with at least one tag match and
-   add them to the context passed to the research agents in Step 3.
-6. At the end of Step 3 output, include a new section in
-   `research/README.md` titled *"Prior lessons that apply"* listing the
-   selected blocks by title and date, each with a one-line relevance note.
-
-If no lessons match the new feature's tags, the section is omitted from
-`research/README.md`. Do not invent or synthesise lessons.
-
----
-
-## Step 3: Launch Parallel Research Agents
-
-Launch ALL active dimensions **simultaneously** via Agent tool.
-
-### Agent 1: Competitor Research (MANDATORY)
-
-**Goal:** Analyze how competitors approach `{FEATURE_DESCRIPTION}`.
-
-Context to provide:
-- Feature description
-- Project domain: `{project_domain}`
-- Competitors (if user provided list; otherwise auto-find 5–8)
-- Extra context: any user-provided links/materials
-
-**Instructions:**
-1. For each competitor, document:
-   - Feature name, description, positioning
-   - Core interaction pattern (how user completes the task)
-   - Key differentiators + unique strengths
-   - Access model (free/freemium/premium/paid)
-   - User sentiment from App Store, Play Store, Reddit, Twitter/X
-2. Identify the **top 3 best implementations** with rationale
-3. Find any open-source or publicly described reference implementations
-4. Identify **gaps** — what no competitor does well (= our opportunity)
-5. Note pricing, growth signals, user base size if available
-
-**Output:** `{RESEARCH_DIR}/competitors.md`
-
-```markdown
-# Competitor Analysis: {Feature}
-
-> Generated: {date} | Dimensions: {N competitors analyzed}
-
-## Executive Summary
-{2–3 paragraphs: dominant patterns, gaps, top recommendation}
-
-## Competitors Analyzed
-
-### 1. {Name} — [{score}/5]
-- **Feature:** {how they implement it}
-- **Core UX pattern:** {how user interacts}
-- **Differentiator:** {unique strength}
-- **Access:** Free/Premium/Paid
-- **User sentiment:** {+positive / -negative patterns}
-- **Reference:** {link if available}
-
-[repeat for each competitor]
-
-## Common Patterns
-{What 80%+ of competitors do — table stakes}
-
-## Differentiation Opportunities
-{What no one does well — ranked by impact}
-
-## Top 3 Reference Implementations
-1. {Name} — {why it's best}
-2. {Name} — {why}
-3. {Name} — {why}
-```
-
----
-
-### Agent 2: UX/UI Patterns Research (MANDATORY)
-
-**Goal:** Research best UX/UI patterns, interactions, and design for `{FEATURE_DESCRIPTION}`.
-
-Context: feature, domain, tech stack (mobile/web implications), any user-provided links.
-
-**Instructions:**
-1. Research UX best practices (Baymard, Nielsen Norman, UX Collective, Mobbin, Dribbble)
-2. Document: primary flows, edge cases, empty/loading/error states
-3. Find 3–5 concrete UI pattern examples with descriptions
-4. Identify key micro-interactions and animations
-5. List WCAG accessibility requirements specific to this feature type
-6. List anti-patterns to avoid (common mistakes for this type of feature)
-7. Mobile-specific considerations if applicable (touch targets, gestures, thumb zones)
-
-**Output:** `{RESEARCH_DIR}/ux-patterns.md`
-
-```markdown
-# UX/UI Patterns: {Feature}
-
-> Generated: {date}
-
-## Core User Flows
-
-### Primary (Happy Path)
-{Step-by-step with expected user mental model at each step}
-
-### Alternative Paths
-{List of key alternative scenarios}
-
-## State Inventory
-| State | Trigger | Recommended Pattern |
-|-------|---------|---------------------|
-| Empty | No data yet | {recommendation} |
-| Loading | Data fetching | {skeleton/spinner} |
-| Error | Request failed | {user-friendly error} |
-| Success | Action complete | {confirmation} |
-| Partial | Some data missing | {graceful degradation} |
-
-## UI Pattern Library
-{3–5 proven patterns with sources and descriptions}
-
-## Micro-interactions & Animations
-{Key moments worth animating — entry, transition, confirmation, error}
-
-## Accessibility Requirements (WCAG 2.1 AA)
-{Specific criteria relevant to this feature — not generic}
-
-## Platform Considerations
-{Mobile: touch targets ≥44px, gesture conflicts, safe areas}
-{Web: keyboard navigation, focus management}
-
-## Anti-patterns to Avoid
-{Common mistakes for this feature type — with explanations}
-
-## Recommended Approach
-{3–5 sentences synthesizing the best UX for our context}
-```
-
----
-
-### Agent 3: Codebase Integration Analysis (MANDATORY)
-
-**Goal:** Map `{FEATURE_DESCRIPTION}` to the existing codebase at `{codebase_path}`.
-
-Context: feature, codebase path, tech stack.
-
-**Instructions:**
-1. Explore project structure (top-level dirs, architecture, key modules)
-2. Find existing code relevant to this feature:
-   - Similar features already implemented (reference implementations)
-   - Shared components/services that can be reused
-   - Data models/schemas that overlap
-   - API endpoints that can be extended
-3. Identify integration points (where new code plugs in)
-4. Assess technical complexity:
-   - New module needed or extension of existing?
-   - Database/schema changes?
-   - Breaking changes risk?
-5. Document current tech capabilities relevant to this feature
-6. **Identify architectural constraints** (critical — prevents design mistakes in spec/plan):
-   - Mandatory patterns the project enforces (e.g., resilience wrappers for external calls, specific naming conventions, ID format requirements from external services)
-   - Project constitution or ADRs (architectural decision records) that apply to this feature's domain
-   - Existing event or message patterns: exact identifiers, payload shapes, delivery guarantees
-   - Shared utilities already available (e.g., caching helpers, retry decorators, GDPR handlers) — reuse instead of reinventing
-
-**Output:** `{RESEARCH_DIR}/codebase-analysis.md`
-
-```markdown
-# Codebase Analysis: {Feature}
-
-> Generated: {date} | Codebase: {codebase_path}
-
-## Architecture Overview
-{High-level: what layers exist, how they're organized}
-
-## Reusable Existing Code
-| Component/Service | Location | How to Reuse |
-|------------------|----------|--------------|
-| {name} | {path} | {description} |
-
-## Reference Implementations (Similar Features)
-| Feature | Location | Key Pattern |
-|---------|----------|-------------|
-| {name} | {path} | {what to learn from it} |
-
-## Integration Points
-| Layer | Location | Change Type | Description |
-|-------|----------|-------------|-------------|
-| API | {path} | New endpoint | {description} |
-| Service | {path} | Extend | {description} |
-| DB | {schema} | New collection | {description} |
-| UI | {path} | New component | {description} |
-
-## Codebase Constraints
-
-> Non-negotiable patterns and limitations discovered in the codebase.
-> These MUST be reflected in spec.md and plan.md — ignoring them causes design bugs.
-
-| Constraint | Source (file / ADR) | Impact on Feature Design |
-|------------|---------------------|--------------------------|
-| {e.g., all external service calls require a circuit breaker} | {path or ADR-NNN} | {must wrap X with circuit breaker} |
-| {e.g., external service requires UUID v4 IDs, not sequential} | {path} | {ID generation strategy must change} |
-| {e.g., cache keys follow `{module}:{entity}:{id}` pattern} | {constitution §IV} | {cache key design constraint} |
-| {e.g., events emitted only after DB persist} | {constitution §V / path} | {event emission order} |
-
-## Event / Message Patterns (if applicable)
-
-> If the project uses event-driven architecture, document existing patterns here.
-> These exact identifiers and payload shapes must be used in spec.md — invented names cause silent failures.
-
-| Event / Topic | Exact Identifier | Payload Interface | Source File | Notes |
-|---------------|-----------------|-------------------|-------------|-------|
-| {event name} | `{EXACT_VALUE}` | `{InterfaceName}` | {path} | {emitted by / consumed by} |
-
-> Leave empty and note "N/A — no EDA patterns detected" if not applicable.
-
-## Data Model Impact
-{New schemas, migrations, relationships}
-
-## Technical Complexity
-- **Overall:** Low / Medium / High
-- **New modules:** {list or "none"}
-- **Breaking change risk:** None / Low / Medium / High
-- **Estimated touch points:** {N files/modules}
-
-## Current Tech Capabilities
-{What the project already supports that this feature leverages}
-
-## Implementation Guidance
-{2–3 key technical decisions or constraints for planning phase}
-```
-
----
-
-### Agent 4: Tech Stack Research (OPTIONAL — if user opted in)
-
-**Goal:** Compare libraries, APIs, packages for `{FEATURE_DESCRIPTION}`.
-
-**Instructions:**
-1. Identify the main technical sub-problems to solve
-2. For each, compare 2–3 solutions:
-   - npm/pip stats (weekly downloads, GitHub stars, last release)
-   - API stability, breaking-change history
-   - Bundle size (frontend) or memory footprint (backend)
-   - License compatibility
-   - Community/ecosystem health
-3. Produce a decision matrix with recommendation
-
-**Output:** `{RESEARCH_DIR}/tech-stack.md`
-
-```markdown
-# Tech Stack Research: {Feature}
-
-> Generated: {date}
-
-## Sub-problems to Solve
-{List of technical challenges this feature needs to address}
-
-## Option Comparison
-
-### Sub-problem 1: {name}
-| Option | Stars | Downloads/wk | Bundle | License | Verdict |
-|--------|-------|--------------|--------|---------|---------|
-| {lib} | 12k | 800k | 45KB | MIT | ✅ Recommended |
-| {lib} | 5k | 200k | 120KB | Apache | ⚠️ Heavy |
-
-**Recommendation:** {option} — {rationale}
-
-[repeat per sub-problem]
-
-## Final Recommendation Stack
-{Summary table: what to use for each need}
-
-## Integration Notes
-{How recommended libs fit into the existing tech stack}
-```
-
----
-
-### Agent 5: Metrics & ROI Analysis (OPTIONAL — if user opted in)
-
-**Goal:** Estimate business impact of `{FEATURE_DESCRIPTION}`.
-
-**Instructions:**
-1. Industry benchmarks for this feature type
-2. User impact: retention, engagement, NPS-relevant metrics
-3. Revenue impact: direct or indirect
-4. Effort vs. impact signal
-5. Recommended KPIs and measurement approach
-
-**Output:** `{RESEARCH_DIR}/metrics-roi.md`
-
-```markdown
-# Metrics & ROI: {Feature}
-
-> Generated: {date}
-
-## Industry Benchmarks
-{What impact do similar features typically have? Sources cited.}
-
-## User Impact Signals
-| Metric | Expected Impact | Confidence | Source |
-|--------|----------------|------------|--------|
-| {metric} | +X% | High/Med/Low | {source} |
-
-## Revenue Impact
-{Direct/indirect revenue analysis}
-
-## Effort vs. Impact
-{Quick assessment: high/medium/low for both dimensions}
-
-## Recommended KPIs
-| KPI | Baseline | Target | Measurement |
-|-----|----------|--------|-------------|
-| {metric} | {current} | {goal} | {how} |
-
-## Measurement Plan
-- Day 1: {early signal}
-- Week 1: {leading indicator}
-- Month 1: {primary KPI review}
-```
-
----
-
-## Step 4: Wait for All Agents
-
-Wait for all agents to complete. Do not generate the index until all are done.
-
----
-
-## Step 5: Compile Research Index
-
-Create `{RESEARCH_DIR}/README.md`:
-
-```markdown
-# Research Index: {Feature Name}
-
-> Generated: {date} | Feature: {feature-slug}
-> Input richness: {score}/8 | Interview mode: {FULL/PARTIAL/CONFIRM}
-> Research dimensions: {list completed}
-
-## Executive Summary
-
-{2–3 sentences synthesizing the most important findings across all dimensions}
-
-## Key Findings
-
-| Dimension | Top Insight |
-|-----------|-------------|
-| 🏆 Competitors | {1-sentence finding} |
-| 🎨 UX/UI | {1-sentence finding} |
-| 🔧 Codebase | {1-sentence finding} |
-| 🔒 Constraints | {top codebase constraint that will affect spec/plan} |
-| 📦 Tech Stack | {1-sentence finding — if researched} |
-| 📊 Metrics | {1-sentence finding — if researched} |
-
-## Research Documents
-
-| Document | Status | Key Insight |
-|----------|--------|-------------|
-| [competitors.md](./competitors.md) | ✅ | {insight} |
-| [ux-patterns.md](./ux-patterns.md) | ✅ | {insight} |
-| [codebase-analysis.md](./codebase-analysis.md) | ✅ | {insight} |
-| [tech-stack.md](./tech-stack.md) | ✅ Optional | {insight} |
-| [metrics-roi.md](./metrics-roi.md) | ✅ Optional | {insight} |
-
-## Synthesis: Recommended Approach
-{4–6 sentences: what to build, how to build it, what to prioritize}
-
-## Open Questions for Product Spec
-{Questions research raised but couldn't answer — to resolve in Phase 2}
-
-## Red Flags / Risks Identified
-{Any significant risks discovered during research}
-```
-
----
-
-## Step 6: Phase Digest (required)
-
-Write `{FEATURE_DIR}/research/digest.md` using the template at
-[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) **before**
-any status write marks the phase complete
-([docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)).
-
-The digest must include:
-- **Key decisions** — which research dimensions were run (and which were skipped),
-  the input-richness score / interview mode, and the top 3 findings.
-- **Artifacts produced** — every file under `{FEATURE_DIR}/research/` with a one-line description.
+Result: feature description, competitors, stack, domain, constraints, materials and
+the active dimension set are known.
+
+## Step 3: Consult prior lessons
+
+Read the project learning log `.product-forge/lessons.md`
+([lessons-format.md](../docs/lessons-format.md)) — a no-LLM step.
+
+1. File absent → note *"No prior lessons log yet"* in the research index and go to
+   Step 4. Only retrospectives create this file.
+2. Extract every block's `Tags:`.
+3. Derive the feature's tag set from the project domain, tech-stack elements in the
+   description, and obvious domain keywords (push, payments, auth, schema, …).
+4. Score each block by tag overlap; select the top N (default 5) with ≥ 1 match.
+5. Pass the selected blocks to the research agents in Step 4.
+6. In `README.md`, list them under *"Prior lessons that apply"* (title, date,
+   one-line relevance note). No match → omit the section. Quote only lessons that
+   exist in the file.
+
+## Step 4: Launch parallel research agents
+
+Launch every active dimension **at once** with the Agent tool. Give each agent the
+feature description, `project_domain`, tech stack, user-provided links/materials, the
+selected lessons and, when Step 0 found them, the Problem Discovery hypotheses. Each agent writes its report from its section of
+[docs/templates/research-reports.md](../docs/templates/research-reports.md).
+
+| Agent | Runs | Writes |
+|-------|------|--------|
+| 1. Competitors | always | `{RESEARCH_DIR}/competitors.md` |
+| 2. UX/UI patterns | always | `{RESEARCH_DIR}/ux-patterns.md` |
+| 3. Codebase integration | always | `{RESEARCH_DIR}/codebase-analysis.md` |
+| 4. Tech stack | opted in | `{RESEARCH_DIR}/tech-stack.md` |
+| 5. Metrics & ROI | opted in | `{RESEARCH_DIR}/metrics-roi.md` |
+
+**Agent 1 — Competitors.** Analyze how competitors approach the feature (the user's
+list, or auto-find 5–8).
+1. Per competitor: feature name, description, positioning; core interaction pattern;
+   key differentiators and strengths; access model (free / freemium / premium /
+   paid); user sentiment from App Store, Play Store, Reddit, Twitter/X.
+2. The **top 3 implementations**, with rationale.
+3. Open-source or publicly described reference implementations.
+4. **Gaps** no competitor handles well (our opportunity).
+5. Pricing, growth signals, user-base size where available.
+
+**Agent 2 — UX/UI patterns.** Use the stack's mobile/web implications.
+1. UX best practice (Baymard, Nielsen Norman, UX Collective, Mobbin, Dribbble).
+2. Primary flows, edge cases, empty / loading / error states.
+3. 3–5 concrete UI pattern examples with descriptions.
+4. Key micro-interactions and animations.
+5. WCAG accessibility requirements specific to this feature type.
+6. Anti-patterns common to this feature type.
+7. Mobile considerations where relevant (touch targets, gestures, thumb zones).
+
+**Agent 3 — Codebase integration.** Map the feature onto `{codebase_path}`.
+1. Project structure: top-level dirs, architecture, key modules.
+2. Relevant existing code: similar features, reusable components/services,
+   overlapping data models, extendable API endpoints.
+3. Integration points where new code plugs in.
+4. Complexity: new module or extension; database/schema changes; breaking-change risk.
+5. Current tech capabilities the feature can use.
+6. **Architectural constraints** (they keep spec and plan from design mistakes):
+   mandatory patterns (resilience wrappers for external calls, naming conventions,
+   ID formats required by external services); the constitution or ADRs for this
+   domain; existing event/message patterns with exact identifiers, payload shapes
+   and delivery guarantees; shared utilities to reuse (caching helpers, retry
+   decorators, GDPR handlers).
+
+**Agent 4 — Tech stack.** Name the main technical sub-problems; for each compare 2–3
+solutions on npm/pip stats (weekly downloads, GitHub stars, last release), API
+stability and breaking-change history, bundle size (frontend) or memory footprint
+(backend), license compatibility and ecosystem health; end with a decision matrix
+and recommendation.
+
+**Agent 5 — Metrics & ROI.** Industry benchmarks for the feature type; user impact
+(retention, engagement, NPS-relevant metrics); direct or indirect revenue impact;
+effort vs impact; recommended KPIs and how to measure them.
+
+Result: one report per active dimension exists in `RESEARCH_DIR`.
+
+## Step 5: Compile the research index
+
+Wait until every agent has finished, then write `{RESEARCH_DIR}/README.md` from
+[docs/templates/research-index.md](../docs/templates/research-index.md).
+
+## Step 6: Phase digest
+
+Write `{RESEARCH_DIR}/digest.md` from [phase-digest.md](../docs/templates/phase-digest.md):
+
+- **Key decisions** — dimensions run and skipped, input-richness score and interview
+  mode, top 3 findings.
+- **Artifacts produced** — every file in `research/`, one line each.
 - **Open risks** — unresolved questions forwarded to product-spec.
-- **Handoff notes** — what product-spec needs to know that is not obvious from the file list.
+- **Handoff notes** — what product-spec needs that the file list does not show.
 
----
+## Step 7: Status and gate
 
-## Step 7: Update Status & Gate
-
-Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-If `.forge-status.yml` does not exist yet, it is initialized from the v3 initial
-document in [docs/schema.md §3.1](../docs/schema.md#31-initial-document-new-features);
-(`feature_mode` from `--mode` or `default_feature_mode`); if it exists (forge
-intake, Problem Discovery), merge — never re-initialize. Keys
-this phase owns:
+When `.forge-status.yml` is absent, initialize it from the v3 initial document
+([schema.md §3.1](../docs/schema.md#31-initial-document-new-features)) with
+`feature_mode` from `--mode` or `default_feature_mode`. When it exists (forge intake,
+Problem Discovery), merge into it. Keys this phase owns:
 
 ```yaml
 phases:
   research:
     digest_path: "research/digest.md"
-    status: completed        # set from the gate decision — see below
+    status: completed        # set from the gate decision
 ```
 
-The dimensions run and the input-richness score are recorded in
-`research/README.md` and the digest, not in the status file.
+The dimensions run and the richness score live in `README.md` and the digest only.
 
-Show:
-1. Summary table of completed dimensions
-2. Top 3 most important findings
-3. Open questions that need answers in Phase 2
-4. Any red flags or risks
+Show: a summary table of completed dimensions, the top 3 findings, open questions for
+Phase 2, and red flags or risks.
 
-**Gate** ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)–[§6.3](../docs/runtime.md#63-gate-prompt)):
+Gate outcome line: *"Research complete — {N} dimensions analyzed, saved to
+`{RESEARCH_DIR}/`"*; `{next phase}` = Product Spec (required, so no Skip).
+On Approve, end with `Next step: /speckit.product-forge.product-spec`.
 
-- **`--from-forge` in `$ARGUMENTS`** — write only `digest_path`, do not prompt and
-  do not append to `gates[]`; return the summary to the orchestrator, which presents
-  the gate and sets `phases.research.status` from its decision.
-- **Standalone** — present the **Gate** prompt from
-  [interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase):
-  *"Research complete — {N} dimensions analyzed, saved to `{RESEARCH_DIR}/`"*, with
-  `{next phase}` = Product Spec (required, so no Skip). Map the answer per
-  [§6.2](../docs/runtime.md#62-status-follows-the-decision) (Approve → `completed`;
-  Revise → `in_progress`; Rollback → rewind; Abort → unchanged) and append one
-  `gates[]` entry. On Approve: *"Next: `/speckit.product-forge.product-spec`"*.
+## Done when
+
+- Every active dimension has its report in `research/`, built from its template
+  section; the three mandatory ones (competitors, UX/UI, codebase) always exist.
+- `research/README.md` lists every report with its key insight, the richness score
+  and interview mode, and the lessons section (or its absence note) per Step 3.
+- `research/digest.md` is written with all four sections.
+- Standalone: the gate was shown, its decision appended to `gates[]`, and
+  `phases.research.status` set from it.
+- `--from-forge`: only `phases.research.digest_path` was written; the summary
+  (dimensions, top 3 findings, open questions, risks) was returned to forge with no
+  gate prompt and no status or `gates[]` write.

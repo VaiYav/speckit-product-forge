@@ -164,7 +164,7 @@ silently break the plugin. Test these deliberately.
     banner. Status file sets the marker. Test by running backfill on
     a module and grep for banner on each produced file.
 12. **Learning loop.** Retrospective appends blocks to
-    `.product-forge/lessons.md`. Research reads lessons at Step 2.5 and
+    `.product-forge/lessons.md`. Research reads lessons at Step 3 and
     surfaces tag-matching ones. Test: add a lesson; run research on a
     feature with matching tags; verify mention.
 

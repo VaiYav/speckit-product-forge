@@ -1,443 +1,146 @@
 ---
 name: speckit.product-forge.bridge
 description: >
-  Phase 4: Converts approved product-spec artifacts into a SpecKit-compatible spec.md,
-  enriched with full research and product context. Then launches SpecKit in classic
-  (plan → tasks → implement) or V-Model mode based on user choice.
-  Use with: "bridge to speckit", "create spec", "/speckit.product-forge.bridge"
+  Converts the approved product spec into a research-backed SpecKit spec.md (Phase 4),
+  with FE↔BE contracts and delta specs, then hands off to the classic or V-Model flow.
+  Use after revalidation approves the product spec.
 ---
 
 # Product Forge — Phase 4: SpecKit Bridge
 
-You are the **SpecKit Bridge Agent** for Product Forge Phase 4.
-Your goal: synthesize everything from the research and product-spec phases into a
-single `spec.md` that SpecKit can use — richer and better-informed than any spec
-written from scratch, because it's backed by exhaustive research and user-approved requirements.
+You are the **SpecKit Bridge Agent**. You synthesize the research and product-spec
+artifacts into one `spec.md` that SpecKit agents can work from, plus contract files and
+delta specs, then hand off to the chosen SpecKit flow.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-`spec.md`, `contracts/` and delta specs are written under
-`{FEATURE_DIR}/.forge-dry-run/bridge/`, no status or gate entry is written, and
-SpecKit is not launched (Step 8).
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** `bridge` (Phase 4)
+- **Config keys:** `features_dir`, `default_speckit_mode`
+- **Writes:** `spec.md`, `contracts/openapi.yaml`, `contracts/asyncapi.yaml`,
+  `specs/<domain>/spec.md` (delta specs), `{FEATURE_DIR}/README.md`,
+  `phases.bridge.*`, top-level `speckit_mode`
+- **Contract deltas:** prerequisites are stricter than the §11.2 row (Step 1). With
+  `--dry-run`, SpecKit is not launched (Step 11).
 
-## Step 1: Validate Prerequisites
+## Step 1: Validate prerequisites
 
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
-Keys used: `features_dir`, `default_speckit_mode`.
+1. `phases.revalidation.status` in `.forge-status.yml` is `completed` (canonical) or the
+   legacy literal `approved`.
+2. `{FEATURE_DIR}/product-spec/product-spec.md` exists.
+3. `{FEATURE_DIR}/review.md` contains "APPROVED".
 
-Document size: every Markdown document this command writes follows `max_tokens_per_doc` ([docs/runtime.md §10.1](../docs/runtime.md#101-document-size-budget-max_tokens_per_doc)) — split into an index + parts when over budget, except the single-file documents listed there.
+When any check fails, stop with:
+*"⚠️ Product spec has not been approved yet. Please complete Phase 3 first:
+`/speckit.product-forge.revalidate`"*
 
-Check that Phase 3 was approved:
-1. Read `{FEATURE_DIR}/.forge-status.yml` — `phases.revalidation.status` must be
-   `completed` (canonical) or the legacy literal `approved`
-2. Verify `{FEATURE_DIR}/product-spec/product-spec.md` exists
-3. Verify `{FEATURE_DIR}/review.md` contains "APPROVED"
+## Step 2: Load source artifacts
 
-If not approved:
-> ⚠️ Product spec has not been approved yet. Please complete Phase 3 first: `/speckit.product-forge.revalidate`
+Read in this order (each one enriches `spec.md`):
 
----
+1. `product-spec/product-spec.md` — user stories, requirements, personas, risks
+2. `product-spec/journeys/journeys.yml` — structured journeys (JRN / STEP / EDGE), the E2E source of truth
+3. `product-spec/metrics.md` — success criteria, KPIs
+4. `product-spec/wireframes*` — screen descriptions
+5. `research/README.md` — research summary
+6. `research/competitors.md` — key competitive patterns
+7. `research/ux-patterns.md` — UX recommendations
+8. `research/codebase-analysis.md` — integration points and technical constraints
 
-## Step 2: Load All Source Artifacts
+Then set `FEATURE_TYPE`:
 
-Read in this order (each enriches the spec.md we'll create):
+- `shared_infrastructure` — the feature exposes a reusable service, library or API
+  other features consume (signals: "platform", "service", "SDK", "provider",
+  "engine", "shared", "foundation", or named as a dependency by other features).
+- `end_user` — everything else.
 
-1. **product-spec/product-spec.md** — user stories, requirements, personas, risks
-2. **product-spec/journeys/journeys.yml** — structured journeys (JRN/STEP/EDGE), the E2E source of truth
-3. **product-spec/metrics.md** — success criteria, KPIs
-4. **product-spec/wireframes*** — screen descriptions
-5. **research/README.md** — research executive summary
-6. **research/competitors.md** — competitive intelligence (extract key patterns)
-7. **research/ux-patterns.md** — UX recommendations
-8. **research/codebase-analysis.md** — integration points and technical constraints
+Result: sources read; `FEATURE_TYPE` set (it decides the Consumer Contract section).
 
-After reading, determine the **feature type**:
+## Step 3: Dependency discovery
 
-- **Shared Infrastructure** — the feature exposes a reusable service, library, or API consumed by other features (signals: "platform", "service", "SDK", "provider", "engine", "shared", "foundation", or explicitly mentioned as a dependency by other features)
-- **End-User Feature** — the feature directly serves an end user (everything else)
+1. Enumerate feature roots with `enumerate()`
+   ([runtime.md §12](../docs/runtime.md#12-path-resolution-contract)) and read each
+   `.forge-status.yml` for phase status. When `{features_dir}/` is empty or missing,
+   go to Step 4.
+2. For each feature sharing a domain keyword or module with this one, classify the
+   relationship: **blocks** / **complements** / **replaces** / **unrelated**.
+3. Related features found → fill the `## Prerequisites` section of `spec.md`. None →
+   omit that section.
 
-Store as `FEATURE_TYPE = shared_infrastructure | end_user`.
-This drives whether the Consumer Contract section is included in spec.md (Step 4).
+## Step 4: Choose the SpecKit mode
 
----
+Resolve `SPECKIT_MODE` per [policy.md §4.1](../docs/policy.md#41-phase-maps)
+("`speckit_mode` vs `feature_mode`"):
 
-## Step 2.5: Dependency Discovery
+- `feature_mode: v-model` → `v-model`, without asking.
+- Otherwise (`standard`): `default_speckit_mode: classic` or `v-model` → use it without
+  asking; `ask` → structured prompt *"How would you like to proceed with SpecKit after
+  the spec is created?"*:
+  - **Classic** — `plan → tasks → implement → verify`. Best for well-scoped features,
+    clear requirements, time-constrained work.
+  - **V-Model** — full traceability: V1 requirements → V3 acceptance → V4/V5 system
+    design + test → V6/V7 architecture design + integration test → V8/V9 module design
+    + unit test, with V10 trace checkpoints, then Product Forge plan → tasks → implement
+    ([v-model-integration.md §4](../docs/v-model-integration.md#4-phase-map-in-v-model-mode)).
+    Best for complex features, safety-critical flows, regulated domains, or when full
+    test-coverage traceability is required.
 
-Before writing the spec, identify related features that may block or overlap with this one.
-`{features_dir}` comes from the effective config (Step 1).
+## Step 5: Generate `spec.md`
 
-1. Enumerate feature roots via `enumerate()` (Path-Resolution Contract, [docs/runtime.md §12](../docs/runtime.md#12-path-resolution-contract)) — read each `.forge-status.yml` for phase status
-2. For each feature that shares a domain keyword or module with the current feature:
-   - Determine the relationship: **blocks** / **complements** / **replaces** / **unrelated**
-3. If dependencies are found: populate the `## Prerequisites` section in `spec.md` (template below)
-4. If no related features found: **omit the Prerequisites section entirely** from `spec.md`
+Write `{FEATURE_DIR}/spec.md` — the canonical SpecKit specification — from
+[docs/templates/bridge-spec.md](../docs/templates/bridge-spec.md). It is richer than a
+plain SpecKit spec: it links `product-spec/` and `research/` for depth, carries every
+user story with acceptance criteria and the codebase integration notes, and is
+self-contained enough for SpecKit agents to work without reading every source.
 
-> Skip silently if `{features_dir}/` is empty or doesn't exist.
-
----
-
-## Step 3: Choose SpecKit Mode
-
-Resolve per [policy.md §4.1](../docs/policy.md#41-phase-maps) ("`speckit_mode` vs `feature_mode`"):
-
-- `feature_mode: v-model` → `SPECKIT_MODE = v-model`. Do **not** ask.
-- Otherwise (`standard`): if `default_speckit_mode` is `classic` or `v-model`, use it
-  without asking; if it is `ask`, ask the user:
-
-*"How would you like to proceed with SpecKit after the spec is created?"*
-
-- **Classic** — `plan → tasks → implement → verify`
-  Best for: well-scoped features, clear requirements, time-constrained implementations.
-
-- **V-Model** — Full traceability: V1 requirements → V3 acceptance → V4/V5 system design + test → V6/V7 architecture design + integration test → V8/V9 module design + unit test, with V10 trace checkpoints, then Product Forge plan → tasks → implement ([v-model-integration.md §4](../docs/v-model-integration.md#4-phase-map-in-v-model-mode))
-  Best for: complex features, safety-critical flows, regulated domains, when full test coverage traceability is required.
-
-Store as `SPECKIT_MODE`.
-
----
-
-## Step 4: Generate spec.md
-
-Create `{FEATURE_DIR}/spec.md` — this is the canonical SpecKit specification.
-
-The spec must be **richer than a standard SpecKit spec** because it's enriched with research context. It should:
-- Reference product-spec/ and research/ documents for full depth
-- Include all user stories with acceptance criteria
-- Include technical integration notes from codebase analysis
-- Be self-contained enough for SpecKit agents to work without reading all source documents
-
-**Conditional sections** (include or omit based on detection in Steps 2 and 2.5):
-
-| Section | Include when |
-|---------|-------------|
-| `## Prerequisites` | Step 2.5 found related features |
-| `## EDA Events` | Step 2 codebase-analysis.md shows event-driven patterns |
+| Conditional section | Include when |
+|---------------------|--------------|
+| `## Prerequisites` | Step 3 found related features |
+| `## EDA Events` | `research/codebase-analysis.md` shows event-driven patterns |
 | `## Consumer Contract` | `FEATURE_TYPE = shared_infrastructure` |
 
-````markdown
-# Spec: {Feature Name}
+## Step 6: Verify EDA events
 
-> **Product Forge Feature** | Generated: {date}
-> Feature slug: `{feature-slug}` | SpecKit mode: {SPECKIT_MODE}
->
-> **Source artifacts:**
-> - Product Spec: [product-spec/README.md](./product-spec/README.md)
-> - Research: [research/README.md](./research/README.md)
-> - Review log: [review.md](./review.md)
+When the *Event / Message Patterns* section of `research/codebase-analysis.md` shows no
+EDA patterns, remove `## EDA Events` from `spec.md` and go to Step 7. Otherwise, for
+each event in that table:
 
----
+1. Search the codebase for the exact identifier (enum value, constant or string literal).
+2. Locate its payload interface or schema definition.
+3. Confirm the payload carries a correlation / trace ID when the project convention
+   requires one.
+4. Set Status: `exists` (fill the source file path) or `to create` (it must
+   become the tasks.md task "Define event [name] + payload interface").
 
-## Overview
+Result: every EDA row has a source path or the to-create status.
 
-### What We're Building
-{2-3 sentences from product-spec.md overview}
+## Step 7: Contract-first artifacts and delta specs
 
-### Why We're Building It
-{Problem statement + business justification from product-spec.md}
-
-### Research Backing
-This spec is backed by a full research phase covering:
-- **Competitor analysis:** {top insight from competitors.md — what best implementations do}
-- **UX/UI patterns:** {top recommendation from ux-patterns.md}
-- **Codebase analysis:** {integration approach from codebase-analysis.md}
-
-> Deep-dive: [research/README.md](./research/README.md)
-
----
-
-## Prerequisites
-
-| Priority | Feature | Status | Relationship | What's Needed |
-|----------|---------|--------|--------------|---------------|
-| P1 | {feature-slug} | {🟢 done / 🟡 partial / ⏳ pending} | blocks / complements | {what must exist before this feature can ship} |
-
----
-
-## Goals
-
-### Primary Goal
-{Single most important user outcome}
-
-### Secondary Goals
-{2-3 supporting goals}
-
-### Non-Goals (v1 scope)
-{Explicit out-of-scope list from product-spec.md}
-
----
-
-## Users
-
-### Primary Persona
-**{Persona Name}** — {role and context}
-Key need: {what they need from this feature}
-
-### Secondary Personas
-{if any}
-
----
-
-## User Stories
-
-> Full structured journeys: [product-spec/journeys/](./product-spec/journeys/)
-
-### Must Have (MVP)
-
-- [ ] **{US-001}** As a {user}, I want to {action} so that {benefit}.
-  - **AC:** {acceptance criteria — specific, testable}
-  - **Wireframe ref:** [{screen name}](./product-spec/wireframes.md#{anchor})
-
-- [ ] **{US-002}** ...
-
-### Should Have
-
-- [ ] **{US-0N}** ...
-
-### Could Have (Future)
-
-- [ ] **{US-0N}** ...
-
----
-
-## Functional Requirements
-
-| ID | Requirement | Priority | Source |
-|----|-------------|----------|--------|
-| FR-001 | {requirement} | Must | US-001 |
-| FR-002 | {requirement} | Should | US-005 |
-
----
-
-## Non-Functional Requirements
-
-| Category | Requirement | Source |
-|----------|-------------|--------|
-| Performance | {e.g., API response < 300ms P95} | research/codebase-analysis |
-| Accessibility | WCAG 2.1 AA | research/ux-patterns |
-| Security | {relevant requirement} | — |
-| Scalability | {requirement} | — |
-
-## NFR Measurement Contract
-
-> Every NFR must have a corresponding measurable signal. Without this, the NFR cannot be verified.
-> Rule: if you can't define how to measure it, it is not a real NFR.
-
-| NFR | How to Measure | Signal / Query | Threshold |
-|-----|----------------|----------------|-----------|
-| {e.g., P95 latency ≤ 300ms} | {e.g., `api_response_time` event, p95 field} | {analytics query or dashboard} | {value} |
-| {e.g., Error rate < 0.5%} | {e.g., `request_failed` / `request_total`} | {query} | {value} |
-
----
-
-## Technical Context
-
-> Detailed analysis: [research/codebase-analysis.md](./research/codebase-analysis.md)
-
-### Integration Points
-{Summary of where new code plugs into the existing codebase}
-
-### Reusable Components
-{List of existing components/services that can be leveraged}
-
-### New Modules Required
-{List of new modules/services to create}
-
-### Data Model Impact
-{Schema changes, migrations, new collections}
-
-### Tech Stack Notes
-{Relevant tech stack decisions from research/tech-stack.md if available}
-
-### Codebase Constraints
-
-> From `research/codebase-analysis.md` — constraints the architecture must respect.
-
-| Constraint | Source | Impact |
-|------------|--------|--------|
-| {e.g., circuit breaker required for external calls} | {ADR or file path} | {how it shapes design} |
-| {e.g., ID format restrictions} | {source} | {impact} |
-
----
-
-## EDA Events
-
-| Direction | Event Name | Exact Identifier | Payload Contract | Source File | Status |
-|-----------|------------|-----------------|-----------------|-------------|--------|
-| emits | {event} | `{EXACT_ENUM_OR_CONSTANT}` | {interface / schema ref} | {path} | ✅ exists / 🆕 to create |
-| listens | {event} | `{EXACT_ENUM_OR_CONSTANT}` | {interface / schema ref} | {path} | ✅ exists / 🆕 to create |
-
-> Every event marked 🆕 must become a task in tasks.md: "Define event [name] + payload interface".
-
----
-
-## Consumer Contract
-
-> Include this section only when `FEATURE_TYPE = shared_infrastructure`.
-> Omit entirely for end-user features.
->
-> Defines the public surface that downstream consumers must depend on.
-> Anything not listed here is an internal implementation detail and may change without notice.
-
-### Public API
-
-```typescript
-// The single exported surface consumers should use:
-// {ServiceName}.{method}(params: {InputType}): Promise<{OutputType}>
-//
-// Example:
-// const result = await this.{serviceName}.{method}({ userId, query });
-```
-
-### Consumer Utilities
-
-| Utility | Purpose | Usage |
-|---------|---------|-------|
-| `{FormatterName}` | {what it formats} | `{FormatterName}.format(rawResult)` |
-| `{AdapterName}` | {what it adapts} | `{AdapterName}.toPromptContext(data)` |
-
-### Fallback Behaviour
-
-| Failure Mode | What Consumers Receive | Consumer Action Required |
-|--------------|----------------------|--------------------------|
-| Service unavailable | `null` / empty result | Use cached or default value |
-| Partial result | Result with `partial: true` flag | Degrade gracefully |
-| Timeout | Throws `ServiceTimeoutError` | Catch and fall back |
-
-### Integration Pattern
-
-```typescript
-// Recommended consumer integration:
-// const raw = await this.{serviceName}.{method}(userId, input);
-// const context = {FormatterName}.format(raw);
-// // → inject context into downstream process
-```
-
----
-
-## Acceptance Criteria
-
-Each user story's AC is listed above. Additionally, the feature is considered complete when:
-
-1. All Must Have user stories are implemented and tested
-2. All wireframes match the implemented UI within acceptable deviation
-3. Performance NFRs are met (as measured by {measurement method})
-4. Accessibility requirements pass automated + manual testing
-5. {Additional global AC from product-spec.md}
-
----
-
-## Success Metrics
-
-> Full metrics definition: [product-spec/metrics.md](./product-spec/metrics.md)
-
-Primary KPI: {metric name} — Target: {value} (Baseline: {current value})
-
----
-
-## Testing Specification
-
-### Coverage Targets
-
-| Module / Service | Target Coverage | Test Type |
-|-----------------|----------------|-----------|
-| {module} | {e.g., ≥ 80%} | unit / integration |
-
-### Critical Test Cases
-
-Minimum required test cases (happy path + key edge cases per critical component):
-
-| # | Scenario | Input | Expected Output | Type |
-|---|----------|-------|----------------|------|
-| TC-001 | {happy path} | {input} | {expected} | unit / integration / e2e |
-| TC-002 | {error path} | {input} | {expected} | unit |
-| TC-003 | {edge case} | {input} | {expected} | unit |
-
-### E2E Scenarios
-
-| TC-ID | Scenario | Entry Point | Exit Condition |
-|-------|----------|------------|----------------|
-| TC-E2E-001 | {full happy path} | {starting state} | {success state} |
-| TC-E2E-002 | {failure/recovery} | {starting state} | {graceful error state} |
-
----
-
-## Risks
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| {risk from product-spec.md} | High/Med/Low | {mitigation} |
-
----
-
-## Wireframes Reference
-
-> Visual wireframes: [product-spec/wireframes*](./product-spec/)
-
-Key screens:
-{for each screen: name + 1-line description + link}
-
----
-
-## Open Questions
-
-{Remaining open questions from product-spec.md that implementation must resolve}
-````
-
----
-
-## Step 4.5: EDA Event Verification
-
-Check `research/codebase-analysis.md` for the "Event / Message Patterns" section:
-- **If EDA patterns are detected**: proceed with verification below
-- **If no EDA patterns found**: remove `## EDA Events` section from `spec.md` entirely and skip this step
-
-For each event referenced in `spec.md § EDA Events`:
-
-1. **Search the codebase** for the exact event identifier (enum value, constant, or string literal)
-2. **Verify payload contract**: locate the interface or schema definition in the codebase
-3. **Check correlation / trace ID**: confirm the payload includes a request correlation or trace ID if the project convention requires it
-4. **Mark status**:
-   - ✅ exists → fill in the source file path in the EDA Events table
-   - 🆕 to create → ensure a task will be created in tasks.md for "Define event [name] + payload interface"
-
-Update `spec.md § EDA Events` table with verified source file paths and final statuses.
-
-> Skip silently if no EDA patterns detected in codebase-analysis.md.
-
----
-
-## Step 4.6: Contract-first artifacts + delta specs (v1.6)
-
-**Contracts (Theme F).** Define the FE↔BE contracts up front so frontend and
-backend tasks share one source:
-- Emit/update `contracts/openapi.yaml` (OpenAPI 3.1) for HTTP endpoints and
+**Contracts.** Define the FE↔BE contracts up front so frontend and backend tasks share
+one source:
+- Write or update `contracts/openapi.yaml` (OpenAPI 3.1) for HTTP endpoints and
   `contracts/asyncapi.yaml` (AsyncAPI) for events, derived from the EDA Events and
-  data-model sections above. Give each operation a stable `API-*` id.
-- Reference these `API-*` ids from journey steps (`journeys.yml`) and from the
-  `contracts:` column of `traceability.yml`. `api-docs` later validates/regenerates
-  against the implementation rather than authoring from scratch.
+  data-model sections. Give each operation a stable `API-*` id.
+- Reference those `API-*` ids from journey steps (`journeys.yml`) and the `contracts:`
+  column of `traceability.yml`. `api-docs` later validates them against the
+  implementation.
 
-**Delta specs (Theme B).** Express this change against the canonical `specs/`
-source of truth (see [spec-merge](./spec-merge.md)): write
-`{FEATURE_DIR}/specs/<domain>/spec.md` using `## ADDED / ## MODIFIED / ##
-REMOVED Requirements` with stable `FR-*` ids — the same `FR-*` requirements minted
-in the Functional Requirements table above. On completion, `spec-merge` folds these
-into canonical `specs/`. For a brand-new domain, all requirements are `ADDED`.
-
-For each domain touched by this feature, write one delta file. Template:
+**Delta specs.** Express the change against the canonical `specs/` source of truth
+([spec-merge](./spec-merge.md)): write one `{FEATURE_DIR}/specs/<domain>/spec.md` per
+touched domain, using the same `FR-*` ids minted in the Functional Requirements table.
+`spec-merge` folds them into canonical `specs/` on completion. Omit empty sections; for
+a brand-new domain every requirement is `ADDED`.
 
 ```markdown
 # Delta spec: {domain} — {feature-slug}
 
 > Delta against canonical `specs/{domain}/spec.md`. Keys: `FR-*` (minted in
-> spec.md § Functional Requirements). Folded by [spec-merge](./spec-merge.md).
+> spec.md § Functional Requirements). Folded by `spec-merge`.
 
 ## ADDED Requirements
 - **FR-001** {requirement} — Priority: Must — Source: US-001
@@ -450,73 +153,58 @@ For each domain touched by this feature, write one delta file. Template:
 - **FR-009** {requirement being retired, with one-line reason}
 ```
 
-Omit any section that has no entries. For a brand-new domain, list every
-requirement under `## ADDED Requirements`.
+## Step 8: Self-check `spec.md`
 
-## Step 5: Validate spec.md Quality
+Check, and fix every failure before presenting:
 
-Before presenting, self-check:
-1. Every Must Have user story has at least one acceptance criterion
-2. All FR-NNN IDs trace to at least one user story
-3. Integration points section references actual paths from codebase-analysis.md
-4. No placeholder text left (no "TODO", no "{}")
-5. Links to product-spec/ and research/ are valid relative paths
-6. **[if `## EDA Events` section is present]** All events have verified status (✅ or 🆕) — no blank Status cells
-7. **[if `## NFR Measurement Contract` section is present]** Every NFR row has a non-empty Signal / Query column
-8. **[if `## Testing Specification` section is present]** At least 3 TC entries and at least 1 E2E scenario exist
-9. **[if `## Prerequisites` section is present]** All rows have a non-empty Relationship and What's Needed column
-10. **[if `## Consumer Contract` section is present]** Public API code block is filled in and Fallback Behaviour table has at least one row
-11. Delta spec `{FEATURE_DIR}/specs/<domain>/spec.md` exists with at least one `## ADDED` / `## MODIFIED` / `## REMOVED` Requirements section and valid `FR-*` ids (matching the Functional Requirements table)
+1. Every Must Have user story has ≥ 1 acceptance criterion.
+2. Every `FR-NNN` traces to ≥ 1 user story.
+3. Integration Points cite real paths from `codebase-analysis.md`.
+4. No placeholder text remains (no "TODO", no "{}").
+5. Links to `product-spec/` and `research/` are valid relative paths.
+6. `## EDA Events` present → every event has a status (exists / to create); no blank cells.
+7. `## NFR Measurement Contract` present → every NFR row has a Signal / Query.
+8. `## Testing Specification` present → ≥ 3 TC entries and ≥ 1 E2E scenario.
+9. `## Prerequisites` present → every row has Relationship and What's Needed.
+10. `## Consumer Contract` present → the Public API block is filled and Fallback
+    Behaviour has ≥ 1 row.
+11. A delta spec `specs/<domain>/spec.md` exists with ≥ 1 ADDED / MODIFIED / REMOVED
+    Requirements section and `FR-*` ids matching the Functional Requirements table.
 
-Fix any issues found silently.
+## Step 9: Present and gate
 
----
+Show:
 
-## Step 6: Present and Confirm
-
-Show the user:
 ```
-📄 spec.md created: {FEATURE_DIR}/spec.md
-
-Contents:
-  • {N} Must Have stories + acceptance criteria
-  • {N} Should Have stories
-  • {N} Functional requirements
-  • {N} Non-functional requirements + NFR Measurement Contract
-  • {N} EDA events verified  [or: "EDA not applicable — section omitted"]
-  • {N} dependencies discovered  [or: "No prerequisite features found"]
-  • Consumer Contract: included  [or: "end-user feature — section omitted"]
-  • {N} test cases + {N} E2E scenarios (Testing Specification)
-  • {N} identified risks
-  • Full links to {N} source documents
-
+spec.md created: {FEATURE_DIR}/spec.md
+- {N} Must Have stories + acceptance criteria
+- {N} Should Have stories
+- {N} functional requirements
+- {N} non-functional requirements + NFR Measurement Contract
+- {N} EDA events verified   [or: EDA not applicable — section omitted]
+- {N} dependencies discovered   [or: no prerequisite features found]
+- Consumer Contract: included   [or: end-user feature — section omitted]
+- {N} test cases + {N} E2E scenarios (Testing Specification)
+- {N} identified risks
+- links to {N} source documents
 SpecKit mode: {SPECKIT_MODE}
 ```
 
-Then present the **Gate** prompt from
-[interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)
-(`{Phase}` = Bridge, `{next phase}` = Plan). Map the answer per
-[runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+Gate: `{Phase}` = Bridge, `{next phase}` = Plan.
 
-| Option | Decision | Next |
+| Answer | Decision | Next |
 |--------|----------|------|
-| Approve | `approved` | Step 7 (`phases.bridge.status: completed`), then Step 8 |
-| Revise | `revised` | Adjust `spec.md` / deltas with the feedback and return to Step 5; the phase stays `in_progress` |
+| Approve | `approved` | Step 10 (`phases.bridge.status: completed`), then Step 11 |
+| Revise | `revised` | Adjust `spec.md` / delta specs with the feedback and return to Step 8; the phase stays `in_progress` |
 | Rollback | `rolled_back` | Offer only `completed` phases; that phase and every later one → `pending`, rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management); stop |
 | Abort | `aborted` | Statuses unchanged; stop |
 
-Skip is offered only per the Gate template's computed rule
-([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)) — never for a required phase.
-Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)): on a
-standalone run, append one `gates[]` entry for `bridge`; when `$ARGUMENTS`
-contains `--from-forge`, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return the outcome to the orchestrator.
+## Step 10: Update status
 
----
+Standalone, after Approve, write both keys below. Under `--from-forge`, write only the
+data field `speckit_mode` — no `phases.bridge.status` and no `gates[]` entry (forge
+writes them from its gate).
 
-## Step 7: Update Status
-
-Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
-Keys written to `{FEATURE_DIR}/.forge-status.yml`:
 ```yaml
 phases:
   bridge:
@@ -524,54 +212,57 @@ phases:
 speckit_mode: "{SPECKIT_MODE}"
 ```
 
-Delta files written in Step 4.6 are not listed in the status file — `spec-merge`
-discovers them under `{FEATURE_DIR}/specs/`.
+Delta specs are not listed in the status file — `spec-merge` finds them under
+`{FEATURE_DIR}/specs/`. Mark Phase 4 ✅ Complete in `{FEATURE_DIR}/README.md`.
 
-Update `{FEATURE_DIR}/README.md` — mark Phase 4 as ✅ Complete.
+## Step 11: Hand off to SpecKit
 
----
+Runs after Approve and the status write, standalone only (under `--from-forge` the
+orchestrator runs the next phase).
 
-## Step 8: Launch SpecKit
+Context note for the delegated command: *"This spec was generated by Product Forge
+from a fully researched and user-approved product spec. The product-spec/ folder
+contains detailed user journeys, wireframes, and mockups. The research/ folder
+contains competitor analysis, UX patterns, and codebase integration analysis. Use all
+of this context to create the most informed technical plan possible."*
 
-After the gate is approved and status written, trigger SpecKit commands. When
-`$ARGUMENTS` contains `--from-forge`, skip this step — the orchestrator runs the
-next phase.
+**`SPECKIT_MODE = classic`** — tell the user the sequence, then delegate to
+`speckit.product-forge.plan` with the context note:
 
-### If `SPECKIT_MODE = classic`:
+1. `/speckit.product-forge.plan` — technical plan with product-spec cross-validation
+2. `/speckit.product-forge.tasks` — task breakdown with coverage validation
+3. `/speckit.product-forge.pre-impl-review` — design + architecture + risk review (optional)
+4. `/speckit.product-forge.implement` — implementation with progressive verification
+5. `/speckit.product-forge.code-review` — multi-agent code review (optional)
+6. `/speckit.product-forge.verify-full` — full traceability verification
 
-Inform the user:
-```
-🚀 Launching SpecKit Classic Flow
+**`SPECKIT_MODE = v-model`** — tell the user the sequence (order per
+[v-model-integration.md §4](../docs/v-model-integration.md#4-phase-map-in-v-model-mode)),
+then delegate to `speckit.v-model.requirements` with the context note and `spec.md` as
+its primary input:
 
-Next commands (run in sequence):
-1. /speckit.product-forge.plan           — Technical plan with product-spec cross-validation
-2. /speckit.product-forge.tasks          — Task breakdown with coverage validation
-3. /speckit.product-forge.pre-impl-review — Design + architecture + risk review (optional)
-4. /speckit.product-forge.implement      — Implementation with progressive verification
-5. /speckit.product-forge.code-review    — Multi-agent code review (optional)
-6. /speckit.product-forge.verify-full    — Full traceability verification
-```
+1. `/speckit.v-model.requirements` — V1, `REQ-NNN` from `spec.md` + `product-spec/`
+2. `/speckit.v-model.acceptance` — V3 acceptance test plan (V2 hazard analysis first when the domain requires it)
+3. `/speckit.v-model.system-design` + `system-test` — V4 / V5
+4. `/speckit.v-model.architecture-design` + `integration-test` — V6 / V7
+5. `/speckit.v-model.module-design` + `unit-test` — V8 / V9
+   (`/speckit.v-model.trace` — V10 checkpoint after each pair)
+6. `/speckit.product-forge.plan` — Phase 5, consistent with SYS / ARCH / MOD
+7. `/speckit.product-forge.tasks` — Phase 5B, derived from `MOD-NNN`
+8. `/speckit.product-forge.implement` → verify-full → test-plan / test-run → V12 → V13 → release-readiness
 
-Delegate to `speckit.product-forge.plan` with context:
-> *"This spec was generated by Product Forge from a fully researched and user-approved product spec. The product-spec/ folder contains detailed user journeys, wireframes, and mockups. The research/ folder contains competitor analysis, UX patterns, and codebase integration analysis. Use all of this context to create the most informed technical plan possible."*
+## Done when
 
-### If `SPECKIT_MODE = v-model`:
-
-Inform the user:
-```
-🚀 Launching V-Model Full Traceability Flow
-
-Phases (order per docs/v-model-integration.md §4):
-1. /speckit.v-model.requirements          — V1  REQ-NNN from spec.md + product-spec/
-2. /speckit.v-model.acceptance            — V3  acceptance test plan (V2 hazard analysis first when the domain requires it)
-3. /speckit.v-model.system-design + system-test             — V4/V5
-4. /speckit.v-model.architecture-design + integration-test  — V6/V7
-5. /speckit.v-model.module-design + unit-test               — V8/V9
-   (/speckit.v-model.trace — V10 checkpoint after each pair)
-6. /speckit.product-forge.plan            — Phase 5, consistent with SYS/ARCH/MOD
-7. /speckit.product-forge.tasks           — Phase 5B, derived from MOD-NNN
-8. /speckit.product-forge.implement → verify-full → test-plan/test-run → V12 → V13 → release-readiness
-```
-
-Delegate to `speckit.v-model.requirements` with the same context note above, plus
-`spec.md` as its primary input.
+- `spec.md` follows the template, contains exactly the conditional sections whose
+  conditions hold, and passes all 11 Step 8 checks.
+- Every EDA event (when the section exists) is exists-with-path or to create.
+- `contracts/openapi.yaml` / `contracts/asyncapi.yaml` give each operation an `API-*`
+  id, and one delta spec exists per touched domain with matching `FR-*` ids.
+- `SPECKIT_MODE` resolved: `v-model` whenever `feature_mode` is `v-model`; otherwise
+  from `default_speckit_mode` or the user's answer.
+- Standalone: the gate was shown and its decision appended to `gates[]`; on Approve,
+  `phases.bridge.status: completed` and `speckit_mode` are written, the feature
+  README marks Phase 4 complete, and the flow for `SPECKIT_MODE` was handed off.
+- `--from-forge`: `speckit_mode` was written (a data field) and the Step 9 summary
+  returned to forge, with no gate prompt, no `phases.bridge.status` or `gates[]`
+  write, and no SpecKit hand-off.

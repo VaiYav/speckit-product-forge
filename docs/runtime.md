@@ -38,7 +38,10 @@ this section disagree, this section wins (runtime precedence).
    to the **project** config.
 2. **Feature.** Resolve `FEATURE_DIR` from the slug in `$ARGUMENTS` via
    [§12.2](#122-resolveslug--feature_dir); with no slug, list features with
-   `enumerate()` and ask which one (a structured prompt).
+   `enumerate()` and ask which one (a structured prompt). A command that can be
+   a feature's first writer (`forge` intake, `problem-discovery`, `research`,
+   `product-spec` in express / lite, `backfill`) creates the folder when no
+   feature matches: slug = kebab-case of the description, placed by `resolve()`.
 3. **Prerequisites.** Check the required upstream artifacts for the feature's
    `feature_mode` ([§11.2](#112-per-phase-required-upstream-artifacts)). When one
    is missing, stop and name the missing artifact and the command that produces it.
