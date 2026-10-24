@@ -83,8 +83,14 @@ Parse the input:
 > `status: "not_applicable"` and do NOT require skip reasons (see
 > [docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2)).
 
-> **Lite mode** skips phases 1, 3, 4, 5B, 5C, 6B, 8A, 8B, 9 by default. See
-> [docs/policy.md §4](../docs/policy.md#4-feature-modes-e1).
+> **Other modes.** For `express` / `lite` / `v-model`, every `no` cell for the
+> mode in [docs/schema/phase-map.yml](../docs/schema/phase-map.yml) (the `—`
+> cells in "Phase execution map by mode" below) is `not_applicable`; `opt` cells
+> are offered. See [docs/policy.md §4](../docs/policy.md#4-feature-modes-e1).
+>
+> **Post-release order.** After Phase 9 the order is 9 → 9.5 → 9B (when
+> triggered) → 10; each is optional and offered in turn, so skipping one moves to
+> the next (skipping 9.5 or 9B lands on Spec Merge).
 
 > **Cross-cutting commands** (runnable at any time):
 > - `/speckit.product-forge.sync-verify` — artifact consistency across layers
@@ -105,6 +111,43 @@ See [docs/policy.md §1](../docs/policy.md#1-operating-rules). Summary:
 one phase at a time, human gate after every phase, pass full context forward,
 suppress sub-agent handoffs, record every gate decision, respect the state
 lock before writing `.forge-status.yml`.
+
+### Delegation & gate recording (applies to every phase below)
+
+The per-phase blocks only name what differs; these rules are shared:
+
+1. **Delegate.** Prepend the suppress-handoff preamble (policy §1 rule 5) and
+   pass the `--from-forge` marker in the sub-skill's `$ARGUMENTS` (plus
+   `--dry-run` when active). The sub-skill then returns its gate extras
+   (`findings`, `risks_accepted`, `action_items`, `reviewed_by_model`,
+   `cross_model_findings`, …) to forge instead of appending to `gates[]`
+   ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)).
+2. **Quick sync.** Run the per-phase "Quick sync" step only when
+   `auto_sync_between_phases` is true; layers per
+   [docs/runtime.md §5.1](../docs/runtime.md#51-automatic-quick-sync).
+3. **Gate prompt.** Use the Gate template
+   ([interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase))
+   with options computed per [docs/runtime.md §6.3](../docs/runtime.md#63-gate-prompt).
+   `{next phase}` is the next in-scope phase for the resolved `feature_mode`
+   in [phase-map.yml](../docs/schema/phase-map.yml); the per-phase gate lines
+   below show the standard-mode rendering. **Skip** appears only when
+   `{next phase}` is `opt` for the mode and not made required by
+   `require_problem_discovery`, `require_pre_impl_review`, `require_code_review`,
+   `require_testing` or `release_readiness: required`; it names the phase it
+   skips. Otherwise drop it and renumber. Skip reasons follow
+   `require_skip_reason` ([docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2)).
+4. **Record the gate.** Forge is the gate writer when orchestrating: append the
+   `gates[]` entry with the sub-skill's returned extras plus `reviewed_sha`,
+   `risk` and `sync_result`, and set statuses from the decision per
+   [docs/runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision)
+   (`skipped` applies to the **next** phase, never the gated one). Write via the
+   status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+5. **Optional-phase offers.** The "Run / Skip" offer shown before an optional
+   phase is not repeated when the previous gate already decided that phase. If
+   config makes the phase required, run it without offering Skip. Declining the
+   offer is the `skipped` decision for that phase (`status: skipped` +
+   `skip_reason`). Conditional phases whose trigger is not met are set to
+   `not_applicable` without a gate.
 
 **Structured interaction (normative).** Every gate, mode/track selection, skip
 reason, clarification, and next-action prompt in this orchestrator and all
@@ -136,14 +179,13 @@ Always allow a free-text "Other" answer; never trap the user in a closed list.
 ## Runtime
 
 - **Config load** — see [docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config).
-- **State lock** — see [docs/runtime.md §2](../docs/runtime.md#2-state-lock-protocol-a2).
+- **Status writes** — every `.forge-status.yml` write in this file goes through the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
 - **Feature detection / resume** — see [docs/runtime.md §3](../docs/runtime.md#3-step-1--feature-detection--resume).
   `FEATURE_DIR` resolution and cross-feature enumeration follow the normative
   **Path-Resolution Contract** in [docs/runtime.md §12](../docs/runtime.md#12-path-resolution-contract)
   (parameterized by `storage_strategy`; `flat` is the zero-config default).
 - **Pre-flight** — see [docs/runtime.md §4](../docs/runtime.md#4-step-2--pre-flight-check).
 - **Sync-verify integration** — see [docs/runtime.md §5](../docs/runtime.md#5-sync-verify-integration).
-- **Catalog carrier refresh** — after each transition's status write, regenerate `_portfolio/catalog.yml` so cross-feature reads stay fresh; see [docs/runtime.md §2.8](../docs/runtime.md#28-carrier-refresh-catalog-freshness).
 - **Gate audit trail** — see [docs/runtime.md §6](../docs/runtime.md#6-gate-audit-trail).
 - **Dry-run semantics (forward contract)** — see [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics).
 - **Phase digest requirement** — see [docs/runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4).
@@ -168,6 +210,12 @@ intake step before fixing the mode (see [docs/policy.md §4.0](../docs/policy.md
    v-model`). "Track" is just the user-facing word for the choice at intake; the
    persisted field is `feature_mode` (express is a first-class mode value — see
    [docs/schema.md](../docs/schema.md)). There is no separate `track` field.
+   Intake is the first writer: create the status file from the v3 initial document
+   ([docs/schema.md §3.1](../docs/schema.md#31-initial-document-new-features)) —
+   phases seeded from phase-map.yml, `yes`/`opt` → `pending`, `no` →
+   `not_applicable` — via the status-write procedure
+   ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)), which
+   merges instead if the file already exists.
 
 Triage may recommend a **downgrade** for a brand-new feature (e.g. `standard → lite`)
 — this is distinct from escalation (§"Escalation" below), which only goes upward
@@ -183,7 +231,7 @@ schema/contract change). See [docs/policy.md §4.1](../docs/policy.md#41-phase-m
 
 ## Flow Mode (gated vs fluid)
 
-Read `flow_mode` from config (default `gated`):
+Read `flow_mode` from the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config); default `gated`):
 
 - **`gated`** — execute phases strictly in order with a gate after each (the
   behavior described throughout this file). When a gate resolves to **Approve**,
@@ -269,7 +317,7 @@ and exit non-zero.
      unattended, stamped per `record_on_auto_recommend`:
 
      ```yaml
-     # appended to gates[] on .forge-status.yml
+     # appended to gates[] on .forge-status.yml via runtime.md §2.9
      - phase: {phase}
        decision: approved
        mode: ci-auto-recommend
@@ -315,11 +363,11 @@ phases (invoke the sub-skill directly to combine them).
 Before executing any phase, resolve the feature mode:
 
 1. Read `.forge-status.yml` `feature_mode` field.
-2. If absent: use `default_feature_mode` from `.product-forge/config.yml`
-   (fallback: `"standard"`).
-3. If the user passed `--mode=<value>` in this invocation: override the
-   field, write to `.forge-status.yml`, and confirm with the user that
-   changing mode mid-feature is intentional.
+2. If absent: use `default_feature_mode` from the effective config
+   ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config); fallback: `"standard"`).
+3. If the user passed `--mode=<value>` in this invocation: confirm with the user
+   that changing mode mid-feature is intentional, then write `feature_mode` via
+   the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
 4. **Validate.** The resolved value MUST be one of
    `"express" | "lite" | "standard" | "v-model"`. If anything else (typo, unknown
    literal, non-string) appears — either in the status file, config
@@ -381,7 +429,7 @@ feature, reject and suggest creating a new feature in v-model mode.
 | 9.5. Monitoring Setup | — | — | opt | opt |
 | 9B. Experiment Design | — | — | opt (conditional on experiment flag) | opt |
 | 10. Spec Merge | — | — | opt | opt |
-| V1 Requirements (`speckit.v-model.requirements`) | — | — | — | ✅ (replaces Phase 2) |
+| V1 Requirements (`speckit.v-model.requirements`) | — | — | — | ✅ (SpecKit sub-flow after bridge) |
 | V2 Hazard analysis (`speckit.v-model.hazard-analysis`) | — | — | — | opt (safety-critical domain) |
 | V3 Acceptance test plan (`speckit.v-model.acceptance`) | — | — | — | ✅ |
 | V4 System design (`speckit.v-model.system-design`) | — | — | — | ✅ |
@@ -395,16 +443,19 @@ feature, reject and suggest creating a new feature in v-model mode.
 | V12 Test results (`speckit.v-model.test-results`) | — | — | — | ✅ (after Phase 8B) |
 | V13 Audit report (`speckit.v-model.audit-report`) | — | — | — | ✅ (gates Phase 9) |
 
-In v-model mode, our Phase 2 (product-spec), Phase 3 (revalidation),
-Phase 4 (bridge), and Phase 5 (plan) are replaced by the V-Model
-progression V1 → V9 with V10 trace checkpoints between each level pair.
-See [docs/v-model-integration.md](../docs/v-model-integration.md) for
-the full orchestration contract.
+In v-model mode, Product Forge Phases 2–5 still run (✅ above, per
+[phase-map.yml](../docs/schema/phase-map.yml)). The V-Model plugin owns
+V1–V13 ([docs/policy.md §4.1](../docs/policy.md#41-phase-maps)):
+`feature_mode: v-model` forces `speckit_mode: v-model` at Phase 4 (bridge does
+not ask), so the SpecKit sub-flow after the bridge is the V-Model progression
+V1 → V9 with V10 trace checkpoints between each level pair. See
+[docs/v-model-integration.md](../docs/v-model-integration.md) for the
+plugin's orchestration contract.
 
-In lite mode, phases marked `—` are set to `status: "not_applicable"` on
-`.forge-status.yml`. They do NOT receive `gates[]` entries and do NOT
-require skip reasons — they were never in scope for this feature. See
-[docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2).
+In every mode, phases marked `—` (`no` in phase-map.yml) are
+`status: "not_applicable"` — seeded at intake. They do NOT receive `gates[]`
+entries and do NOT require skip reasons — they were never in scope for this
+feature. See [docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2).
 
 **Conditional phases** (i18n-harvest, migration-plan, experiment-design)
 are skipped automatically without gates when their trigger condition is
@@ -416,12 +467,13 @@ reason is required.
 During a lite run, watch for escalation triggers:
 
 - `task_log[].size` contains `L` or `XL`.
-- `len(tasks) > 10`.
+- The plan's inline `## Tasks` list has more than 10 items (lite has no tasks
+  phase — [docs/policy.md §4.2](../docs/policy.md#42-escalation)).
 - `plan.md` references more than 3 modules.
 
 When triggered, prompt the user: *"This feature is exceeding lite-mode
 bounds ({trigger reason}). Escalate to standard mode?"* If the user
-accepts, set `feature_mode: standard`, keep all existing artifacts, and
+accepts, set `feature_mode: standard` (via [docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)), keep all existing artifacts, and
 run the missing standard-mode phases on the next loop.
 
 Escalation is append-only. Never delete artifacts.
@@ -440,7 +492,8 @@ Writers must follow the migration rules in
 
 ## Phase 0: Problem Discovery *(Optional)*
 
-Before Phase 1, offer:
+Before Phase 1 (Phase 2 in lite), offer — or, when `require_problem_discovery: true`,
+run it without the Skip option:
 ```
 💡 Problem Discovery (Phase 0)
 
@@ -448,8 +501,11 @@ Validates the problem before investing in research:
 JTBD analysis, competing forces model, problem statement canvas, go/no-go decision.
 
   1. [Run Problem Discovery] (recommended for new/unvalidated ideas)
-  2. [Skip to Research] (problem is already validated)
+  2. [Skip to {next phase}] (problem is already validated)
 ```
+
+Declining records `phases.problem_discovery.status: skipped` + `skip_reason`
+([docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2)).
 
 If user confirms → **Delegate to:** `speckit.product-forge.problem-discovery`
 
@@ -459,11 +515,9 @@ After completion:
 - Read `{FEATURE_DIR}/problem-discovery/problem-statement.md`
 - Show: go/no-go decision, confidence score, key hypotheses
 - If **No-go**: stop and inform user. Do not proceed to Phase 1.
-- If **Go** or **Investigate further**: proceed to Phase 1 with hypotheses forwarded
-- **Gate:** `[Gate] Problem Discovery complete — go/no-go on the problem. How do you want to proceed? 1. Approve / Go (recommended if validated) → continue to Research [approved] · 2. Revise — re-run discovery with feedback [revised] · 3. Skip Research [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort / No-go — stop the lifecycle [aborted] · (or type your own answer)`
-- Record gate decision; if skipped, apply [docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2).
-
-Update `.forge-status.yml`: `problem_discovery.status = completed` (or `skipped`).
+- If **Go** or **Investigate further**: proceed to the next phase with hypotheses forwarded
+- **Gate:** `[Gate] Problem Discovery complete — go/no-go on the problem. How do you want to proceed? 1. Approve / Go (recommended if validated) → continue to Research (Product Spec in lite) [approved] · 2. Revise — re-run discovery with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort / No-go — stop the lifecycle [aborted] · (or type your own answer)` — no Skip: the next phase is required in every mode.
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -476,10 +530,8 @@ Provide: FEATURE_DESCRIPTION, FEATURE_DIR, project_name, project_domain, project
 After completion:
 - Read `{FEATURE_DIR}/research/README.md` for summary
 - Show key findings from each research dimension
-- **Gate:** `[Gate] Research complete — research dimensions gathered. How do you want to proceed? 1. Approve (recommended) → continue to Product Spec [approved] · 2. Revise — request additional research dimensions [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
-
-Update `.forge-status.yml`: `research.status = completed`.
+- **Gate:** `[Gate] Research complete — research dimensions gathered. How do you want to proceed? 1. Approve (recommended) → continue to Product Spec [approved] · 2. Revise — request additional research dimensions [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: Product Spec is required.
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -487,16 +539,14 @@ Update `.forge-status.yml`: `research.status = completed`.
 
 **Delegate to:** `speckit.product-forge.product-spec`
 
-Provide: FEATURE_DESCRIPTION, FEATURE_DIR, all research artifacts summary, project settings.
+Provide: FEATURE_DESCRIPTION, FEATURE_DIR, research artifacts summary (standard / v-model; in express / lite there is no research and `problem-discovery/` is optional input — [docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts)), project settings.
 
 After completion:
 - Read `{FEATURE_DIR}/product-spec/README.md`
 - List all created documents
-- **Quick sync:** Layer 1 (research ↔ product-spec)
-- **Gate:** `[Gate] Product Spec complete — created with [N] documents. How do you want to proceed? 1. Approve (recommended) → continue to Revalidation [approved] · 2. Revise — re-run with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
-
-Update `.forge-status.yml`: `product_spec.status = completed`.
+- **Quick sync** (when enabled): Layer 1 (research ↔ product-spec)
+- **Gate:** `[Gate] Product Spec complete — created with [N] documents. How do you want to proceed? 1. Approve (recommended) → continue to Revalidation (Plan in express / lite) [approved] · 2. Revise — re-run with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: the next phase is required (2H runs inside Phase 2).
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -510,11 +560,9 @@ The revalidation skill handles its own approval loop. Returns only when user app
 
 After completion:
 - Confirm approval from `{FEATURE_DIR}/review.md`
-- **Quick sync:** Layer 1
-- **Gate:** `[Gate] Revalidation complete — product spec approved and locked. How do you want to proceed? 1. Approve (recommended) → continue to Bridge → SpecKit [approved] · 2. Revise — re-run revalidation with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
-
-Update `.forge-status.yml`: `revalidation.status = approved`.
+- **Quick sync** (when enabled): Layer 1
+- **Gate:** `[Gate] Revalidation complete — product spec approved and locked. How do you want to proceed? 1. Approve (recommended) → continue to Bridge → SpecKit [approved] · 2. Revise — re-run revalidation with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: Bridge is required.
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision); approve → `completed`).
 
 ---
 
@@ -522,16 +570,14 @@ Update `.forge-status.yml`: `revalidation.status = approved`.
 
 **Delegate to:** `speckit.product-forge.bridge`
 
-Provide: FEATURE_DIR, all product-spec artifacts, `default_speckit_mode`.
+Provide: FEATURE_DIR, all product-spec artifacts, `default_speckit_mode` (in v-model, bridge forces `speckit_mode: v-model`).
 
 After completion:
 - Confirm `spec.md` exists
 - Show summary (goals, user stories count, acceptance criteria)
-- **Quick sync:** Layer 2 (product-spec ↔ spec.md)
-- **Gate:** `[Gate] Bridge complete — spec.md created. How do you want to proceed? 1. Approve (recommended) → continue to Plan [approved] · 2. Revise — re-run the bridge with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
-
-Update `.forge-status.yml`: `bridge.status = completed`.
+- **Quick sync** (when enabled): Layer 2 (product-spec ↔ spec.md)
+- **Gate:** `[Gate] Bridge complete — spec.md created. How do you want to proceed? 1. Approve (recommended) → continue to {next phase} (i18n Harvest when triggered, else Plan) [approved] · 2. Revise — re-run the bridge with feedback [revised] · 3. Skip i18n Harvest [skipped] — only when i18n Harvest is triggered · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -557,10 +603,8 @@ Provide: FEATURE_DIR with bridge output, project locale list.
 
 After completion:
 - Confirm `i18n/keys.yml` exists
-- **Gate:** `[Gate] i18n Harvest complete — locale key stubs created. How do you want to proceed? 1. Approve (recommended) → continue to Plan [approved] · 2. Revise — re-run the harvest with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision; if skipped, apply [docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2).
-
-Update `.forge-status.yml`: `i18n_harvest.status = completed` (or `skipped` / `not_applicable` for English-only projects).
+- **Gate:** `[Gate] i18n Harvest complete — locale key stubs created. How do you want to proceed? 1. Approve (recommended) → continue to Plan [approved] · 2. Revise — re-run the harvest with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: Plan is required.
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)). English-only projects: `phases.i18n_harvest.status: not_applicable`, no gate.
 
 ---
 
@@ -568,15 +612,13 @@ Update `.forge-status.yml`: `i18n_harvest.status = completed` (or `skipped` / `n
 
 **Delegate to:** `speckit.product-forge.plan`
 
-Provide: FEATURE_DIR with spec.md, product-spec artifacts summary, codebase_path.
+Provide: FEATURE_DIR with spec.md (standard / v-model) or `product-spec/README.md` (express / lite — the plan reads the product spec directly and ends with an inline `## Tasks` list; [docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts)), product-spec artifacts summary, codebase_path.
 
 After plan approved:
-- Confirm `plan.md` exists
-- **Quick sync:** Layer 3 (spec.md ↔ plan.md)
-- **Gate:** `[Gate] Plan complete — technical plan ready. How do you want to proceed? 1. Approve (recommended) → continue to Tasks [approved] · 2. Revise — re-run the plan with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
-
-Update `.forge-status.yml`: `plan.status = completed`.
+- Confirm `plan.md` exists (in express / lite, with its inline `## Tasks` list)
+- **Quick sync** (when enabled): Layer 3 (spec.md ↔ plan.md)
+- **Gate:** `[Gate] Plan complete — technical plan ready. How do you want to proceed? 1. Approve (recommended) → continue to Tasks (Implement in express / lite) [approved] · 2. Revise — re-run the plan with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: the next phase is required.
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 > **Extension point:** *"Want to insert a custom step here (e.g., architecture review, cost estimation)?"*
 
@@ -590,11 +632,9 @@ Provide: FEATURE_DIR with plan.md.
 
 After tasks approved:
 - Show task count, group summary, story coverage
-- **Quick sync:** Layer 4 (plan.md ↔ tasks.md)
-- **Gate:** `[Gate] Tasks complete — task breakdown ready. How do you want to proceed? 1. Approve (recommended) → continue to Pre-Implementation Review [approved] · 2. Revise — re-run the breakdown with feedback [revised] · 3. Skip Pre-Implementation Review [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
-
-Update `.forge-status.yml`: `tasks.status = completed`.
+- **Quick sync** (when enabled): Layer 4 (plan.md ↔ tasks.md)
+- **Gate:** `[Gate] Tasks complete — task breakdown ready. How do you want to proceed? 1. Approve (recommended) → continue to {next phase} (Migration Plan when triggered, else Pre-Implementation Review) [approved] · 2. Revise — re-run the breakdown with feedback [revised] · 3. Skip {next phase} [skipped] — not offered for Pre-Implementation Review when require_pre_impl_review is true · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -622,10 +662,8 @@ Provide: FEATURE_DIR with plan.md, codebase_path, detected DB kind.
 
 After completion:
 - Confirm `migrations/migration-plan.md`, `forward.sql`, `rollback.sql`, `validation.sql` exist
-- **Gate:** `[Gate] Migration Plan complete — forward/rollback scripts ready. How do you want to proceed? 1. Approve (recommended) → continue to Pre-Implementation Review [approved] · 2. Revise — re-run the migration plan with feedback [revised] · 3. Skip Pre-Implementation Review [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision; if skipped, apply [docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2).
-
-Update `.forge-status.yml`: `migration_plan.status = completed` (or `skipped` / `not_applicable` when plan has no schema changes).
+- **Gate:** `[Gate] Migration Plan complete — forward/rollback scripts ready. How do you want to proceed? 1. Approve (recommended) → continue to Pre-Implementation Review [approved] · 2. Revise — re-run the migration plan with feedback [revised] · 3. Skip Pre-Implementation Review [skipped] — hidden when require_pre_impl_review is true · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)). No schema changes in the plan: `phases.migration_plan.status: not_applicable`, no gate.
 
 ---
 
@@ -648,10 +686,8 @@ Provide: FEATURE_DIR with all artifacts.
 
 After completion:
 - Show summary: design findings, architecture findings, risk count
-- **Gate:** `[Gate] Pre-Implementation Review complete — design/architecture/risk reviewed. How do you want to proceed? 1. Approve (recommended; record accepted risks and conditions) → continue to Implement [approved] · 2. Revise — re-run the review with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision (including accepted risks and conditions)
-
-Update `.forge-status.yml`: `pre_impl_review.status = completed` (or `skipped`; if skipped, apply [docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2)).
+- **Gate:** `[Gate] Pre-Implementation Review complete — design/architecture/risk reviewed. How do you want to proceed? 1. Approve (recommended; record accepted risks and conditions) → continue to Implement [approved] · 2. Revise — re-run the review with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: Implement is required.
+- Record the gate with the returned `risks_accepted` and any conditions (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 > **Extension point:** *"Want to insert a custom step here (e.g., sprint estimation, migration plan)?"*
 
@@ -659,22 +695,21 @@ Update `.forge-status.yml`: `pre_impl_review.status = completed` (or `skipped`; 
 
 ## Phase 6: Implement
 
-**Test-first Red gate (before delegating).** Tasks marked `Test-first: true` in
-tasks.md must fail before any implementation runs. Before handing off:
-1. Have `implement` run the `Test-first: true` test tasks and report the result by
-   that field name; verify the listed `TC-*` tests are currently **failing**.
-2. Record the outcome in `phases.implement.red_gate { status, tests: [TC-*],
-   skip_reason }` on `.forge-status.yml`, where `status` is one of
-   `confirmed_failing | skipped`.
-3. **Do not advance** unless `status: confirmed_failing`, OR the user explicitly
-   skips via the structured skip-reason prompt (see
-   [interaction-prompts.md](../docs/templates/interaction-prompts.md) → "Skip reason")
-   — record `status: skipped` with the captured `skip_reason`. An unconfirmed,
-   un-skipped Red gate blocks implementation.
+**Test-first Red gate (owned by implement).** Tasks marked `Test-first: true`
+must fail before any implementation runs. `implement` runs those test tasks,
+confirms the listed `TC-*` tests are currently **failing** (or captures the
+user's structured skip reason — [interaction-prompts.md](../docs/templates/interaction-prompts.md) → "Skip reason"),
+and is the **sole writer** of `phases.implement.red_gate { status, tests: [TC-*],
+skip_reason }` (`status` ∈ `confirmed_failing | skipped`) —
+[docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership). Forge does not
+record it; at the Phase 6 gate forge **reads** `phases.implement.red_gate` and
+treats the phase as not complete unless `status` is `confirmed_failing`, or
+`skipped` with a `skip_reason`. An unconfirmed, un-skipped Red gate blocks
+implementation.
 
 **Delegate to:** `speckit.product-forge.implement`
 
-Provide: FEATURE_DIR with tasks.md, plan.md, spec.md, product-spec/.
+Provide: FEATURE_DIR with tasks.md, plan.md, spec.md, product-spec/ (standard / v-model); in express / lite, `plan.md` with its inline `## Tasks` list plus product-spec/ ([docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts)).
 
 `speckit.product-forge.implement` will:
 1. Delegate to SpecKit `implement` with product-spec context.
@@ -682,14 +717,12 @@ Provide: FEATURE_DIR with tasks.md, plan.md, spec.md, product-spec/.
 3. Monitor task completion; populate `task_log[]` on `.forge-status.yml` with sizes, paths, status, and commit SHAs.
 4. Surface product-spec artifacts to implementation agents as needed.
 
-After all tasks `[x]`:
-- Summarize implemented files and progressive verify results
-- **Quick sync:** Layers 5, 6 (tasks ↔ code, spec ↔ code)
-- **Gate:** `[Gate] Implementation complete — all tasks done. How do you want to proceed? 1. Approve (recommended) → continue to Code Review [approved] · 2. Revise — re-run implementation with feedback [revised] · 3. Skip Code Review [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
+After all tasks `[x]` (in `tasks.md`, or the plan's inline `## Tasks` list in express / lite):
+- Summarize implemented files and progressive verify results; show `phases.implement.red_gate`
+- **Quick sync** (when enabled): Layers 5, 6, 8, 9, 10 (tasks ↔ code, spec ↔ code, contract drift, doc ↔ code, constitution ↔ code)
+- **Gate:** `[Gate] Implementation complete — all tasks done. How do you want to proceed? 1. Approve (recommended) → continue to Code Review (Verify Full in express / lite) [approved] · 2. Revise — re-run implementation with feedback [revised] · 3. Skip Code Review [skipped] — standard / v-model only, hidden when require_code_review is true · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 - Offer git WIP commit
-
-Update `.forge-status.yml`: `implement.status = completed`.
 
 ---
 
@@ -711,10 +744,8 @@ Provide: FEATURE_DIR with all artifacts.
 
 After completion:
 - Show summary: findings by dimension and severity
-- **Gate:** `[Gate] Code Review complete — findings by dimension and severity reported. How do you want to proceed? 1. Approve (recommended; record findings count and acknowledged items) → continue to Verify Full [approved] · 2. Revise — re-run the review with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision (including findings count and acknowledged items)
-
-Update `.forge-status.yml`: `code_review.status = completed` (or `skipped`).
+- **Gate:** `[Gate] Code Review complete — findings by dimension and severity reported. How do you want to proceed? 1. Approve (recommended; record findings count and acknowledged items) → continue to Verify Full [approved] · 2. Revise — re-run the review with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: Verify Full is required.
+- Record the gate with the returned `findings` (and `reviewed_by_model` / `cross_model_findings` when present) plus acknowledged items (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -722,23 +753,25 @@ Update `.forge-status.yml`: `code_review.status = completed` (or `skipped`).
 
 **Delegate to:** `speckit.product-forge.verify-full`
 
-Provide: FEATURE_DIR (with all artifacts), codebase_path.
+Provide: FEATURE_DIR (with all artifacts — `spec.md` + code in standard / v-model, `product-spec/README.md` + code in express / lite; [docs/runtime.md §11.2](../docs/runtime.md#112-per-phase-required-upstream-artifacts)), codebase_path.
 
 After completion:
 - Read `{FEATURE_DIR}/verify-report.md`
 - Show: CRITICAL count, WARNING count, PASSED count
 - If CRITICAL > 0: ask user to fix and re-run verify
-- If all clear: congratulate + offer git commit
-- **Gate:** `[Gate] Verify Full complete — verification report ready (acknowledge to continue). How do you want to proceed? 1. Acknowledge (recommended) → record as [approved] and continue to Test Plan · 2. Revise — fix CRITICALs and re-run verify [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)` — an acknowledgement maps to the `approved` literal. (verify-full itself is read-only and does not write row status.)
-- Record gate decision
-
-Update `.forge-status.yml`: `verify.status = completed`.
+- If all clear (0 CRITICAL): congratulate + offer git commit
+- **Gate:** `[Gate] Verify Full complete — verification report ready. How do you want to proceed? 1. Acknowledge → record as [approved] and continue to {next phase} (Test Plan in standard / v-model; finish in express / lite) · 2. Revise — fix CRITICALs and re-run verify [revised] · 3. Skip Test Plan (and Test Run) [skipped] — standard / v-model only, hidden when require_testing is true · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)` — an acknowledgement maps to the `approved` literal. **CRITICAL-aware:** with 0 CRITICAL, option 1 is Acknowledge (recommended) → `approved`; with CRITICAL > 0, option 1 becomes "Accept with conditions" → `approved_with_conditions` with every open CRITICAL listed in `conditions`, and **Revise** is the recommended option. (verify-full itself is read-only and does not write row status.)
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)). Skipping Test Plan also sets `phases.test_run` to `skipped` with the same reason (its input never exists).
 
 ---
 
 ## Phase 8A: Test Plan *(Optional)*
 
-After Phase 7 completes, ask:
+After Phase 7 completes (standard / v-model only — testing is `not_applicable`
+in express / lite), and only if the Phase 7 gate did not already decide it, ask.
+Print the "Verification passed!" line only when the report has 0 CRITICAL;
+otherwise print "Verification accepted with conditions ({N} CRITICAL open)".
+When `require_testing: true`, run 8A without offering Skip.
 
 ```
 ✅ Verification passed!
@@ -756,10 +789,8 @@ Provide: FEATURE_DIR, codebase_path, project_tech_stack.
 
 After completion:
 - Show test case counts per type
-- **Gate:** `[Gate] Test Plan complete — test cases generated. How do you want to proceed? 1. Approve (recommended) → continue to Test Run [approved] · 2. Revise — re-run the test plan with feedback [revised] · 3. Skip Test Run [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
-
-Update `.forge-status.yml`: `test_plan.status = completed` (or `skipped`).
+- **Gate:** `[Gate] Test Plan complete — test cases generated. How do you want to proceed? 1. Approve (recommended) → continue to Test Run [approved] · 2. Revise — re-run the test plan with feedback [revised] · 3. Skip Test Run [skipped] — hidden when require_testing is true · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -775,10 +806,8 @@ After completion:
 - Read `{FEATURE_DIR}/test-report.md`
 - Show: pass rate, bugs found, bugs fixed, bugs deferred
 - Offer git commit with all test artifacts
-- **Gate:** `[Gate] Test Run complete — test report ready (acknowledge to continue). How do you want to proceed? 1. Acknowledge (recommended) → record as [approved] and continue to Release Readiness · 2. Revise — re-run the test loop with feedback [revised] · 3. Skip Release Readiness [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)` — an acknowledgement maps to the `approved` literal.
-- Record gate decision
-
-Update `.forge-status.yml`: `test_run.status = completed` (or `completed_with_known_issues`).
+- **Gate:** `[Gate] Test Run complete — test report ready (acknowledge to continue). How do you want to proceed? 1. Acknowledge (recommended) → record as [approved] and continue to Release Readiness · 2. Revise — re-run the test loop with feedback [revised] · 3. Skip Release Readiness [skipped] — hidden when release_readiness is required · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)` — an acknowledgement maps to the `approved` literal.
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision); approval with deferred bugs → `completed_with_known_issues`).
 
 ---
 
@@ -804,10 +833,8 @@ Provide: FEATURE_DIR with all artifacts.
 After completion:
 - Confirm `release-readiness.md`, `monitoring/dashboard.json`, `flags/registry.yml` exist
 - Show readiness verdict and action items
-- **Gate:** `[Gate] Release Readiness complete — readiness verdict and action items reported. How do you want to proceed? 1. Approve (recommended if ready to ship) → continue to Monitoring Setup [approved] · 2. Revise — address action items and re-run readiness [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision
-
-Update `.forge-status.yml`: `release_readiness.status = completed` (or `skipped`).
+- **Gate:** `[Gate] Release Readiness complete — readiness verdict and action items reported. How do you want to proceed? 1. Approve (recommended if ready to ship) → continue to Monitoring Setup [approved] · 2. Revise — address action items and re-run readiness [revised] · 3. Skip Monitoring Setup [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)` — next steps follow the post-release order (9 → 9.5 → 9B → 10) stated under the Phase Map.
+- Record the gate with the returned `action_items` (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -833,10 +860,8 @@ If user confirms → **Delegate to:** `speckit.product-forge.monitoring-setup`.
 
 After completion:
 - Confirm `monitoring/slo.md`, `alerts.yml`, and extended `dashboard.json` exist
-- **Gate:** `[Gate] Monitoring Setup complete — SLO doc, alerts, and dashboard panels generated. How do you want to proceed? 1. Approve (recommended) → continue to the next phase [approved] · 2. Revise — re-run monitoring setup with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision; if skipped, apply [docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2).
-
-Update `.forge-status.yml`: `monitoring_setup.status = completed` (or `skipped`).
+- **Gate:** `[Gate] Monitoring Setup complete — SLO doc, alerts, and dashboard panels generated. How do you want to proceed? 1. Approve (recommended) → continue to {next phase} (Experiment Design when triggered, else Spec Merge) [approved] · 2. Revise — re-run monitoring setup with feedback [revised] · 3. Skip {next phase} [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)).
 
 ---
 
@@ -861,16 +886,15 @@ If user confirms → **Delegate to:** `speckit.product-forge.experiment-design`.
 
 After completion:
 - Confirm `experiment/experiment-design.md` and `experiment.yml` exist
-- **Gate:** `[Gate] Experiment Design complete — A/B plan pre-registered. How do you want to proceed? 1. Approve (recommended if ready to ship) → continue to the next phase [approved] · 2. Revise — re-run experiment design with feedback [revised] · 3. Skip the next optional phase [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
-- Record gate decision; if skipped, apply [docs/policy.md §3](../docs/policy.md#3-skip-reason-policy-e2).
-
-Update `.forge-status.yml`: `experiment_design.status = completed` (or `skipped` / `not_applicable` when the feature has no experiment flag).
+- **Gate:** `[Gate] Experiment Design complete — A/B plan pre-registered. How do you want to proceed? 1. Approve (recommended if ready to ship) → continue to Spec Merge [approved] · 2. Revise — re-run experiment design with feedback [revised] · 3. Skip Spec Merge [skipped] · 4. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 5. Abort [aborted] · (or type your own answer)`
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)). No experiment flag: `phases.experiment_design.status: not_applicable`, no gate.
 
 ---
 
 ## Phase 10: Spec Merge *(living spec)*
 
-After release-readiness (or at completion), offer to fold this feature's **delta
+Last in the post-release order (after 9.5 / 9B, or after Phase 9 when those are
+skipped / not applicable), offer to fold this feature's **delta
 specs** into the canonical `specs/` source of truth and archive the change:
 
 ```
@@ -883,9 +907,11 @@ and archive the change with audit history (living, spec-anchored source of truth
   2. [Skip — I'll merge later]
 ```
 
-If user confirms → **Delegate to:** `speckit.product-forge.spec-merge`. Then
-update `.forge-status.yml`: `spec_merge.status = completed` (or `skipped` /
-`not_applicable` when the project has no canonical `specs/`).
+If user confirms → **Delegate to:** `speckit.product-forge.spec-merge`.
+
+After completion:
+- **Gate:** `[Gate] Spec Merge complete — delta specs merged into canonical specs/ and the change archived. How do you want to proceed? 1. Approve (recommended) → finish [approved] · 2. Revise — re-run spec-merge with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: nothing follows. Always human (also under `--ci`).
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)). No canonical `specs/` in the project: `phases.spec_merge.status: not_applicable`, no gate.
 
 ---
 
@@ -911,7 +937,7 @@ When all active phases are complete:
   pre-impl-review.md    — Design + architecture + risk review (if ran)
   implementation-log.md — Progressive verify log              (if ran)
   code-review.md        — Multi-agent code review             (if ran)
-  verify-report.md      — Verification passed
+  verify-report.md      — Verification report ({N} CRITICAL open)
   testing/              — Test plan + {N} Playwright specs    (if 8A ran)
   bugs/                 — {N} bugs tracked, {N} fixed         (if 8B ran)
   test-report.md        — {pass rate}% pass rate              (if 8B ran)
