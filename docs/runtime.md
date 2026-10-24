@@ -1,6 +1,6 @@
 # Product Forge — Runtime
 
-> **Status:** normative for v1.5.0+
+> **Status:** normative
 > **Consumers:** every command in `commands/` (§0 is their shared contract).
 > **Companions:** [policy.md](./policy.md), [schema.md](./schema.md).
 
@@ -133,28 +133,16 @@ Used between every adjacent pair of layers:
 
 ### 1.2 Extract
 
-Extract (from the MERGED result):
-
-- `project_name`
-- `project_tech_stack`
-- `project_domain`
-- `codebase_path` (single-root projects, legacy)
-- `codebase.root` / `codebase.paths` / `codebase.workspace_type` (monorepo mode, v1.5+)
-- `features_dir`
-- `storage_strategy` (default `"flat"`; see [§12](#12-path-resolution-contract))
-- `default_speckit_mode`
-- `default_feature_mode` (default `"standard"`)
-- `flow_mode` (`gated` | `fluid`, default `gated`)
-- `default_track_hint`
-- `progressive_verify_interval`
-- `auto_sync_between_phases`
-- `require_skip_reason`
-- `release_readiness` (`required` | `optional` | `skip`)
-- `e2e_runner`
-- `a11y_gate`
-- `telemetry.*`
-- `sync_verify.*`
-- `max_tokens_per_doc`
+Commands read the keys they list under **Config keys** (§0); every key's default
+and meaning is in `config-template.yml` / [config.md](./config.md). Orchestrator-level
+keys: `project_name`, `project_tech_stack`, `project_domain`, `codebase_path`
+(single root) or `codebase.root` / `codebase.paths` / `codebase.workspace_type`
+(monorepo, §9), `features_dir`, `storage_strategy` (default `"flat"`, §12),
+`default_speckit_mode`, `default_feature_mode` (default `"standard"`), `flow_mode`
+(`gated` | `fluid`), `default_track_hint`, `progressive_verify_interval`,
+`auto_sync_between_phases`, `require_skip_reason`, `release_readiness`
+(`required` | `optional` | `skip`), `e2e_runner`, `a11y_gate`, `telemetry.*`,
+`sync_verify.*`, `max_tokens_per_doc`.
 
 **Missing identity:** if required project identity (name, tech stack, domain,
 codebase path) is still unset after merging, prompt the user and SAVE the
@@ -165,30 +153,14 @@ answers to the **PROJECT** config (`<project-root>/.product-forge/config.yml`) �
 
 ## 1A. Locating bundled scripts (`${PLUGIN_ROOT}`)
 
-> **Status:** normative for v1.6.0+. **Consumers:** every command that shells out
-> to a bundled helper (`forge.md`, `verify-full.md`, `test-run.md`, and any
-> future caller of `scripts/*`).
-
-Product Forge ships executable helpers under `scripts/` (`gate-risk.js`,
-`validate-traceability.js`, `lib-yaml.js`, `lint-docs.js`, the lock scripts, the
-migrator). **Once installed, these do NOT live in the user's project** — the
-SpecKit extension installs them under the extension path and the Claude plugin
-copies them to `~/.claude/plugins/cache/...`. A command's working directory at
-run time is the **user's project root**, where `scripts/` does not exist. So a
-bare `node scripts/<name>.js` (or `require('<plugin-root>/scripts/<name>.js')`
-with a bare `./` prefix) **silently fails**,
-disabling the deterministic risk-routing and traceability pre-gate that the gate
-flow depends on.
-
-Every script invocation MUST therefore resolve through a `${PLUGIN_ROOT}`
-indirection rather than a bare relative path. Resolve `PLUGIN_ROOT` once, at the
-start of any command that needs a script, in this order:
-
-1. **Claude plugin form:** the host exports `${CLAUDE_PLUGIN_ROOT}` for an
-   installed plugin — use it directly.
-2. **SpecKit extension form:** `PLUGIN_ROOT="$(specify extension path product-forge)"`.
-3. **Dev / in-repo form:** if neither is set and `./scripts/` exists relative to
-   the repo, `PLUGIN_ROOT="."` (running from a checkout).
+Bundled helpers live under `scripts/` **in the plugin**, not in the user's project
+(the SpecKit extension path, or `~/.claude/plugins/cache/...` for the Claude
+plugin), while a command runs from the user's project root.
+A bare `node scripts/<name>.js` therefore fails there and silently disables risk routing
+and the traceability pre-gate. Resolve `PLUGIN_ROOT` once per command, in this
+order: `${CLAUDE_PLUGIN_ROOT}` (Claude plugin) → `specify extension path
+product-forge` (SpecKit extension) → `.` (a repo checkout), and call every script
+through it:
 
 ```bash
 # Resolve the plugin root once (Claude plugin → SpecKit extension → in-repo dev).
@@ -196,17 +168,13 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(specify extension path product-forge 2>/dev
 node "$PLUGIN_ROOT/scripts/gate-risk.js" --feature-dir "$FEATURE_DIR" --json
 ```
 
-**Graceful-degradation rule (mandatory).** The deterministic scripts are an
-*accelerator*, not a hard dependency of the LLM workflow. If `PLUGIN_ROOT` cannot
-be resolved or the target script is absent, the command MUST emit a one-line
-`WARNING: <script> not found at $PLUGIN_ROOT — falling back to the LLM review
-path` and continue with the prose/LLM equivalent (e.g. classify gate risk by the
-documented heuristic, run the verify layers without the structural pre-gate). A
-missing script never aborts a run and never silently auto-approves a gate.
-
-> The `node -e` one-liners that `require()` a bundled module (e.g. `lib-yaml.js`
-> for selector extraction) follow the same rule: `require("$PLUGIN_ROOT/scripts/
-> lib-yaml.js")`, with the same WARN-and-fallback if the module is absent.
+**Graceful degradation.** The scripts accelerate the workflow; they are not a hard
+dependency. When `PLUGIN_ROOT` or the script is missing, print one line —
+`WARNING: <script> not found at $PLUGIN_ROOT — falling back to the LLM review path`
+— and continue with the documented prose equivalent (heuristic gate risk, verify
+layers without the structural pre-gate). A missing script never aborts a run and
+never approves a gate. `node -e` one-liners that `require()` a bundled module use
+`require("$PLUGIN_ROOT/scripts/<module>.js")` with the same fallback.
 
 ---
 
@@ -299,13 +267,9 @@ bash "${PLUGIN_ROOT}/scripts/acquire-lock.sh" "$FEATURE_DIR" 1800 "$FORGE_SESSIO
 # ... write `.forge-status.yml` via temp + rename ...
 ```
 
-- `${PLUGIN_ROOT}/scripts/acquire-lock.sh` uses `ln` (hardlink) as its atomic acquisition
-  primitive, followed by a `session_id` verification step that confirms the
-  writer owns the lock it just created. `ln` is used deliberately instead of
-  `mv -n` (BSD `mv -n` silently skips on an existing target with exit 0,
-  defeating the race guard); `ln` exits non-zero on an existing target on both
-  GNU and BSD, so it works on Linux, macOS, and WSL. The script refuses fresh
-  locks and takes over stale ones as described in §2.2.
+- `${PLUGIN_ROOT}/scripts/acquire-lock.sh` acquires with `ln` (atomic and
+  non-zero on an existing target on GNU, BSD and WSL — unlike BSD `mv -n`), then
+  verifies the `session_id`; it refuses fresh locks and takes over stale ones (§2.2).
 - `${PLUGIN_ROOT}/scripts/release-lock.sh` is idempotent and refuses to delete a lock held
   by a different `session_id`, preventing takeover-race foot-guns.
 
@@ -515,10 +479,10 @@ gates:
       qa: null
     skip_reason: null         # required when decision == "skipped" and require_skip_reason is true
     rolled_back_to: null      # required when decision == "rolled_back" (phase name to rewind to)
-    reviewed_sha: "abc1234"   # W5-A2 — git SHA / artifact stamp reviewed; enables delta/incremental review on re-run
-    risk: "low"               # W5-A4 — gate risk class (low | medium | high) from scripts/gate-risk.js
-    reviewed_by_model: null   # v1.7 P1-B — reviewer id on a code-review --cross-model gate; null otherwise
-    cross_model_findings: 0   # v1.7 P1-B — findings the cross-model reviewer added (0 if not run)
+    reviewed_sha: "abc1234"   # git SHA / artifact stamp reviewed; enables delta/incremental review on re-run
+    risk: "low"               # gate risk class (low | medium | high) from scripts/gate-risk.js
+    reviewed_by_model: null   # reviewer id on a code-review --cross-model gate; null otherwise
+    cross_model_findings: 0   # findings the cross-model reviewer added (0 if not run)
     # Phase-specific extras (present only on the named gate):
     findings: {}              # code_review — counts by severity
     risks_accepted: {}        # pre_impl_review — { critical: N, high: N } accepted
@@ -595,7 +559,7 @@ option set is computed, not hard-coded:
 
 ## 7. Dry-Run Semantics
 
-**Normative for v1.7+.** `--dry-run` lets any phase (or `forge` end-to-end) run
+`--dry-run` lets any phase (or `forge` end-to-end) run
 fully — including LLM calls and artifact computation — without mutating the
 feature's real state. It answers *"what would this phase change?"* before
 committing. Every sub-skill that writes artifacts MUST honor it; a sub-skill that
@@ -699,7 +663,7 @@ phases:
     tool_calls: <int>      # tool invocations
 ```
 
-These are the **producer** for `status --cost` / `scripts/cost-report.js` (P3-C).
+These are the **producer** for `status --cost` / `scripts/cost-report.js`.
 They are **best-effort and host-dependent**: a host with no usage API simply omits
 them, and the cost rollup then reports "no per-phase token telemetry recorded"
 rather than fabricating zeros. Never invent counts the host did not provide.

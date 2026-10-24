@@ -1,0 +1,15 @@
+schema_version: "1.1"
+name: status-standard
+description: "status renders the standard phase map for the demo fixture"
+tags: [product-forge, regression]
+runs: 1
+context:
+  scaffold_script: setup.sh
+execution:
+  max_turns: 25
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep]
+  prompt: |
+    /speckit-product-forge:status demo-save-preferences
+    
+    Unattended evaluation run: whenever the command asks a question or shows a gate, choose the option it marks as recommended and continue without waiting.

@@ -1,0 +1,15 @@
+schema_version: "1.1"
+name: plan-lite-dry-run
+description: "plan --dry-run in lite writes only under .forge-dry-run and keeps status untouched"
+tags: [product-forge, regression]
+runs: 1
+context:
+  scaffold_script: setup.sh
+execution:
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Write, Edit]
+  prompt: |
+    /speckit-product-forge:plan quick-export --dry-run
+    
+    Unattended evaluation run: whenever the command asks a question or shows a gate, choose the option it marks as recommended and continue without waiting.
