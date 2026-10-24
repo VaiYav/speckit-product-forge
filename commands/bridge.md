@@ -94,7 +94,7 @@ Resolve per [policy.md §4.1](../docs/policy.md#41-phase-maps) ("`speckit_mode` 
 - **Classic** — `plan → tasks → implement → verify`
   Best for: well-scoped features, clear requirements, time-constrained implementations.
 
-- **V-Model** — Full traceability: `v-model-requirements → v-model-architecture-design → v-model-system-design → v-model-module-design → [unit/integration/system/acceptance tests]`
+- **V-Model** — Full traceability: V1 requirements → V3 acceptance → V4/V5 system design + test → V6/V7 architecture design + integration test → V8/V9 module design + unit test, with V10 trace checkpoints, then Product Forge plan → tasks → implement ([v-model-integration.md §4](../docs/v-model-integration.md#4-phase-map-in-v-model-mode))
   Best for: complex features, safety-critical flows, regulated domains, when full test coverage traceability is required.
 
 Store as `SPECKIT_MODE`.
@@ -559,15 +559,17 @@ Inform the user:
 ```
 🚀 Launching V-Model Full Traceability Flow
 
-Phases:
-1. /speckit.v-model-requirements    — REQ-NNN traceable requirements
-2. /speckit.v-model-architecture-design — System architecture
-3. /speckit.v-model-system-design   — Component decomposition
-4. /speckit.v-model-module-design   — Module-level design
-5. /speckit.tasks                   — Implementation tasks
-6. /speckit.implement               — Execution
-7. /speckit.v-model-unit-test + integration/system/acceptance — Test specs
-8. /speckit.product-forge.verify-full       — Full traceability check
+Phases (order per docs/v-model-integration.md §4):
+1. /speckit.v-model.requirements          — V1  REQ-NNN from spec.md + product-spec/
+2. /speckit.v-model.acceptance            — V3  acceptance test plan (V2 hazard analysis first when the domain requires it)
+3. /speckit.v-model.system-design + system-test             — V4/V5
+4. /speckit.v-model.architecture-design + integration-test  — V6/V7
+5. /speckit.v-model.module-design + unit-test               — V8/V9
+   (/speckit.v-model.trace — V10 checkpoint after each pair)
+6. /speckit.product-forge.plan            — Phase 5, consistent with SYS/ARCH/MOD
+7. /speckit.product-forge.tasks           — Phase 5B, derived from MOD-NNN
+8. /speckit.product-forge.implement → verify-full → test-plan/test-run → V12 → V13 → release-readiness
 ```
 
-Delegate to SpecKit `v-model-requirements` with the same context note above.
+Delegate to `speckit.v-model.requirements` with the same context note above, plus
+`spec.md` as its primary input.

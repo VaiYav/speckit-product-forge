@@ -198,8 +198,10 @@ in [runtime.md §11.2](./runtime.md#112-per-phase-required-upstream-artifacts).
 
 **Standard mode** — the full standard lifecycle (20 phase slots: 8 always-on core + 12 optional/conditional) documented in `commands/forge.md`.
 
-**V-Model mode** — replaces the middle of the standard lifecycle with the
-formal V-Model artifact progression for regulated / safety-critical work.
+**V-Model mode** — the full standard lifecycle plus the formal V-Model artifact
+progression for regulated / safety-critical work. No Product Forge phase is
+replaced: the V-Model phases are inserted around them
+([`schema/phase-map.yml`](./schema/phase-map.yml) is the authority).
 Requires the external optional extension
 [leocamello/spec-kit-v-model](https://github.com/leocamello/spec-kit-v-model)
 (v0.5.0 or higher). See [v-model-integration.md](./v-model-integration.md)
@@ -211,9 +213,13 @@ Key properties:
   architecture / module design paired with system / integration / unit test
   plans, trace checkpoints, peer review, test results ingestion, and audit
   report.
-- Product Forge owns the bookends: problem-discovery, research, tasks,
-  implement, verify-full, test-plan / test-run (browser E2E), release-
-  readiness.
+- Product Forge runs every phase it runs in `standard` — problem-discovery,
+  research, product-spec, revalidation, bridge, plan, tasks, implement,
+  verify-full, test-plan / test-run (browser E2E), release-readiness.
+- Order: Phase 4 bridge writes `spec.md` and (with `speckit_mode: v-model`)
+  starts V1; **V1–V11 run between bridge and Phase 5 plan**; plan and tasks
+  build on the approved V-Model design (`SYS` / `ARCH` / `MOD`); **V12 runs after
+  Phase 8B and V13 gates Phase 9**.
 - Missing plugin → abort, no silent degradation. Regulated work must not
   ship without the formal artifacts.
 - Domain selection (IEC 62304 / ISO 26262 / DO-178C / generic) lives in

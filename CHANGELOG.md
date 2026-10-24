@@ -62,6 +62,11 @@ _Nothing yet._
   parameterised Gate template computes its options from config.
 - **Skip at a gate** means *approve this phase, skip the next (optional) one* — two gate
   entries; Skip is never offered when the next phase is required.
+- **`v-model` keeps every standard phase.** `phase-map.yml` is the authority:
+  product-spec, revalidation, bridge and plan still run; V1–V11 run between bridge
+  and plan, V12 after test-run, V13 gates release-readiness. `policy.md`,
+  `v-model-integration.md` §4, `bridge.md` (V-command order and names) and the config
+  docs no longer say the V-phases replace Phases 2–5.
 - **Mode-keyed prerequisites** (runtime §11.2) and a defined `speckit_mode` ↔ `feature_mode`
   relationship (policy §4.1; `feature_mode: v-model` forces `speckit_mode: v-model`).
 - **Schema:** v3 initial document (schema §3.1); declared fields for `config_override`,

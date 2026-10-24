@@ -82,16 +82,32 @@ regulatory vocabulary.
 
 ## 4. Phase map in v-model mode
 
-The v-model lifecycle replaces the middle of the standard lifecycle
-(product-spec through plan) with the formal V-Model progression,
-keeping our plugin's bookends (problem-discovery, research,
-implement, tests, release-readiness).
+The v-model lifecycle runs **every Product Forge phase it runs in `standard`**
+and inserts the formal V-Model progression around them — nothing is replaced.
+Per-mode applicability comes from
+[`schema/phase-map.yml`](./schema/phase-map.yml), the single source; this section
+only places the V-phases.
+
+- **Phases 0–4 run as in standard.** Phase 2 product-spec stays the product
+  source (journeys, wireframes, acceptance criteria); Phase 3 revalidates it;
+  Phase 4 bridge writes `spec.md` and, because `feature_mode: v-model` forces
+  `speckit_mode: v-model`, hands off to V1.
+- **V1–V11 run between bridge and Phase 5 plan.** V1 derives `REQ-NNN` from
+  `spec.md` + `product-spec/`; the level pairs follow with V10 trace checkpoints.
+- **Phase 5 plan and 5B tasks build on the approved V-Model design**: the plan
+  must stay consistent with `SYS` / `ARCH` / `MOD`, and tasks derive from
+  `MOD-NNN`.
+- **V12 runs after Phase 8B; V13 gates Phase 9.**
 
 ```
 PRODUCT FORGE           ║  V-MODEL EXTENSION PACK       ║  PHASE ID
 ════════════════════════╬═══════════════════════════════╬══════════
 Phase 0 problem-discov. ║                               ║  0   (opt)
 Phase 1 research        ║                               ║  1
+Phase 2 product-spec    ║                               ║  2
+Phase 2H design-system  ║                               ║  2H  (opt)
+Phase 3 revalidation    ║                               ║  3
+Phase 4 bridge          ║                               ║  4   (writes spec.md, forces speckit_mode)
                         ║  v-model.requirements         ║  V1
                         ║  v-model.hazard-analysis (opt║  V2  (safety-critical only)
                         ║  v-model.acceptance           ║  V3
@@ -103,8 +119,11 @@ Phase 1 research        ║                               ║  1
                         ║  v-model.unit-test            ║  V9
                         ║  v-model.trace (checkpoint)   ║  V10
                         ║  v-model.peer-review (opt)    ║  V11 (cross-cutting)
+Phase 4.5 i18n-harvest  ║                               ║  4.5 (opt, cond)
+Phase 5 plan            ║                               ║  5   (consistent with SYS/ARCH/MOD)
 Phase 5B tasks          ║                               ║  5B  (derives from V8 MOD-NNN)
 Phase 5.5 migration-plan║                               ║  5.5 (opt, cond)
+Phase 5C pre-impl-review║                               ║  5C  (opt)
 Phase 6 implement       ║                               ║  6
 Phase 6B code-review    ║                               ║  6B  (opt)
 Phase 7 verify-full     ║                               ║  7   (cross-checks against V10 matrix)
@@ -117,10 +136,12 @@ Phase 9 release-readines║                               ║  9   (opt)
 
 ### Phase detail
 
-#### V1 — Requirements (replaces Phase 2 product-spec)
+#### V1 — Requirements (after Phase 4 bridge)
 
 - Command: `speckit.v-model.requirements`
-- Input: research outputs, feature description, hypotheses from Phase 0.
+- Input: `spec.md` from the bridge, the approved `product-spec/`, research
+  outputs, hypotheses from Phase 0. V1 formalises the product spec into
+  traceable requirements; it does not replace it.
 - Output: `requirements.md` with `REQ-NNN` traceable IDs.
 - Gate: user approval; drift from research captured in gates[].
 
@@ -161,7 +182,8 @@ Phase 9 release-readines║                               ║  9   (opt)
   compliant with DO-178C / ISO 26262.
 - `speckit.v-model.unit-test` → white-box unit tests (`UTP-NNN`) with
   five named techniques per module.
-- Output of V9 is the input for our Phase 5B tasks: every `MOD-NNN`
+- The approved V4 / V6 / V8 designs are inputs for our Phase 5 plan, and the
+  output of V9 is the input for our Phase 5B tasks: every `MOD-NNN`
   becomes one or more tasks, every `UTP-NNN` becomes one or more unit
   tests in Phase 8B / test-plan §5E.
 

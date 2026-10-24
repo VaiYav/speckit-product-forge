@@ -615,7 +615,7 @@ a digest file before the orchestrator marks the phase `completed`.
 | `express` | `product_spec`, `plan`, `implement`, `verify` |
 | `lite` | `product_spec`, `plan`, `implement`, `verify` |
 | `standard` | `research`, `product_spec`, `plan`, `tasks`, `implement`, `verify` |
-| `v-model` | same as standard plus V-Model artifact phases when implemented |
+| `v-model` | same as standard (V-Model artifacts are owned by the V-Model pack) |
 
 Phases marked `not_applicable` (for example in `backfill`-ed features) are
 exempt regardless of mode.
@@ -878,7 +878,7 @@ mode does not produce (in `express`/`lite`, research, bridge and tasks are
 | 3. Revalidation | `product-spec/README.md` | — not in scope |
 | 4. Bridge → SpecKit | `product-spec/README.md` | — not in scope |
 | 4.5. i18n Harvest | `spec.md` | — not in scope |
-| 5. Plan | `spec.md` | `product-spec/README.md` (the plan reads the product spec directly) |
+| 5. Plan | `spec.md` (v-model: plus the approved V4 / V6 / V8 designs) | `product-spec/README.md` (the plan reads the product spec directly) |
 | 5B. Tasks | `plan.md` | — not in scope; the plan carries an inline `## Tasks` list |
 | 5.5. Migration Plan | `plan.md` | — not in scope |
 | 5C. Pre-Impl Review | `tasks.md` | — not in scope |

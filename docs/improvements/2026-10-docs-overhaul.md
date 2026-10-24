@@ -44,6 +44,7 @@
 | D12 | `speckit_mode` ↔ `feature_mode` relationship defined in policy §4.1; nothing retired. |
 | D13 | `forge.md`: fix drift in place, extract only the gate prompt and the status epilogue (a full generic transition table is deferred). |
 | D14 | Wire `require_*`, `require_skip_reason`, `auto_sync_between_phases` through the shared gate template; add `require_problem_discovery` to `config-template.yml`. Skip is never offered on a required phase. |
+| D15 | **v-model keeps every standard phase** (owner decision): `phase-map.yml` wins over the old "V1–V10 replace product-spec…plan" prose. V1–V11 run between bridge and plan, V12 after test-run, V13 gates release; `policy.md`, `v-model-integration.md` §4, `bridge.md`, `config.md` and `config-template.yml` aligned. |
 
 ## Sequencing
 
@@ -56,6 +57,5 @@ CHANGELOG [1.8.0] `### Fixed`.
 ## Deferred
 
 - `max_tokens_per_doc` / `output_language` removal (D4) — owner decision pending.
-- `v-model` applicability: `phase-map.yml` runs Product Forge phases 2–5 in `v-model`, while `v-model-integration.md` §4 says V1–V10 replace them — owner decision pending; `forge.md` follows `phase-map.yml` meanwhile.
 - Generic forge transition table (D13).
 - Issue-tracker bridge, cron nudges, messaging delivery — see `ROADMAP.md`.

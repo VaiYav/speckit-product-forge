@@ -138,8 +138,9 @@ release_readiness: "optional"
 #   "lite"     — 5 phases: problem-discovery (opt) → product-spec → plan → implement → verify
 #   "standard" — full standard lifecycle: 8 always-on core phases + 12
 #                optional/conditional = 20 phase slots (recommended for most features)
-#   "v-model"  — standard bookends + V1–V13 delegated to the external
-#                V-Model Extension Pack (leocamello/spec-kit-v-model ≥0.5.0).
+#   "v-model"  — the full standard lifecycle plus V1–V13 delegated to the
+#                external V-Model Extension Pack (V1–V11 between bridge and
+#                plan, V12–V13 before release) (leocamello/spec-kit-v-model ≥0.5.0).
 #                REQUIRES that plugin to be installed separately:
 #                  specify extension add v-model \
 #                    --from https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.5.0.zip

@@ -252,8 +252,8 @@ Phase map selected when a new feature is created (persisted as `feature_mode`):
   implement → verify. For bug fixes, refactors, small features.
 - `"standard"` — full lifecycle: 8 always-on core phases + 12
   optional/conditional = 20 phase slots. Default.
-- `"v-model"` — Product Forge keeps the bookends (problem-discovery, research,
-  tasks, implement, verify, test, release-readiness) and delegates V1–V13 to the
+- `"v-model"` — the full standard lifecycle (every Product Forge phase, including
+  product-spec, revalidation, bridge and plan) plus V1–V13 delegated to the
   external [V-Model Extension Pack](https://github.com/leocamello/spec-kit-v-model)
   (`leocamello/spec-kit-v-model` ≥ 0.5.0). **Required install:**
   `specify extension add v-model --from https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.5.0.zip`.
