@@ -9,7 +9,7 @@
 
 ## 1. What this plugin is
 
-A SpecKit extension (`speckit-product-forge`, v1.8.0) that orchestrates
+A SpecKit extension (`speckit-product-forge`, v1.9.0) that orchestrates
 a full product lifecycle — from problem discovery through shipped and
 measured code — as a sequence of human-gated phases. Users drive it
 through `/speckit.product-forge.*` slash commands. State between phases

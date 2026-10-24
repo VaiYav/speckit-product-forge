@@ -31,19 +31,22 @@ on its own. Add `--dry-run` to preview what a phase would change without writing
 
 ---
 
-## What's new in 1.8 ("Venusaur")
+## What's new in 1.9 ("Charmander")
 
-- **Feature catalog** — `catalog` builds `_portfolio/catalog.yml`, one small,
-  deterministic index over every feature, refreshed after every status write and
-  checked with `--check` in CI. Shape: [docs/schema/catalog.yml](./docs/schema/catalog.yml).
-- **Retrieve** — `retrieve` turns a question into the 1–3 matching features and the
-  exact files to open (one index scan, no embeddings).
-- **One status-write procedure, one gate writer** — every command writes
-  `.forge-status.yml` the same way (lock helpers, v3 initial document, object-form
-  phases, digest before `completed`), and each gate is recorded exactly once, with
-  the phase status following the decision.
-- **Express and lite run end to end** — plan reads the product spec directly and
-  carries an inline task list that implement executes.
+- **Leaner, more predictable prompts** — the 33 commands shrank from ~75k to ~50k
+  words with the same behaviour. Long output templates and branch-only procedures
+  moved to `docs/templates/` and `docs/reference/`, read only at the step that
+  needs them; every command ends with a checkable `## Done when`.
+- **One command contract** — config loading, feature resolution, dry-run, status
+  writes, digests, gates and `--from-forge` are defined once in
+  [runtime.md §0](./docs/runtime.md#0-command-contract); each command states only
+  its deltas.
+- **forge runs one phase loop** — a single transition procedure plus a per-phase
+  table replace the copy-pasted per-phase blocks (forge is half its old size).
+- **Short descriptions** — every command description is ≤ 40 words, so the
+  always-loaded skill list costs a third less context.
+- **Glossary** — shared terms are defined once in
+  [concept.md §8](./docs/concept.md#8-glossary).
 
 Earlier releases: [CHANGELOG.md](./CHANGELOG.md).
 
@@ -123,7 +126,7 @@ claude plugin install speckit-product-forge@vaiyav-plugins
 Pin a release with `@ref`, update with `marketplace update`:
 
 ```bash
-claude plugin marketplace add VaiYav/speckit-product-forge@v1.8.0
+claude plugin marketplace add VaiYav/speckit-product-forge@v1.9.0
 claude plugin marketplace update vaiyav-plugins
 ```
 
@@ -132,8 +135,8 @@ Packaging details and the command-name mapping: [docs/claude-plugin.md](./docs/c
 ### Option B — SpecKit extension
 
 ```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.8.0.zip
-specify extension list   # product-forge  v1.8.0  enabled
+specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.9.0.zip
+specify extension list   # product-forge  v1.9.0  enabled
 ```
 
 Use `.../archive/refs/heads/main.zip` for the latest commit, and
@@ -146,7 +149,7 @@ mkdir -p .product-forge
 # SpecKit extension:
 cp "$(specify extension path product-forge)/config-template.yml" .product-forge/config.yml
 # Claude plugin:
-curl -fsSL https://raw.githubusercontent.com/VaiYav/speckit-product-forge/v1.8.0/config-template.yml -o .product-forge/config.yml
+curl -fsSL https://raw.githubusercontent.com/VaiYav/speckit-product-forge/v1.9.0/config-template.yml -o .product-forge/config.yml
 ```
 
 Set at least `project_name`, `project_tech_stack`, `project_domain` and

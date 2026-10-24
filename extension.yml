@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "product-forge"
   name: "Product Forge"
-  version: "1.8.0"
+  version: "1.9.0"
   description: "Full product lifecycle orchestrator around SpecKit — problem discovery, research, product spec, plan, implement, verify, test, release and retrospective — across express/lite/standard/v-model modes with human gates, cross-artifact sync-verify, a living/delta spec with a REQ→…→TEST→EVT traceability matrix, a feature catalog with deterministic retrieval, --dry-run previews and cross-model code review. See README for the full feature list."
   author: "Valentin Yakovlev"
   repository: "https://github.com/VaiYav/speckit-product-forge"

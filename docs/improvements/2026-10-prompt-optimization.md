@@ -1,6 +1,6 @@
 # Design Note — Prompt Optimization (v1.9.0)
 
-> **Status:** IN PROGRESS → ships as v1.9.0.
+> **Status:** IMPLEMENTED (open items only under *Deferred*) → ships as v1.9.0 "Charmander".
 > Decided 2026-10-24 (owner accepted Q1–Q12). Builds on the v1.8.0 documentation
 > overhaul ([2026-10-docs-overhaul.md](./2026-10-docs-overhaul.md)).
 
@@ -47,6 +47,32 @@ consistent, but not lean:
 4. Use the glossary terms (gate, carrier, digest, drift, index, single-file
    document, `--from-forge`) instead of re-explaining them.
 
+## Result
+
+| Measure | Before | After |
+|---------|--------|-------|
+| Frontmatter `description` | 1746 words | ~1.2k words, all ≤ 40 |
+| Command bodies | ~75.5k words | ~49.6k words (forge 7554 → ~3.9k) |
+| Version / wave tags in `commands/` | 87 | 0 (lint-enforced) |
+| Prohibitions in `commands/` | 167 | 4 hard guardrails |
+| Decorative emoji / rule lines | 464 / 32 | 0 (lint-enforced) |
+| Shared preamble | 6–12 restatements | runtime.md §0, one link per command |
+| Normative docs (11 pruned files) | 20.4k words | 17.0k words (−16 %) |
+
+New homes: 40 files in `docs/templates/` (output templates) and 10 in
+`docs/reference/` (branch-only procedures). Every command was rewritten from a
+behaviour inventory and checked by an independent reviewer against the old text;
+the defects those reviews found (several pre-existing) are listed in CHANGELOG
+[1.9.0] `### Fixed`.
+
 ## Deferred
 
-- Nothing yet.
+- **P11 eval comparison.** The suite (`evals/`, 3 cases) is committed, but the
+  before/after runs were blocked by the CLI account's weekly usage limit. To run
+  it, check out the pre-rewrite tree (commit `4875929`) in a worktree, copy
+  `evals/` into it, and run the same command in both trees outside the sandbox:
+  `claude plugin eval . --scaffold --trust-plugin --ablation none --no-publish --allow-tools Write Edit --max-cost-usd 5`.
+  `Bash` cannot be granted on the author's machine, so the cases exercise only
+  behaviour that needs no `node` helper.
+- Normative docs reached −16 %, short of the −20–25 % target: the remaining text
+  was normative.

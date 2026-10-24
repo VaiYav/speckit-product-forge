@@ -12,6 +12,95 @@ _Nothing yet._
 
 ---
 
+## [1.9.0] — "Charmander" — 2026-10-24
+
+> **Prompt optimization.** The 33 command files are prompts an LLM executes; this
+> release makes them shorter and more predictable without changing what they do.
+> Design note: [docs/improvements/2026-10-prompt-optimization.md](docs/improvements/2026-10-prompt-optimization.md).
+
+### Changed
+
+- **Command contract** ([docs/runtime.md §0](docs/runtime.md#0-command-contract)) — config
+  loading, feature resolution, prerequisites, dry-run mirror, English + size budget, status
+  writes, digests, gates / `--from-forge`, structured prompts, script location and the
+  `Next step:` line are defined once. Every command links it with one identical line and lists
+  only its deltas (phase key, config keys, writes, contract deltas).
+- **Commands rewritten to one shape** — role line, numbered steps, checkable `## Done when`.
+  Bodies 75.5k → ~49.6k words (forge 7.5k → ~3.9k, test-run 5.2k → ~3.4k, test-plan
+  4.9k → ~2.4k). Output templates longer than ~20 lines moved to `docs/templates/<command>-*.md`;
+  branch-only procedures (per-type test procedures, a11y conformance, oasdiff / judge tiers,
+  dependency vetting, design review, OWASP checks, New Relic queries, sample size) moved to
+  the new `docs/reference/`. Version / wave tags, banners and decorative emoji removed;
+  prohibitions rewritten as positive instructions.
+- **Descriptions** — every frontmatter `description` is ≤ 40 words (total 1746 → ~1180), one
+  trigger per use case.
+- **forge** — one generic phase loop (scope, offer, delegate, confirm, quick sync, gate
+  surface, gate, record, hand off) plus a Phase transitions table with only the per-phase
+  differences, replacing 21 copy-pasted per-phase blocks (closes ROADMAP D13).
+- **Quick sync** ([runtime.md §5.1](docs/runtime.md)) is keyed by the phase just finished, in
+  every mode.
+- **Glossary** ([docs/concept.md §8](docs/concept.md)) and a status-emoji legend
+  ([docs/interaction.md §4](docs/interaction.md)) define the shared vocabulary once.
+- **Normative docs pruned** (−16 %): policy, phases, testing-strategy, config,
+  file-structure, schema, journeys, lessons-format, v-model-integration, interaction,
+  claude-plugin and runtime lose no-ops and restatements of `config-template.yml` /
+  `phase-map.yml`.
+
+### Behaviour changes
+
+- **First-writer commands create the feature folder** — `forge` intake, `problem-discovery`,
+  `research`, `product-spec` (express / lite) and `backfill` create it via `resolve()` when
+  no feature matches, instead of stopping.
+- **Optional phases gate standalone** — `design-system-harvest`, `i18n-harvest`,
+  `migration-plan`, `monitoring-setup` and `experiment-design` show their gate and set status
+  from it when run on their own, and return the outcome under `--from-forge`.
+- **`release_readiness: skip`** records Phase 9 `skipped` with
+  `skip_reason: "release_readiness: skip (config)"` and no prompt; forge's next-phase offer
+  skips config-disabled phases.
+- **Live MCP / PostHog creation happens only after approval** — monitoring-setup
+  (dashboards / alerts) and experiment-design (flag + experiment) create live objects after
+  an approving gate; under `--from-forge` they return the step and forge offers it after the
+  9.5 / 9B gate.
+
+### Added
+
+- **`CMD-SHAPE` lint rule** (on by default) — contract link, `## Done when`, description
+  ≤ 40 words, no version-tag sediment, no decoration. `lint-docs` self-test count 35.
+- **`evals/`** — three `claude plugin eval` cases on scaffolded fixtures (status on a
+  standard feature, tasks refusing a lite feature, plan `--dry-run` in lite);
+  `evals/results/` is gitignored.
+- **`--nested`** — product-spec Step 2E calls design-system-harvest with it: the harvest
+  writes its own status and appends no gate entry.
+
+### Fixed
+
+- forge: `{next phase}` skips 2H, untriggered conditional phases and config-disabled phases;
+  per-mode artifact signals; offers state their Skip consequence; express escalation
+  triggers, the red-gate block and dry-run recording rules restated; the 8B row sits in the
+  transitions table.
+- `--from-forge` writes artifacts, digest and data fields but no phase status or gate entry
+  (sync-verify, verify-full, revalidate, bridge, optional phases).
+- sync-verify appends to sync history instead of replacing it.
+- test-plan / test-run: TC-UNIT / TC-INT cases get a home in `test-cases.md`; resume rebuilds
+  bug / run counters and fix-attempt counts; `--dry-run` files bugs in the mirror and skips
+  the fix loop; under `--from-forge` test-run returns its traceability updates and forge
+  applies them after an approving gate.
+- implement writes `task_log[].size` (the lite escalation trigger) and updates entries in
+  place; the code-review REV heading carries its severity so `gate-risk.js` counts it;
+  pre-impl-review Skip writes `skip_reason`; release-readiness lists api-docs /
+  tracking-plan / security-check in Prior Quality Gates.
+- research PARTIAL mode still asks the scope multiSelect and reads problem-discovery
+  hypotheses; product-spec `## Done when` is mode-aware; bridge EDA status uses words.
+- retrospective's skill-promotion fallback no longer skips the status write; api-docs
+  documents contracts-only / AsyncAPI-only features instead of stopping; spec-merge skips its
+  Merge prompt under forge; backfill's canonical-spec write is defined; commands without a
+  `FEATURE_DIR` print their dry-run report.
+- Docs: Phase 3 uses the structured Gate prompt; 5C is optional in every mode that runs it;
+  standard → v-model escalation needs explicit confirmation; `v2_native` grandfathering
+  stated; the bugs legend gains Deferred.
+
+---
+
 ## [1.8.0] — "Venusaur" — 2026-06-22
 
 > **Feature wave (v1.8) — the feature catalog carrier + freshness loop.** A compact,

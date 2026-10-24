@@ -31,20 +31,22 @@ do not (and should not) exist here. Do not scaffold them in this repo.
 commands/              33 slash-command definitions (markdown + YAML frontmatter)
 docs/                  normative specs + templates (see hierarchy below)
   schema/              canonical .forge-status.yml v3 schema + migration notes
-  templates/           gate-review, journey-spec, traceability-matrix, domains.yml, …
+  templates/           output templates (gate-review, journey-spec, <command>-<artifact>.md, …)
+  reference/           branch-only procedures commands read on demand (<command>-<topic>.md)
   improvements/        dated design/audit notes
 scripts/               zero-dependency Node helpers (CommonJS, Node ≥ 22)
 extension.yml          SpecKit extension manifest (declares all commands)
 .claude-plugin/        plugin.json + marketplace.json (Claude plugin manifests)
 config-template.yml    shipped config defaults + authoritative config reference
-CHANGELOG.md           Keep-a-Changelog; current: v1.8.0 "Venusaur"
+evals/                 claude plugin eval cases on scaffolded fixtures (results/ gitignored)
+CHANGELOG.md           Keep-a-Changelog; current: v1.9.0 "Charmander"
 ```
 
 ## Version sync rule (do not break)
 
 The version lives in **two** places and they MUST match on every release:
 `extension.yml` (`extension.version`) and `.claude-plugin/plugin.json`
-(`version`). Currently `1.8.0`. `plugin.json` wins if they ever diverge, but they
+(`version`). Currently `1.9.0`. `plugin.json` wins if they ever diverge, but they
 should never diverge — bump both. The marketplace entry intentionally omits
 `version` (single source of truth). Update `CHANGELOG.md` in the same change.
 
@@ -57,6 +59,16 @@ should never diverge — bump both. The marketplace entry intentionally omits
 - When adding/removing a command: add/remove the `commands/<name>.md` file AND
   its entry under `provides.commands` in `extension.yml`. Keep the README command
   table and `docs/claude-plugin.md` count ("33 commands") in sync. `lint-docs` enforces the count here too.
+- Every command follows one shape (lint rule `CMD-SHAPE`): one identical
+  "Follow the command contract" line linking `docs/runtime.md#0-command-contract`
+  (copy it from any command), then its deltas (Phase key / Config keys / Writes / Contract deltas), numbered steps,
+  and a checkable `## Done when`. Shared behaviour (config, feature resolution,
+  dry-run, status writes, digests, gates, `--from-forge`) lives in runtime.md §0 —
+  never restate it in a command. Descriptions ≤ 40 words; no version tags
+  (`(v1.6)`, `W5-D1`, `Theme F`), banners or decorative emoji (only ✅ ⚠️ ❌ ⏳ ⏭ ↔).
+- Output templates longer than ~20 lines live in `docs/templates/<command>-<artifact>.md`;
+  procedures only some branches need live in `docs/reference/<command>-<topic>.md`.
+  The command points at them from the step that uses them.
 
 ## Helper scripts & verification
 
@@ -70,7 +82,7 @@ node scripts/doctor.js     # every --selftest + lint-docs + fixture smoke + inva
 It wraps:
 
 ```bash
-node scripts/lint-docs.js --selftest             # doc-corpus consistency linter (its own tests)
+node scripts/lint-docs.js --selftest             # doc-corpus consistency linter (35 self-tests)
 node scripts/lint-docs.js                         # run against the repo — 0 error-severity required
 node scripts/lib-paths.js --selftest             # Path-Resolution Contract (runtime.md §12)
 node scripts/gate-risk.js --selftest             # deterministic gate risk classifier
@@ -89,7 +101,7 @@ it), **carrier-field contracts** (every cross-phase field has a producer + a
 consumer), **gate-policy shape**, **sync-verify/verify-full layer-count parity**,
 dead config switches (a documented key no command reads — no exemption list),
 documented-but-undeclared config keys, stale current-version claims (install pins,
-title stamps, command descriptions), and bare `node scripts/…` / `scripts/*.sh`
+title stamps, command descriptions), **command shape** (`CMD-SHAPE`, above), and bare `node scripts/…` / `scripts/*.sh`
 paths in commands and normative docs (must use `${PLUGIN_ROOT}`, see runtime.md §1A).
 `doctor` also runs the fixture smokes (traceability `--strict`, gate-risk, cost-report).
 `scripts/lib-yaml.js` is a **subset** YAML parser (only what Product Forge's own
@@ -105,6 +117,13 @@ Validate the plugin manifests (offline, no auth):
 
 ```bash
 claude plugin validate .
+```
+
+Behaviour check for prompt edits (real model calls, costs money, needs an
+unsandboxed shell; `Bash` is not granted, so cases avoid `node` helpers):
+
+```bash
+claude plugin eval . --scaffold --trust-plugin --ablation none --no-publish --allow-tools Write Edit --max-cost-usd 5
 ```
 
 ## Documentation hierarchy (normative)

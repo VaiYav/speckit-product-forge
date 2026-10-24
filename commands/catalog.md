@@ -94,7 +94,7 @@ CI, or the SpecKit extension dir. Replace `features` with your `features_dir`.
 
 ```yaml
 - uses: actions/checkout@v4
-  with: { repository: VaiYav/speckit-product-forge, ref: v1.8.0, path: .product-forge-plugin }
+  with: { repository: VaiYav/speckit-product-forge, ref: v1.9.0, path: .product-forge-plugin }
 - name: Catalog freshness
   run: node .product-forge-plugin/scripts/build-catalog.js --features-dir features --check
 ```

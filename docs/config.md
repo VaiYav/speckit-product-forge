@@ -34,7 +34,7 @@ cp "$(specify extension path product-forge)/config-template.yml" .product-forge/
 # Claude Code plugin form (the plugin root is ${CLAUDE_PLUGIN_ROOT})
 cp "${CLAUDE_PLUGIN_ROOT}/config-template.yml" .product-forge/config.yml
 # Or fetch it from GitHub at the pinned tag
-curl -fsSL https://raw.githubusercontent.com/VaiYav/speckit-product-forge/v1.8.0/config-template.yml \
+curl -fsSL https://raw.githubusercontent.com/VaiYav/speckit-product-forge/v1.9.0/config-template.yml \
   -o .product-forge/config.yml
 ```
 

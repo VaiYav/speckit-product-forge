@@ -27,7 +27,7 @@ Defines the **`vaiyav-plugins`** marketplace with one plugin whose source is the
 
 ### `plugin.json`
 
-Declares the plugin **`speckit-product-forge`**, version `1.8.0` (kept in sync with `extension.yml`), plus author, repository, license, and discovery keywords. The version lives **only** here, not in the marketplace entry (`plugin.json` wins silently if both are set).
+Declares the plugin **`speckit-product-forge`**, version `1.9.0` (kept in sync with `extension.yml`), plus author, repository, license, and discovery keywords. The version lives **only** here, not in the marketplace entry (`plugin.json` wins silently if both are set).
 
 ## Command-name mapping
 
@@ -58,10 +58,10 @@ claude plugin marketplace add VaiYav/speckit-product-forge
 claude plugin install speckit-product-forge@vaiyav-plugins
 ```
 
-Publishing is just `git push` — users pick up changes with `/plugin marketplace update vaiyav-plugins`. Pin a release by tagging (`git tag v1.8.0 && git push --tags`) and adding with `@ref`:
+Publishing is just `git push` — users pick up changes with `/plugin marketplace update vaiyav-plugins`. Pin a release by tagging (`git tag v1.9.0 && git push --tags`) and adding with `@ref`:
 
 ```bash
-claude plugin marketplace add VaiYav/speckit-product-forge@v1.8.0
+claude plugin marketplace add VaiYav/speckit-product-forge@v1.9.0
 ```
 
 ### Versioning
