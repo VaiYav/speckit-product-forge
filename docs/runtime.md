@@ -17,9 +17,10 @@ Build the effective config by deep-merging FOUR file/document layers
 (lowest → highest precedence; rightmost wins), then applying environment
 overrides last:
 
-1. **Shipped defaults** — `config-template.yml` from the installed extension.
-   ALWAYS-LOADED BASE (supplies every key's default). Locate via
-   `specify extension path product-forge`.
+1. **Shipped defaults** — `config-template.yml` at `${PLUGIN_ROOT}` (resolved per
+   [§1A](#1a-locating-bundled-scripts-plugin_root): `${CLAUDE_PLUGIN_ROOT}` for the
+   Claude plugin form, `specify extension path product-forge` for the SpecKit
+   form). ALWAYS-LOADED BASE (supplies every key's default).
 2. **Global** — `~/.product-forge/config.yml` (user-level, cross-project).
    Skip silently if absent. If `$XDG_CONFIG_HOME` is set, also check
    `$XDG_CONFIG_HOME/product-forge/config.yml`.
@@ -32,10 +33,14 @@ Apply the **deep-merge rule** (below) between every adjacent pair. Then apply
 `PRODUCT_FORGE_*` env vars over the merged result.
 
 This mirrors git's `system → global → local` precedence, with `config_override`
-and env as two Product-Forge-specific top layers. Layers 1, 3, 4, and 5 already
-exist today; the **global layer (2) is the only structural addition**. The
-global file is **hand-authored** (like a personal global git config) — the
-runtime **reads** it but **NEVER prompt-and-saves** to it.
+and env as two Product-Forge-specific top layers. The global file is
+**hand-authored** (like a personal global git config) — the runtime **reads** it
+but **NEVER prompt-and-saves** to it.
+
+**Every command loads config this way.** A command's "load config" step means
+"build the effective config per this section" — never "read
+`.product-forge/config.yml` alone" (that skips shipped defaults, the global
+layer, `config_override` and env).
 
 ### 1.1 Deep-merge rule
 
@@ -54,8 +59,10 @@ Used between every adjacent pair of layers:
   project sets `sync_verify.contract_regen.cmd` (intrinsically repo-specific) —
   both must survive in the merged `sync_verify`.
 - **Env scope.** `PRODUCT_FORGE_*` addresses **top-level scalar keys only**
-  (e.g. `PRODUCT_FORGE_CODEBASE_PATH`). Nested-key env addressing is undefined
-  and out of scope.
+  (e.g. `PRODUCT_FORGE_CODEBASE_PATH`). The only nested exceptions are the ones a
+  key's own documentation names explicitly in [config.md](./config.md) (e.g. the
+  supply-chain and cost-rate overrides); any other nested-key env addressing is
+  undefined.
 
 ### 1.2 Extract
 
@@ -236,10 +243,12 @@ bash "${PLUGIN_ROOT}/scripts/acquire-lock.sh" "$FEATURE_DIR" 1800 "$FORGE_SESSIO
 - `${PLUGIN_ROOT}/scripts/release-lock.sh` is idempotent and refuses to delete a lock held
   by a different `session_id`, preventing takeover-race foot-guns.
 
-Sub-skills that cannot run shell (pure in-LLM flows) should document which
-writes they perform on `.forge-status.yml` and call out that they rely on
-the LLM following the protocol voluntarily. This is best-effort — see
-the caveat in OB-3 of the code review.
+These helpers are invoked from the status-write procedure ([§2.9](#29-status-write-procedure)),
+so a command never calls them directly. When `bash` or the scripts are
+unavailable (pure in-LLM host), the writer follows §2.2–§2.4 as prose and emits a
+one-line `WARNING: lock helpers unavailable — following the lock protocol
+manually`. That fallback is best-effort: it relies on the LLM honouring the
+protocol, which is why the shell helpers are preferred.
 
 ### 2.8 Carrier refresh (catalog freshness)
 
@@ -262,9 +271,54 @@ node ${PLUGIN_ROOT}/scripts/build-catalog.js --features-dir {features_dir} --che
 ```
 
 which exits non-zero when the on-disk `catalog.yml` differs from a fresh build (or a
-source `.forge-status.yml` is malformed). `doctor` runs the script's `--selftest`; a
-project wires `--check` into CI / pre-commit (see
-[`commands/catalog.md`](../commands/catalog.md)).
+source `.forge-status.yml` is malformed). `doctor` runs the script's `--selftest` and a
+`--check` against the demo fixture; a project wires `--check` into CI / pre-commit (see
+[`commands/catalog.md`](../commands/catalog.md)). The record shape is canonical in
+[`schema/catalog.yml`](./schema/catalog.yml).
+
+### 2.9 Status-write procedure
+
+**Every** command that writes `.forge-status.yml` follows these steps, in order.
+Command files point here instead of restating them; a command only says *which
+keys* it writes.
+
+1. **Dry-run check.** If `--dry-run` is in `$ARGUMENTS`, do not write the status
+   file at all — list the fields that *would* change in the phase's
+   `DRY-RUN-REPORT.md` ([§7](#7-dry-run-semantics)) and stop here.
+2. **Acquire the lock** ([§2.7](#27-reference-shell-helpers)):
+   ```bash
+   trap 'bash "${PLUGIN_ROOT}/scripts/release-lock.sh" "$FEATURE_DIR" "$FORGE_SESSION_ID"' EXIT INT TERM
+   bash "${PLUGIN_ROOT}/scripts/acquire-lock.sh" "$FEATURE_DIR" 1800 "$FORGE_SESSION_ID"
+   ```
+   Fallback when `bash`/the helpers are unavailable: the prose protocol §2.2 with
+   the §2.7 warning. If the lock is held by a live session, abort — never write
+   around it.
+3. **Read, then initialize or migrate.** Read the current file. If it does not
+   exist, start from the **v3 initial document** in
+   [schema.md §3.1](./schema.md#31-initial-document-new-features) — never write
+   `schema_version: 2` and never invent a different skeleton. If
+   `schema_version` is absent or `< 3`, apply the lazy migration
+   ([schema.md §2](./schema.md#2-migration-from-v2-to-v3)) first.
+4. **Merge, never overwrite.** Change only the keys this command owns and keep
+   every other key byte-for-byte. Rules:
+   - A phase entry is always an **object**: `phases.<key>.status: completed`,
+     never the scalar form `phases.<key>: completed` (a scalar clobbers
+     `digest_path`, `red_gate`, counters, …).
+   - Phase-owned data lives **under its phase key** (`phases.implement.red_gate`,
+     `phases.tasks.total`), never as a new top-level block. The only top-level
+     blocks are the ones the canonical schema declares.
+   - Fields not in [the canonical schema](./schema/forge-status-v3.schema.yml)
+     are not written; add them to the schema first.
+5. **Digest before completion.** When the write marks an in-scope phase
+   `completed`, the digest file is written and `phases.<key>.digest_path` set
+   **in the same write or earlier** ([§8](#8-phase-digest-requirement-a4)).
+6. **Stamp** `last_updated` (ISO-8601 UTC) on every write.
+7. **Write atomically** (temp file + rename, [§2.3](#23-writes)), then release
+   the lock.
+8. **Refresh the carrier** ([§2.8](#28-carrier-refresh-catalog-freshness)).
+
+Gate entries (`gates[]`) are written by this same procedure, subject to the
+ownership rule in [§6.1](#61-gate-ownership).
 
 ---
 
@@ -290,9 +344,9 @@ lives in one place.
 
 Acquire the state lock (§2) before reading. Once read, decide the resume point:
 
-- If the file does not exist → create it with v3 defaults (see
-  [schema.md](./schema.md)) and begin from the first phase of the selected
-  feature mode.
+- If the file does not exist → create it from the v3 initial document
+  ([schema.md §3.1](./schema.md#31-initial-document-new-features)) via §2.9 and
+  begin from the first phase of the selected feature mode.
 - If `schema_version` is absent or `< 3` → apply the lazy migration from
   [schema.md §2](./schema.md#2-migration-from-v2-to-v3) before reading the
   phase table.
@@ -330,9 +384,10 @@ Before starting any delegation:
      re-run the phase, or coerce the value — a typo in the status
      file is a user error that must be surfaced.
 3. Summarize prior-phase outputs if resuming.
-4. Show the full phase checklist using `TodoWrite`. Mark optional phases
-   (`5C`, `6B`, `8A`, `8B`, `9`) as "optional" and skipped phases as
-   "skipped — reason: ...".
+4. Show the full phase checklist using `TodoWrite`, built from
+   [`schema/phase-map.yml`](./schema/phase-map.yml) for the feature's mode: mark
+   every `opt` phase as "optional", omit `no` phases (they are
+   `not_applicable`), and show skipped phases as "skipped — reason: ...".
 5. Ask the user: *"Ready to start/resume from Phase N: [phase name]? Any
    changes to the feature description?"*
 
@@ -398,13 +453,70 @@ gates:
     risk: "low"               # W5-A4 — gate risk class (low | medium | high) from scripts/gate-risk.js
     reviewed_by_model: null   # v1.7 P1-B — reviewer id on a code-review --cross-model gate; null otherwise
     cross_model_findings: 0   # v1.7 P1-B — findings the cross-model reviewer added (0 if not run)
+    # Phase-specific extras (present only on the named gate):
+    findings: {}              # code_review — counts by severity
+    risks_accepted: {}        # pre_impl_review — { critical: N, high: N } accepted
+    action_items: {}          # release_readiness — must/should/nice tally
+    mode: null                # forge --ci only — e.g. "ci-auto-recommend"
+    policy_version: null      # forge --ci only — gate-policy.yml version
+    signals: []               # forge --ci only — gate-risk.js signals
+    validate_traceability: null  # forge --ci only — "pass" (require_clean evidence)
 ```
 
 See [docs/policy.md §2](./policy.md#2-gate-decisions) for the full list of
-decision literals and their required fields.
+decision literals and their required fields; the canonical shape is
+[`schema/forge-status-v3.schema.yml`](./schema/forge-status-v3.schema.yml) `gates[]`.
 
 The gate trail is the primary traceability artifact for retrospectives and
 audits. Do not mutate past entries; only append.
+
+### 6.1 Gate ownership
+
+Exactly **one** writer appends the gate entry for a phase boundary:
+
+- **Orchestrated run** (`forge` delegated the phase): `forge` writes the entry. It
+  already holds the gate context (risk class, sync result, `reviewed_sha`). The
+  sub-skill returns its gate extras (e.g. `findings`, `risks_accepted`,
+  `action_items`, `reviewed_by_model`) to forge and does **not** append to
+  `gates[]` itself.
+- **Standalone run** (the user invoked the sub-skill directly): the sub-skill
+  writes the entry, including its extras.
+
+A sub-skill detects an orchestrated run from the `--from-forge` marker forge
+passes in `$ARGUMENTS`. Writing the entry from both sides produces duplicate
+audit records and is a contract violation.
+
+Phase-owned audit records that are not gate entries keep a single owner too:
+`phases.implement.red_gate` is written **only** by `implement`; forge reads it
+at the Phase 6 gate.
+
+### 6.2 Status follows the decision
+
+The gate decision, not the fact that the phase ran, sets the phase status:
+
+| Decision | Status of the gated phase | Later phases |
+|----------|---------------------------|--------------|
+| `approved` / `approved_with_conditions` | `completed` (or `completed_with_known_issues` where the phase defines it) | unchanged |
+| `revised` | `in_progress` (the phase re-runs) | unchanged |
+| `skipped` | the **skipped** phase (always the next, optional one) → `skipped` + `skip_reason` | — |
+| `rolled_back` | the `rolled_back_to` phase and every phase after it → `pending`; rewound artifacts are archived per [policy.md §8](./policy.md#8-change-management) | `pending` |
+| `aborted` | unchanged (left as it was when the gate opened) | unchanged |
+
+### 6.3 Gate prompt
+
+Every gate uses the parameterized **Gate** prompt in
+[templates/interaction-prompts.md](./templates/interaction-prompts.md#gate-after-every-phase). Its
+option set is computed, not hard-coded:
+
+- **Skip** is offered only when the **next** phase is `opt` for the feature's mode
+  in [`schema/phase-map.yml`](./schema/phase-map.yml) **and** is not made
+  required by config (`require_problem_discovery`, `require_pre_impl_review`,
+  `require_code_review`, `require_testing`, `release_readiness: required` —
+  [policy.md §6](./policy.md#6-optional-phase-governance)). The option names the
+  phase it skips. A required phase is never skippable.
+- When Skip is chosen and `require_skip_reason: true`, ask for the reason and
+  record it in `skip_reason` (empty reason → re-ask).
+- **Rollback** lists only phases already `completed` for this feature.
 
 ---
 
@@ -478,6 +590,7 @@ a digest file before the orchestrator marks the phase `completed`.
 
 | Mode | Phases that require a digest |
 |------|------------------------------|
+| `express` | `product_spec`, `plan`, `implement`, `verify` |
 | `lite` | `product_spec`, `plan`, `implement`, `verify` |
 | `standard` | `research`, `product_spec`, `plan`, `tasks`, `implement`, `verify` |
 | `v-model` | same as standard plus V-Model artifact phases when implemented |
@@ -487,10 +600,13 @@ exempt regardless of mode.
 
 ### 8.1 Contract
 
-- File path: `<FEATURE_DIR>/<phase>/digest.md`.
+- File path: `<FEATURE_DIR>/<phase-dir>/digest.md`, where `<phase-dir>` is the
+  kebab-case form of the phase key (`product_spec` → `product-spec/`,
+  `problem_discovery` → `problem-discovery/`, `verify` → `verify/`).
 - Template: [`docs/templates/phase-digest.md`](./templates/phase-digest.md).
-- Sections (required): Key decisions, Artifacts produced, Open risks, Handoff notes.
-- Length: soft 300 words, hard 600 words.
+- Sections (required, in order): Diff since last approved state, Key decisions,
+  Artifacts produced, Open risks, Handoff notes.
+- Length: target 200–400 words; above 600 words is an advisory warning.
 
 #### 8.1a Per-phase cost accounting (producer for `status --cost`)
 
@@ -521,7 +637,7 @@ At phase transitions the orchestrator checks:
 2. The referenced file exists and is non-empty.
 3. The file does not exceed 600 words (advisory warning, not a block).
 
-If either (1) or (2) fails for an in-scope phase of a v3-native feature,
+If either (1) or (2) fails for an in-scope phase of a v2-native feature (§8.3),
 the phase is treated as not yet complete regardless of the `status` field,
 and the sub-skill is asked to produce the digest before the gate is
 presented.
@@ -536,8 +652,9 @@ A feature is considered **v2-native** (and therefore subject to hard
 digest enforcement) only when all of these are true:
 
 - `.forge-status.yml` has `schema_version: 3` set by a v2-aware writer.
-- `created_at` is on or after the v1.5.0 release date, OR the field
-  `v2_native: true` has been explicitly set on the status file.
+- `created_at` is on or after the v1.5.0 release date (2026-04-19), OR the
+  field `v2_native: true` has been explicitly set on the status file (the v3
+  initial document always sets it).
 
 For features that do NOT satisfy both conditions:
 
@@ -722,28 +839,42 @@ Artifact prerequisites are drawn from the sync-verify artifact map
 artifacts exist") and the phase execution map. A phase becomes runnable once the
 artifacts in its row are present under `<FEATURE_DIR>/`.
 
-| Phase | Required upstream artifact(s) | Enabler note |
-|-------|-------------------------------|--------------|
-| 0. Problem Discovery | (none) | always runnable |
-| 1. Research | (none) | always runnable |
-| 2. Product Spec | `research/README.md` (standard/v-model); none for express/lite | runnable once research exists (or immediately in express/lite) |
-| 3. Revalidation | `product-spec/README.md` | runnable once the product spec exists |
-| 4. Bridge → SpecKit | `product-spec/README.md` | runnable once the product spec exists |
-| 5. Plan | `spec.md` | runnable once `spec.md` exists |
-| 5B. Tasks | `plan.md` | runnable once `plan.md` exists |
-| 5C. Pre-Impl Review | `tasks.md` | runnable once `tasks.md` exists |
-| 6. Implement | `tasks.md` | runnable once `tasks.md` exists |
-| 6B. Code Review | code files from completed tasks | runnable once code exists |
-| 7. Verify Full | `spec.md` + code files | runnable once code exists to verify against |
-| 8A. Test Plan | `journeys/` + code files | runnable once journeys and code exist |
-| 8B. Test Run | `.spec.ts` from Phase 8A | runnable once generated tests exist |
-| 9. Release Readiness | verify-full + (when in scope) test-run results | runnable once verification has run |
+**This table is the prerequisite check for every phase command, in every flow
+mode** — not only fluid mode. A phase command validates its inputs against the
+column for the feature's `feature_mode`; it never demands an artifact that its
+mode does not produce (in `express`/`lite`, research, bridge and tasks are
+`not_applicable`, so `research/`, `spec.md` and `tasks.md` never exist).
 
-Optional / conditional phases (`0`, `4.5`, `5.5`, `5C`, `6B`, `8A`, `8B`, `9`,
-`9.5`, `9B`) appear in the runnable set only when both their artifact
-prerequisites are met **and** they are in scope per the mode map. V-Model phases
-follow the same rule against their own artifact prerequisites (see
-[v-model-integration.md](./v-model-integration.md)).
+| Phase | standard / v-model: required upstream | express / lite: required upstream |
+|-------|---------------------------------------|-----------------------------------|
+| 0. Problem Discovery | (none) | (none) — lite only |
+| 1. Research | (none) | — not in scope |
+| 2. Product Spec | `research/README.md` | (none); `problem-discovery/` is optional input |
+| 2H. Design System Harvest | `product-spec/README.md` (UI features) | — not in scope |
+| 3. Revalidation | `product-spec/README.md` | — not in scope |
+| 4. Bridge → SpecKit | `product-spec/README.md` | — not in scope |
+| 4.5. i18n Harvest | `spec.md` | — not in scope |
+| 5. Plan | `spec.md` | `product-spec/README.md` (the plan reads the product spec directly) |
+| 5B. Tasks | `plan.md` | — not in scope; the plan carries an inline `## Tasks` list |
+| 5.5. Migration Plan | `plan.md` | — not in scope |
+| 5C. Pre-Impl Review | `tasks.md` | — not in scope |
+| 6. Implement | `tasks.md` | `plan.md` with its inline `## Tasks` list |
+| 6B. Code Review | code files from completed tasks | — not in scope |
+| 7. Verify Full | `spec.md` + code files | `product-spec/README.md` + code files |
+| 8A. Test Plan | `journeys/` + code files | — not in scope |
+| 8B. Test Run | `.spec.ts` from Phase 8A | — not in scope |
+| 9. Release Readiness | verify-full + (when in scope) test-run results | — not in scope |
+| 9.5 / 9B / 10 | release-readiness completed | — not in scope |
+
+In `express`, product spec and plan are minimal ("1 journey + AC", "inline plan"
+— [policy.md §4.1](./policy.md#41-phase-maps)); the prerequisites are the same as
+lite.
+
+Optional / conditional phases (every `opt` cell in
+[`schema/phase-map.yml`](./schema/phase-map.yml)) appear in the runnable set only
+when both their artifact prerequisites are met **and** they are in scope per the
+mode map. V-Model phases follow the same rule against their own artifact
+prerequisites (see [v-model-integration.md](./v-model-integration.md)).
 
 ### 11.3 Worked example
 
@@ -764,7 +895,9 @@ transition, and records the gate decision exactly as in gated mode.
 ## 12. Path-Resolution Contract
 
 This is the **single normative rule** for computing where a feature lives on
-disk. every one of the 33 commands and both deterministic scripts consult it
+disk. Every one of the 33 commands and every script that locates features
+(`lib-paths.js` and its consumers `validate-traceability.js`, `gate-risk.js`,
+`build-catalog.js`, `retrieve-catalog.js`, `migrate-status-v2-to-v3.js`) consult it
 rather than inlining their own path logic — the path logic lives in **ONE
 place** (here). It is parameterized by the merged `storage_strategy`
 ([§1.2](#12-extract)).
@@ -846,7 +979,7 @@ This single rule cleanly subsumes:
 `_`-prefixed top-level children of `features_dir` are excluded from
 `enumerate()`, and `resolve()` never returns one:
 
-- `_portfolio/` — cross-feature report output (`portfolio.md`,
+- `_portfolio/` — cross-feature output (`portfolio.md`, `catalog.yml`,
   `flag-cleanup-{date}.md`). Stays top-level under every strategy.
 - `_archived/` — `spec-merge` archives (`_archived/<date>-<slug>/`, depth 2).
   Stays top-level. Under the `ddd` strategy, new archives MAY be
@@ -875,6 +1008,9 @@ Every site below stops inlining path logic and calls `resolve()` /
 
 - `commands/portfolio.md` — "each immediate child of `{features_dir}/`" →
   `enumerate()`. Output still `{features_dir}/_portfolio/portfolio.md`.
+- `commands/catalog.md` / `commands/retrieve.md` (`build-catalog.js`,
+  `retrieve-catalog.js`) — `enumerate()` via `lib-paths.js`; the carrier is
+  written to `{features_dir}/_portfolio/catalog.yml`.
 - `commands/status.md` — "list all directories in `{features_dir}/`" →
   `enumerate()`.
 - `commands/bridge.md` — "list all feature directories in `{features_dir}/`" →
@@ -909,7 +1045,6 @@ Every site below stops inlining path logic and calls `resolve()` /
 `dependencies.depends_on` in `.forge-status.yml` (see
 [schema.md](./schema.md)) stores **bare sibling slugs**. Under any nesting
 strategy a bare slug can be ambiguous. Nesting strategies SHOULD store qualified
-refs (`<domain>/<slug>`, and — when those strategies ship — `<context>/<slug>`
-or `<workspace>/<slug>`); a bare slug that resolves to more than 1 candidate
+refs (`<domain>/<slug>`, `<context>/<slug>` or `<workspace>/<slug>`); a bare slug that resolves to more than 1 candidate
 falls back to the same disambiguation prompt as `resolve()`. This is an extra
 real cost the nesting strategies carry and `flat` does not.

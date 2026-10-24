@@ -13,14 +13,31 @@
 
   1. Approve (recommended) — accept this phase and continue to {next phase}
   2. Revise — re-run this phase with feedback
-  3. Skip {next optional phase} — move on without it (a reason may be required)
-  4. Rollback — return to an earlier phase by name
+  3. Skip {next phase} — move on without it (a reason may be required)   ← only when allowed, see below
+  4. Rollback — return to an earlier, completed phase by name
   5. Abort — stop the lifecycle for this feature
   (or type your own answer)
 ```
 
 Maps to `gates[].decision` ∈ `approved | revised | skipped | rolled_back | aborted`
-(see [policy §2](../policy.md#2-gate-decisions)).
+(see [policy §2](../policy.md#2-gate-decisions)); "approve with conditions" typed
+as free text records `approved_with_conditions` with the conditions listed.
+
+**Parameters** (the caller supplies only these): `{Phase}`, the one-line outcome,
+`{next phase}`, and any phase-specific extra option (e.g. "Acknowledge" at verify).
+
+**Computed options** ([runtime.md §6.3](../runtime.md#63-gate-prompt)):
+
+- Show option 3 **only** when `{next phase}` is `opt` for the feature's mode in
+  [`phase-map.yml`](../schema/phase-map.yml) and no `require_*` key makes it
+  required. Otherwise drop it and renumber — never offer Skip on a required phase.
+- If Skip is chosen and `require_skip_reason: true`, follow up with the
+  *Skip reason* prompt below.
+- Rollback lists only `completed` phases.
+
+**After the answer:** set the phase status from the decision
+([runtime.md §6.2](../runtime.md#62-status-follows-the-decision)) and append the
+gate entry once ([runtime.md §6.1](../runtime.md#61-gate-ownership)).
 
 ---
 

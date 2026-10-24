@@ -33,7 +33,7 @@ to it instead of repeating rules in their own files.
 2. **Human gate after every phase.** After each sub-skill completes, summarize the outcome and present a **structured gate prompt** (see [interaction.md](./interaction.md) and the `Gate` template in [templates/interaction-prompts.md](./templates/interaction-prompts.md)) offering:
    - **Approve** → proceed to next phase
    - **Revise** → re-run same phase with feedback
-   - **Skip** → mark skipped and move on (requires confirmation; may also require a reason, see §3)
+   - **Skip** → skip the **next** phase and move on — offered only when that phase is optional for the mode and not made required by config (§6); may require a reason (§3). The computed option set is defined in [runtime.md §6.3](./runtime.md#63-gate-prompt).
    - **Abort** → stop everything
    - **Rollback** → jump back to an earlier phase by name
 
@@ -68,7 +68,7 @@ field of a `gates[]` entry:
 | `rolled_back` | User rewound to an earlier phase. | `rolled_back_to: "<phase-name>"` field populated. Subsequent phases' statuses reset to `pending`; their original completion is preserved in `gates[]` history. |
 | `aborted` | User terminated the lifecycle for this feature. | `notes` populated. |
 
-The user-facing Rollback action in §1.2 maps to a `rolled_back` gate entry.
+The user-facing Rollback action in §1 rule 2 maps to a `rolled_back` gate entry.
 Abort (stop everything) maps to `aborted`. The two are distinct: rollback
 preserves the feature and allows continuation from the rewound phase;
 abort ends the lifecycle.
@@ -89,9 +89,10 @@ require_skip_reason: true   # default
 
 **Rules:**
 
-1. Only optional phases may be skipped. Current optional phases:
-   `problem_discovery`, `pre_impl_review`, `code_review`, `test_plan`,
-   `test_run`, `release_readiness`.
+1. Only optional phases may be skipped. The optional set is every `opt` cell for
+   the feature's mode in [`schema/phase-map.yml`](./schema/phase-map.yml) (the
+   single source — this document does not restate it), minus any phase made
+   required by config (§6).
 2. When a user selects "Skip" at a gate:
    - If `require_skip_reason: true` → prompt `"Reason for skipping?"` and
      persist the free-text answer in `gates[].skip_reason` AND in
@@ -112,8 +113,8 @@ require_skip_reason: true   # default
 **`not_applicable` is NOT a skip.** Phases set to `status: "not_applicable"`
 are outside the scope of this policy:
 
-- Phases excluded by the feature's mode (for example, everything except
-  the 5 lite-mode phases in a `feature_mode: lite` feature).
+- Phases excluded by the feature's mode (every `no` cell for that mode in
+  [`schema/phase-map.yml`](./schema/phase-map.yml)).
 - Phases never run for a `backfilled: true` feature
   (`problem_discovery`, `research`, `revalidation`, `bridge`).
 
@@ -140,7 +141,7 @@ track** via a structured `Track` prompt (see
 | Classification | Recommended track | Rationale |
 |----------------|-------------------|-----------|
 | Trivial (copy/config/one-liner, no UI, no schema) | `express` | Avoid Big-Design-Up-Front overhead. |
-| Bugfix / small (≤5 tasks, single module) | `lite` | Light spec, fast path. |
+| Bugfix / small (≤5 estimated tasks, single module) | `lite` | Light spec, fast path. A lite feature that grows to 6–10 tasks stays lite; escalation to standard starts above 10 (§4.2). |
 | Standard feature | `standard` | Full research → ship lifecycle. |
 | Regulated / safety-critical | `v-model` | Audit-grade traceability. |
 
@@ -190,6 +191,11 @@ turns out larger than triage estimated. All non-express phases are
 | 6 | `implement` | required |
 | 7 | `verify` | required |
 
+In express and lite there is no bridge and no tasks phase: `plan` reads the
+product spec directly and ends with an inline `## Tasks` list (`T001`…), which
+`implement` executes and logs in `task_log[]`. Per-phase inputs for every mode are
+in [runtime.md §11.2](./runtime.md#112-per-phase-required-upstream-artifacts).
+
 **Standard mode** — the full standard lifecycle (20 phase slots: 8 always-on core + 12 optional/conditional) documented in `commands/forge.md`.
 
 **V-Model mode** — replaces the middle of the standard lifecycle with the
@@ -213,6 +219,19 @@ Key properties:
 - Domain selection (IEC 62304 / ISO 26262 / DO-178C / generic) lives in
   `v-model-config.yml` at project root, read by the delegated commands.
 
+**`speckit_mode` vs `feature_mode`.** They are different switches and both stay:
+
+- `feature_mode` (status file; config default `default_feature_mode`) selects the
+  **Product Forge phase map** — express / lite / standard / v-model.
+- `speckit_mode` (status file, written by `bridge`; config default
+  `default_speckit_mode`: `ask` / `classic` / `v-model`) selects the **SpecKit
+  sub-flow inside Phase 4 (bridge)** — classic `plan → tasks → implement`, or the
+  V-Model SpecKit commands.
+
+Relationship: `feature_mode: v-model` forces `speckit_mode: v-model` (bridge does
+not ask). In `standard`, `speckit_mode` is chosen per `default_speckit_mode`. In
+`express`/`lite` there is no bridge, so `speckit_mode` is left unset.
+
 ### 4.2 Escalation
 
 A feature may be **escalated** up the ladder (`express → lite → standard`) when it
@@ -221,7 +240,7 @@ gains UI, a second module, or a schema/contract change. Lite escalates to standa
 when any of:
 
 - `task_log[].size` contains `L` or `XL` entries.
-- The tasks array exceeds 10 items.
+- The task list (the plan's inline `## Tasks` list in lite) exceeds 10 items.
 - The plan references more than 3 modules.
 
 Escalation is append-only — previous artifacts remain, missing standard-mode
@@ -332,13 +351,14 @@ condition, it only adds the `approved_by != produced_by` constraint on top.
 | `test_plan` / `test_run` | optional | `require_testing: true` |
 | `release_readiness` | optional | `release_readiness: required` |
 
-When a phase is required by config, the "Skip" option is hidden at the gate.
+When a phase is required by config, the "Skip" option is hidden at the gate
+(computed by the Gate prompt, [runtime.md §6.3](./runtime.md#63-gate-prompt)).
 
 ---
 
 ## 7. Mode vs Optional Phase Interaction
 
-In lite mode, every phase that is not in the lite phase map (see §4.1) is
+In express and lite mode, every phase that is not in the mode's phase map (see §4.1) is
 written to `.forge-status.yml` with `status: "not_applicable"`. This
 includes both "required in standard mode" phases like `research` and
 optional phases like `test_run`. The `gates[]` entries for these phases
@@ -409,7 +429,7 @@ and records it on `gates[].risk`. Default routing:
 | high | block (require explicit human approval) | required; `--ci` blocks here |
 
 **Risk routing changes how much surface is shown and (in `--ci`) what blocks —
-it NEVER auto-approves a human gate.** This preserves Operating Rule §1.2
+it NEVER auto-approves a human gate.** This preserves Operating Rule 2 of §1
 ("human gate after every phase") and the `revalidate` "Never auto-approve" rule.
 
 ### 9.4 Derived artifacts — review the source, not the output (A5)

@@ -45,8 +45,14 @@ backfilled: false
 v2_native: true
 
 # Legacy v2 field — preserved.
-# Valid values: "classic" | "v-model" | "ask".
+# Valid values: "classic" | "v-model" | "ask". How it relates to feature_mode:
+# docs/policy.md §4.1 ("speckit_mode vs feature_mode").
 speckit_mode: "classic"
+
+# Per-feature config map — layer 4 of the config merge (docs/runtime.md §1).
+# Same keys as config-template.yml; maps deep-merge, scalars/lists replace.
+# Omitted when the feature has no overrides.
+config_override: {}
 
 # Per-phase status map.
 # v2 stored only a status string per phase. v3 expands each entry into an object
@@ -97,6 +103,9 @@ phases:
     status: "completed"
   tasks:
     status: "completed"
+    total: 14                      # tasks in tasks.md (written by tasks; was a top-level `tasks:` block)
+    groups: 4
+    story_coverage: "6/6"          # Must-Have stories covered / total
   pre_impl_review:
     status: "completed"
   implement:
@@ -109,6 +118,18 @@ phases:
       status: "confirmed_failing"  # confirmed_failing | skipped
       tests: ["TC-UNIT-021", "TC-E2E-003"]  # the TC-* ids that were run red-first
       skip_reason: null            # required when status == "skipped"
+    # Run counters (written by implement; were a top-level `implement:` block).
+    tasks_completed: 14
+    tasks_total: 14
+    progressive_checkpoints: 4
+    progressive_warnings: 1
+    progressive_critical: 0
+    dependencies:                  # v1.6 (W5-C2) install-time supply-chain vetting
+      added: 2
+      vetted: 2
+      warned: 0
+      blocked: 0
+      log_path: "dependency-log.md"
   code_review:
     status: "pending"
   verify:
@@ -186,6 +207,27 @@ gates:
     risk: "low"                    # NEW v1.6 (W5-A4) — gate risk class from scripts/gate-risk.js: low | medium | high.
     reviewed_by_model: null        # NEW v1.7 (P1-B) — reviewer id when code-review ran with --cross-model; null otherwise.
     cross_model_findings: 0        # NEW v1.7 (P1-B) — count of findings the cross-model reviewer added (0 if not run).
+
+    # Phase-specific gate extras — present only on the named gate. In an
+    # orchestrated run the sub-skill returns them and forge writes the entry
+    # (docs/runtime.md §6.1).
+    findings:                      # code_review gate
+      critical: 0
+      high: 0
+      medium: 0
+      low: 0
+      fixed: 0
+      acknowledged: 0
+    risks_accepted:                # pre_impl_review gate
+      critical: 0
+      high: 0
+
+    # forge --ci headless-gate record (commands/forge.md "--ci"). Present only
+    # when CI recorded the gate unattended.
+    mode: null                     # e.g. "ci-auto-recommend"
+    policy_version: null           # gate-policy.yml version
+    signals: []                    # gate-risk.js signals[]
+    validate_traceability: null    # "pass" — the require_clean evidence
 
     # NEW in v3 — role-based approvals.
     # If `role_approvals.solo_mode` is true (see below), this block is omitted.

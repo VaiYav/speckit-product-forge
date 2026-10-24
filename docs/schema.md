@@ -62,21 +62,42 @@ Behavior in short:
    populates them.
 
 No one-time migration run is required. The helper
-`scripts/migrate-status-v2-to-v3.ts` is available if a project wants to
-stamp all of its existing feature files in a single pass.
+`node ${PLUGIN_ROOT}/scripts/migrate-status-v2-to-v3.js` is available if a project
+wants to stamp all of its existing feature files in a single pass (the `.ts`
+sibling is a deprecation stub that exits 64).
 
 ---
 
 ## 3. Writer responsibilities
 
-Any sub-skill that mutates `.forge-status.yml` MUST:
+Any command that mutates `.forge-status.yml` follows the status-write procedure
+in [runtime.md §2.9](./runtime.md#29-status-write-procedure) — lock, read,
+initialize-or-migrate, merge (object-form phases, no undeclared fields),
+digest before `completed`, stamp `last_updated`, atomic rename, carrier refresh.
 
-1. Acquire the state lock — see [runtime.md §2](./runtime.md#2-state-lock-protocol-a2).
-2. Read the existing file. Missing file → treat as empty; create on first write.
-3. Apply lazy migration if the file is older than v3 (stamp version, leave
-   other fields untouched unless owned by the writer).
-4. Use the temp-file + rename pattern for atomic writes.
-5. Release the state lock in a `finally` / `trap` handler.
+### 3.1 Initial document (new features)
+
+The **first** writer of a new feature — whichever command that is (`forge`
+intake, `problem-discovery`, `research`, `product-spec` in express/lite,
+`backfill`) — creates exactly this document, then merges its own keys:
+
+```yaml
+schema_version: 3
+feature: "<slug>"
+created_at: "<YYYY-MM-DD>"
+last_updated: "<ISO-8601 UTC>"
+feature_mode: "<resolved mode>"   # from forge triage, --mode, or default_feature_mode
+v2_native: true                   # new features are always digest-enforced (runtime.md §8.3)
+phases:                            # one object entry per phase in schema/phase-map.yml:
+  <phase_key>:                     #   status: "pending"         — `yes`/`opt` for this mode
+    status: "pending"              #   status: "not_applicable"  — `no` for this mode
+gates: []
+task_log: []
+```
+
+If the file already exists, a writer **never** re-initializes it — it merges
+(runtime.md §2.9 step 4). Overwriting an existing file loses `feature_mode`, the
+gate trail and every other phase's state.
 
 ---
 
@@ -99,6 +120,7 @@ Readers (including older sub-skills still on the v2 shape) MUST:
 | `feature` | yes | feature slug. |
 | `created_at` | yes | ISO-8601 date. |
 | `last_updated` | yes | ISO-8601 timestamp; updated on every write. |
+| `config_override` | no | per-feature config map — layer 4 of the config merge ([runtime.md §1](./runtime.md#1-step-0--load-config)). Same keys as `config-template.yml`. |
 | `feature_mode` | no | `"express" | "lite" | "standard" | "v-model"`. Defaults to `"standard"`. `"express"` (v1.6) is the lightest track: product_spec → plan → implement → verify. Phase keys `design_system_harvest` (v1.6, UI features) and `spec_merge` (v1.6, living-spec merge) are also valid `phases.<name>` entries. Supporting/extension commands write their own phase keys too: `api_docs`, `security_check`, `tracking_plan`, `i18n_harvest`, `migration_plan`, `monitoring_setup`, `experiment_design` (all `not_applicable` when not run). |
 | `backfilled` | no | `true` if feature was reverse-engineered by `/backfill`. Defaults to `false`. |
 | `v2_native` | no | `true` for features created by v1.5.0+ (field name is historical — retained for compat). Drives digest enforcement (runtime.md §8.3). Defaults to `false` (i.e. grandfathered). |
@@ -108,6 +130,7 @@ Readers (including older sub-skills still on the v2 shape) MUST:
 | `phases.<name>.tokens_in` / `tokens_out` / `tool_calls` | no | cost tracking. |
 | `phases.<name>.digest_path` | no | path to per-phase digest. |
 | `phases.<name>.skipped` / `skip_reason` | no | E2 skip policy. |
+| `phases.implement.red_gate` | no | test-first Red-gate record (`status`, `tests[]`, `skip_reason`); written only by `implement` (runtime.md §6.1). |
 | `phases.<name>.produced_by` | conditional | Identity (email/handle) of the human who owned the artifact this phase produced. Optional; required when `role_approvals.solo_mode: false` (distinct-approver rule: `approved_by != produced_by`, policy.md §5.3). |
 | `testing.*` | preserved from v2 | yes (same meaning). |
 | `task_log[]` | no | per-task runtime log. Populated during Phase 6 implement. Renamed from initial-v3 `tasks[]` to avoid collision with `phases.tasks`. |
@@ -115,6 +138,12 @@ Readers (including older sub-skills still on the v2 shape) MUST:
 | `gates[].approvals` | conditional | required when `solo_mode: false`. |
 | `gates[].skip_reason` | conditional | required when `decision == "skipped"` and `require_skip_reason: true`. |
 | `gates[].rolled_back_to` | conditional | required when `decision == "rolled_back"`. Phase name to rewind to. |
+| `gates[].reviewed_sha` / `risk` | no | delta-review stamp and gate-risk class (policy.md §9). |
+| `gates[].reviewed_by_model` / `cross_model_findings` | no | code-review `--cross-model` stamp. |
+| `gates[].findings` / `risks_accepted` / `action_items` | no | phase-specific gate extras (code_review / pre_impl_review / release_readiness). |
+| `gates[].mode` / `policy_version` / `signals` | no | `forge --ci` headless-gate record. |
+| `api_docs_report` | no | api-docs run summary (endpoints, source, files, drift count). |
+| `release_readiness.supply_chain_paths` | no | SBOM / SCA / license artifact paths. |
 | `sync_runs` | preserved from v2 | yes. |
 | `change_requests` | preserved from v2 | yes. |
 | `dependencies.depends_on` / `depended_on_by` | no | default `[]`. |
