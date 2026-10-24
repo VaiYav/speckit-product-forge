@@ -1,601 +1,196 @@
 # Product Forge — SpecKit Extension & Claude Plugin
 
-> **Full product lifecycle:** Problem Discovery → Research → Product Spec → Revalidation → SpecKit → Pre-Impl Review → Implement → Code Review → Verify → Test → Release Readiness → **API Docs · Security · Analytics · Retrospective**
+> **Full product lifecycle around SpecKit:** problem → research → product spec →
+> spec.md → plan → tasks → code → tests → release → metrics, with a human gate at
+> every transition.
 
-> Installs as a **SpecKit extension** *or* as a **Claude Code / Claude plugin** from this same repo — see [Installation](#installation) and [docs/claude-plugin.md](./docs/claude-plugin.md).
+Product Forge is a [SpecKit](https://github.com/github/spec-kit) extension that adds
+a complete **product discovery, specification, and quality pipeline** before and
+after SpecKit's own spec → plan → tasks → implement core. You research competitors,
+UX patterns and your codebase, craft and approve a product spec, review the design
+and risks, implement with progressive verification, review the code, verify full
+traceability, and generate and run Playwright tests with a bug-fix loop — then
+ship, measure, and feed the lessons back into the next feature.
 
-Product Forge is a [SpecKit](https://github.com/github/spec-kit) extension that adds a
-complete **product discovery, specification, and quality pipeline** before and after any SpecKit
-implementation work. Instead of jumping straight to spec.md, you first research competitors, UX
-patterns, and your codebase — craft an approved product spec — review design/architecture/risks —
-let SpecKit implement it with progressive verification — run multi-agent code review — then
-automatically generate and run Playwright tests with a bug-fix loop until the feature is ready to ship.
-
-**New in v1.7.0 ("Ivysaur"):**
-- **`--dry-run` preview (normative)** — any phase (or `forge` end-to-end) runs fully but mutates nothing real: writes are redirected under `.forge-dry-run/<phase>/`, status is untouched, no external side-effects, and each phase emits a `DRY-RUN-REPORT.md` of what *would* change.
-- **Cross-model code review** — `code-review --cross-model` exports the consolidated gate surface + diff and has a *different* model review it out-of-band, ingesting findings back into the single `F-NNN` namespace.
-- **Parallel implementation** — `implement --parallel` runs path-disjoint task groups concurrently (proven independent by the portfolio conflict matrix), reconciled serially under the state-lock with a single gate.
-- **Constitution↔code drift layer** — `sync-verify` Layer 10 / `verify-full` Layer 11 re-assert the project architecture constitution against the code as a *standing* check, not just at planning time.
-- **Lessons → reusable skills** — `retrospective` promotes a lesson that recurs across features into a reusable skill (Hermes host), cross-project and idempotent.
-- **`status --cost`** — rolls up per-phase token / tool-call telemetry per feature and across the portfolio (dollar cost when a rate is supplied).
-- **Phase-map single source** — `docs/schema/phase-map.yml` is the canonical phase set + per-mode matrix; the forge.md tables render it and the linter enforces agreement.
-
-Full change list in [CHANGELOG.md](./CHANGELOG.md).
-
-**New in v1.6.0:**
-- **Express mode** — first-class `feature_mode: express`: a 4-phase combined pass (product-spec minimal → plan inline → implement → verify) for the smallest changes, escalatable to lite/standard.
-- **Design System Harvest** (Phase 2H) — discover the project's existing design system (component library, tokens, Storybook, Tailwind/CSS config) and emit a read-only manifest so mockups, component decomposition, and verification stay grounded in real code (`/speckit.product-forge.design-system-harvest`).
-- **Spec Merge** (Phase 10, living spec) — merge a shipped feature's delta specs into the canonical `specs/` source of truth and archive the change with audit history (`/speckit.product-forge.spec-merge`).
-- **Sync-verify now 10 layers** — adds Layer 8 (FE↔BE contract drift), Layer 9 (doc↔code), and Layer 10 (constitution↔code) on top of the seven artifact-pair layers.
-- **Structured journeys** — `journeys/` (journeys.yml + JRN-*.md) as the machine-readable E2E source of truth for spec, tests, and tracking.
-- **Automated WCAG-AA accessibility floor** — Phase 8A generates one `@axe-core/playwright` check per journey and Phase 8B runs it.
-
-Full change list in [CHANGELOG.md](./CHANGELOG.md).
-
-**New in v1.5.0:**
-- **Portfolio view** across all features — conflict matrix, dependency graph, suggested merge order (`/speckit.product-forge.portfolio`).
-- **Brown-field `backfill`** — reverse-engineer a feature folder from existing code with a gaps report.
-- **Lite mode** — 5-phase lifecycle for small features and bug fixes (`feature_mode: lite`).
-- **Phase 9.5 monitoring-setup**, **Phase 5.5 migration-plan**, **post-bridge i18n-harvest**, **Phase 9B experiment-design**, and cross-cutting **feature-flag-cleanup** — all opt-in, artifact-producing.
-- **Schema v3** for `.forge-status.yml` (additive over v2, no action required).
-- **State-lock protocol** prevents concurrent-writer corruption.
-- **Per-phase digests** keep context budgets small across long lifecycles.
-- **Learning loop** via `.product-forge/lessons.md` — retrospectives teach research.
-- **Skip-reason policy** and **sync-verify drift budget** with opt-in cosmetic auto-resolve.
-- **Release-readiness actually creates** monitoring dashboard and flag registry instead of only checking them.
-
-Full change list in [CHANGELOG.md](./CHANGELOG.md).
-
-**New in v1.4.0:** EDA Event Verification in bridge phase, Dependency Discovery between features, Codebase Constraint Analysis in research, Constitution Compliance auto-check in plan, and unified review.md format with Decision Log and Change History.
-
-**New in v1.3.0:** Cross-artifact sync-verify, pre-implementation review gate, code review phase,
-release readiness checklist, change request management, gate audit trail, and progressive verification.
+It installs **two ways from this one repo** — as a SpecKit extension or as a
+Claude Code / Claude plugin — and the workflows are identical.
 
 ---
 
-## Why Product Forge?
+## Quickstart
 
-Standard SpecKit starts from a feature description. Product Forge starts from a feature idea and:
+```text
+/plugin marketplace add VaiYav/speckit-product-forge
+/plugin install speckit-product-forge@vaiyav-plugins
+/speckit-product-forge:forge Build a push notification preferences screen
+```
 
-1. **Discovers** whether the problem is real: JTBD analysis, interview script, Go/No-go before any research begins
-2. **Researches** competitors, UX best practices, and your codebase in parallel — guided by validated hypotheses
-3. **Creates** structured product documents: user journeys, wireframes, mockups, metrics
-4. **Revalidates** everything with you through an approval loop until the spec is perfect
-5. **Bridges** the product spec into SpecKit's spec.md — enriched with all research context
-6. **Plans, implements, and verifies** using SpecKit with full traceability back to the original research
-7. **Auto-generates Playwright tests** from user stories, runs them via `playwright-cli`, fixes P0/P1 bugs, and produces a test report
-8. **Generates API docs** (OpenAPI 3.1 + Postman), runs an **OWASP security audit**, and creates an **analytics tracking plan** with SDK snippets
-9. **Runs a post-launch retrospective** comparing predicted KPIs against real data from the configured MCPs (PostHog/Amplitude, Sentry; NewRelic optional)
+`forge` triages the change, recommends a track (express / lite / standard /
+v-model), and walks you through each phase with a gate. Any phase can also be run
+on its own. Add `--dry-run` to preview what a phase would change without writing.
 
-The result: a **complete traceability chain** — problem → research → product spec → spec.md → plan → tasks → code → tests → metrics.
+---
+
+## What's new in 1.8 ("Venusaur")
+
+- **Feature catalog** — `catalog` builds `_portfolio/catalog.yml`, one small,
+  deterministic index over every feature, refreshed after every status write and
+  checked with `--check` in CI. Shape: [docs/schema/catalog.yml](./docs/schema/catalog.yml).
+- **Retrieve** — `retrieve` turns a question into the 1–3 matching features and the
+  exact files to open (one index scan, no embeddings).
+- **One status-write procedure, one gate writer** — every command writes
+  `.forge-status.yml` the same way (lock helpers, v3 initial document, object-form
+  phases, digest before `completed`), and each gate is recorded exactly once, with
+  the phase status following the decision.
+- **Express and lite run end to end** — plan reads the product spec directly and
+  carries an inline task list that implement executes.
+
+Earlier releases: [CHANGELOG.md](./CHANGELOG.md).
+
+---
+
+## How it works
+
+| Mode | Phases | Use for |
+|------|--------|---------|
+| `express` | product spec (minimal) → plan (inline) → implement → verify | copy, config, one-liners |
+| `lite` | (problem discovery) → product spec → plan → implement → verify | bug fixes, small features |
+| `standard` | problem discovery → research → product spec → revalidate → bridge → plan → tasks → implement → verify, plus optional review, test, release, monitoring, experiment and spec-merge phases | regular features |
+| `v-model` | standard, with the formal V-Model artifacts from the V-Model pack | regulated / safety-critical work |
+
+The exact phase set per mode lives in
+[docs/schema/phase-map.yml](./docs/schema/phase-map.yml); what each phase produces
+is in [docs/phases.md](./docs/phases.md). State for every feature is one file,
+`<feature>/.forge-status.yml`; every gate decision is appended to its audit trail.
 
 ---
 
 ## Commands
 
+33 commands. As a SpecKit extension they are `/speckit.product-forge.<name>`; as a
+Claude plugin, `/speckit-product-forge:<name>`.
+
 | Command | Phase | Description |
 |---------|-------|-------------|
-| `/speckit.product-forge.forge` | All | **Main command.** Full lifecycle orchestrator with human gates |
-| `/speckit.product-forge.problem-discovery` | 0 | Validate the problem: JTBD analysis, interview script, Go/No-go |
-| `/speckit.product-forge.research` | 1 | Parallel research: competitors, UX, codebase (+ constraints & event patterns) **[v1.4]** |
-| `/speckit.product-forge.product-spec` | 2 | Interactive product spec creation with configurable detail |
-| `/speckit.product-forge.revalidate` | 3 | Iterative review loop — Decision Log, Change History, OQR tracking **[v1.4]** |
-| `/speckit.product-forge.bridge` | 4 | Dependency Discovery → spec.md with EDA verification, NFR contracts, test spec **[v1.4]** |
-| `/speckit.product-forge.plan` | 5 | Technical plan + Constitution Compliance auto-check + cross-validation **[v1.4]** |
-| `/speckit.product-forge.tasks` | 5B | Generate task breakdown from plan.md — standalone, exits after approval |
-| `/speckit.product-forge.pre-impl-review` | 5C | **[NEW]** Design review + architecture review + risk assessment before coding |
-| `/speckit.product-forge.implement` | 6 | Execute implementation with progressive verification checkpoints |
-| `/speckit.product-forge.code-review` | 6B | **[NEW]** Multi-agent code review: quality, security, patterns, test coverage |
-| `/speckit.product-forge.verify-full` | 7 | Full traceability verification: code ↔ research |
-| `/speckit.product-forge.test-plan` | 8A | Auto-generate test cases and Playwright specs from user stories |
-| `/speckit.product-forge.test-run` | 8B | Execute tests with playwright-cli, auto-fix bugs, loop until done |
-| `/speckit.product-forge.release-readiness` | 9 | **[NEW]** Pre-ship checklist: feature flags, rollout, docs, monitoring |
-| `/speckit.product-forge.sync-verify` | cross-cutting | **[NEW]** 10-layer artifact consistency check (incl. contract-drift + doc↔code + constitution↔code), runnable between any phases |
-| `/speckit.product-forge.change-request` | cross-cutting | **[NEW]** Formal scope change with impact analysis and artifact propagation |
-| `/speckit.product-forge.api-docs` | post-impl | Generate OpenAPI 3.1 spec + Postman collection from plan.md |
-| `/speckit.product-forge.security-check` | post-impl | OWASP audit scoped to detected surfaces (auth, input, payments) |
-| `/speckit.product-forge.tracking-plan` | post-spec | Analytics events, funnels, property schemas + SDK code snippets |
-| `/speckit.product-forge.retrospective` | post-launch | Predicted vs actual metrics, research accuracy, lessons learned (appends to `.product-forge/lessons.md`) **[UPD v1.5]** |
-| `/speckit.product-forge.status` | — | Show lifecycle status, gate audit trail, sync history |
-| `/speckit.product-forge.portfolio` | cross-cutting | **[NEW v1.5]** Multi-feature view: table, file-conflict matrix, dependency graph, merge order |
-| `/speckit.product-forge.catalog` | cross-cutting | **[NEW v1.8]** Build/verify the feature catalog carrier (`_portfolio/catalog.yml`) — compact machine-readable index read first by agents and `portfolio`; flags malformed status files + duplicate numbers |
-| `/speckit.product-forge.retrieve` | cross-cutting | **[NEW v1.8]** Deterministic lookup over the catalog: query/slug/context → matching feature(s) + the exact files to open (one scan + 1–3 reads, no embeddings) |
-| `/speckit.product-forge.backfill` | alt entry | **[NEW v1.5]** Reverse-engineer an existing module into a feature folder with gaps report |
-| `/speckit.product-forge.monitoring-setup` | 9.5 | **[NEW v1.5]** Build real dashboard JSON, alerts, SLO doc against the configured backend (PostHog/Amplitude, Sentry; NewRelic optional) |
-| `/speckit.product-forge.migration-plan` | 5.5 | **[NEW v1.5]** Zero-downtime migration plan with forward/rollback/validation/backfill when plan.md has schema changes |
-| `/speckit.product-forge.i18n-harvest` | post-bridge | **[NEW v1.5]** Extract strings from wireframes/spec, stub every locale |
-| `/speckit.product-forge.experiment-design` | 9B | **[NEW v1.5]** Pre-registered A/B plan — hypothesis, MDE, sample size, decision rule |
-| `/speckit.product-forge.feature-flag-cleanup` | cross-cutting | **[NEW v1.5]** Scan `flags/registry.yml` for stale flags, produce removal recipes |
-| `/speckit.product-forge.design-system-harvest` | 2H | **[NEW v1.6]** Harvest the project's existing design system into a read-only `design-system/manifest.yml` that grounds mockups, components, and verification |
-| `/speckit.product-forge.spec-merge` | 10 | **[NEW v1.6]** Merge a shipped feature's delta specs into canonical `specs/` (living spec) and archive the change with history |
-
----
-
-## Lifecycle
-
-```
-  Idea
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 0: Problem Discovery  [OPTIONAL but recommended]                      │
-│  /speckit.product-forge.problem-discovery                                    │
-│                                                                              │
-│  JTBD Analysis · Problem Statement Canvas · Interview Script                │
-│  Competing Forces · Go / Investigate further / No-go decision               │
-│  Outputs hypotheses H1–HN that guide Phase 1 research agents                │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: Go decision]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 1: Research                                                           │
-│  /speckit.product-forge.research                                                     │
-│                                                                              │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────────┐        │
-│  │ Competitor       │  │ UX/UI Patterns  │  │ Codebase Analysis    │        │
-│  │ Analysis         │  │ Research        │  │ + Constraints +      │        │
-│  │ [MANDATORY]      │  │ [MANDATORY]     │  │ Event Patterns [MND] │        │
-│  └─────────────────┘  └─────────────────┘  └──────────────────────┘        │
-│  ┌─────────────────┐  ┌─────────────────┐                                   │
-│  │ Tech Stack       │  │ Metrics / ROI   │                                   │
-│  │ Research         │  │ Analysis        │                                   │
-│  │ [OPTIONAL]       │  │ [OPTIONAL]      │                                   │
-│  └─────────────────┘  └─────────────────┘                                   │
-│                              ↓ research/README.md                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: approve research]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 2: Product Spec                                                       │
-│  /speckit.product-forge.product-spec                                                 │
-│                                                                              │
-│  Asks: detail level · decomposition · mockup style                          │
-│                                                                              │
-│  Creates:                                                                    │
-│  product-spec.md · journeys/ (journeys.yml + JRN-*.md) · wireframes*        │
-│  · metrics.md · mockups/                                                    │
-│  All linked via product-spec/README.md                                       │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: approve product spec]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 3: Revalidation                                                       │
-│  /speckit.product-forge.revalidate                                                   │
-│                                                                              │
-│  Loop: show summary → collect feedback → apply changes → confirm            │
-│  Exits only on explicit user approval                                        │
-│  Revisions logged in review.md: Decision Log + Change History + OQR [v1.4] │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: "APPROVED"]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 4: SpecKit Bridge                                                [v1.4] │
-│  /speckit.product-forge.bridge                                                       │
-│                                                                              │
-│  Dependency Discovery → Synthesizes all artifacts → spec.md (enriched)     │
-│  EDA Event Verification · NFR Measurement Contract · Testing Specification  │
-│  User chooses: Classic (plan → tasks → impl) or V-Model (full traceability) │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: approve spec.md]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 5: Plan                                                        [v1.4]  │
-│  /speckit.product-forge.plan                                                 │
-│                                                                              │
-│  SpecKit plan → Constitution Compliance auto-check → cross-validate → approve │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: approve plan]  ← extension point: insert custom step here
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 5B: Tasks                                                             │
-│  /speckit.product-forge.tasks                                                │
-│                                                                              │
-│  SpecKit tasks → cross-validate vs product-spec → approve                  │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: approve tasks]  ← extension point: insert custom step here
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 5C: Pre-Implementation Review  [OPTIONAL but recommended]  [NEW v1.3] │
-│  /speckit.product-forge.pre-impl-review                                      │
-│                                                                              │
-│  Design Review · Architecture Review · Risk Assessment                       │
-│  State completeness · UX compliance · NFR coverage · Risk register          │
-│  Rollout strategy recommendation                                            │
-│  Outputs: pre-impl-review.md                                                │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: approve review]  ← extension point: insert custom step here
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 6: Implementation (with Progressive Verification)         [UPD v1.3]  │
-│  /speckit.product-forge.implement                                            │
-│                                                                              │
-│  SpecKit implement — anchored to product-spec wireframes + user journeys    │
-│  Mini-verify every N tasks: task-code, spec drift, unplanned changes        │
-│  Outputs: implementation-log.md with checkpoint results                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: implementation complete]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 6B: Code Review  [OPTIONAL but recommended]               [NEW v1.3]  │
-│  /speckit.product-forge.code-review                                          │
-│                                                                              │
-│  Parallel agents: Quality · Security · Patterns · Tests                     │
-│  Enriched with Product Forge context (ux-patterns, codebase-analysis)       │
-│  Outputs: code-review.md with findings by severity                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: approve code review]  ← extension point: insert custom step here
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 7: Full Verification                                                  │
-│  /speckit.product-forge.verify-full                                          │
-│                                                                              │
-│  Code ↔ Tasks ↔ Plan ↔ spec.md ↔ product-spec ↔ research                  │
-│  Produces: verify-report.md with CRITICAL / WARNING / PASSED                │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: "Run test phases?" — optional but recommended]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 8A: Test Plan  [OPTIONAL]                                             │
-│  /speckit.product-forge.test-plan                                                    │
-│                                                                              │
-│  Auto-detects framework, ports, env vars                                     │
-│  Generates: smoke / E2E / API / regression test cases                       │
-│  Writes Playwright .spec.ts files with US-NNN traceability                  │
-│  Creates: testing/test-plan.md · testing/test-cases.md · bugs/README.md     │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: approve test plan]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 8B: Test Execution  [OPTIONAL]                                        │
-│  /speckit.product-forge.test-run                                                     │
-│                                                                              │
-│  Smoke → E2E → API → Regression (ordered, smoke blocks on failure)          │
-│  Per bug: bugs/BUG-NNN.md with evidence + gap analysis                      │
-│  Auto-fix loop: P0/P1 bugs fixed → retested → smoke regression check        │
-│  Exit: ≥80% pass rate + zero P0/P1 open bugs                                │
-│  Produces: test-report.md with full traceability chain                      │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ [Human gate: "Run release readiness?" — optional but recommended]
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PHASE 9: Release Readiness  [OPTIONAL]                          [NEW v1.3]  │
-│  /speckit.product-forge.release-readiness                                    │
-│                                                                              │
-│  Feature flags · Rollout strategy · Rollback plan                           │
-│  Documentation · Monitoring · Analytics · Dependencies                       │
-│  Consolidates api-docs + security-check + tracking-plan status              │
-│  Outputs: release-readiness.md with READY / CONDITIONAL / NOT READY         │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  CROSS-CUTTING COMMANDS  [Runnable at any time]                  [NEW v1.3]  │
-│                                                                              │
-│  /speckit.product-forge.sync-verify                                          │
-│  10-layer consistency check across all artifacts (forward + backward drift)  │
-│  Auto-runs in quick mode between every phase transition                      │
-│  Full run on demand or before Phase 7                                        │
-│                                                                              │
-│  /speckit.product-forge.change-request                                       │
-│  Formal scope change: capture → impact analysis → effort delta → propagate  │
-│  Traces changes with CR-NNN markers across all affected artifacts           │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  POST-IMPLEMENTATION COMMANDS  [Run in any order after Phase 6]              │
-│                                                                              │
-│  /speckit.product-forge.api-docs                                             │
-│  OpenAPI 3.1 spec + Postman collection from plan.md contracts               │
-│  Consistency check: plan vs implementation drift                             │
-│                                                                              │
-│  /speckit.product-forge.security-check                                       │
-│  OWASP audit scoped to detected surfaces from plan.md                       │
-│  Checks only: auth / input / payments / files / webhooks (as applicable)    │
-│                                                                              │
-│  /speckit.product-forge.tracking-plan                                        │
-│  Analytics events from user journeys · Funnel definitions                   │
-│  SDK code snippets (Mixpanel / Amplitude / PostHog / Firebase)              │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼ Ship ✅
-   │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  POST-LAUNCH  [Run ≥14 days after shipping]                                  │
-│  /speckit.product-forge.retrospective                                        │
-│                                                                              │
-│  Predicted vs actual metrics (from research/metrics-roi.md)                 │
-│  Connected MCPs query (PostHog/Amplitude, Sentry; NewRelic optional)        │
-│  · Research accuracy audit                                                  │
-│  Lessons learned · Closes the full lifecycle loop                           │
-└─────────────────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-  Done ✅  (Problem → Research → Spec → Reviewed → Code → Code Review → Verified → Tested → Ship Ready → Measured)
-```
-
----
-
-## Feature File Structure
-
-Every feature gets a dedicated folder with a consistent structure:
-
-```
-features/
-└── my-feature-name/
-    ├── README.md                          ← Feature index (all links)
-    ├── .forge-status.yml                  ← Phase tracker
-    │
-    ├── problem-discovery/                 ← Phase 0 outputs (optional)
-    │   ├── problem-statement.md           ← JTBD + Problem Canvas + Go/No-go
-    │   └── interview-script.md            ← User interview guide
-    │
-    ├── research/
-    │   ├── README.md                      ← Research index + executive summary
-    │   ├── competitors.md
-    │   ├── ux-patterns.md
-    │   ├── codebase-analysis.md
-    │   ├── tech-stack.md                  ← optional
-    │   └── metrics-roi.md                 ← optional
-    │
-    ├── product-spec/
-    │   ├── README.md                      ← Spec index + document map
-    │   ├── product-spec.md                ← Main PRD (concise/standard/exhaustive)
-    │   ├── journeys/                      ← structured journeys (E2E source of truth)
-    │   │   ├── journeys.yml               ← authoritative machine-readable index
-    │   │   └── JRN-NNN-{slug}.md × N      ← one file per journey (JRN/STEP/EDGE)
-    │   ├── wireframes.md                  ← or wireframes/ folder × N screens
-    │   ├── metrics.md                     ← optional
-    │   └── mockups/                       ← optional
-    │       ├── index.html
-    │       └── mockup-{screen}.html × N
-    │
-    ├── spec.md                            ← SpecKit spec (generated in Phase 4)
-    ├── plan.md                            ← SpecKit plan (Phase 5)
-    ├── tasks.md                           ← SpecKit tasks (Phase 5B)
-    ├── review.md                          ← Revalidation log (Phase 3)
-    ├── pre-impl-review.md                 ← Design + arch + risk review (Phase 5C) [NEW v1.3]
-    ├── implementation-log.md              ← Progressive verify log (Phase 6) [NEW v1.3]
-    ├── code-review.md                     ← Multi-agent code review (Phase 6B) [NEW v1.3]
-    ├── verify-report.md                   ← Verification report (Phase 7)
-    │
-    ├── testing/                           ← Phase 8A outputs (optional)
-    │   ├── test-plan.md                   ← Master test plan + entry/exit criteria
-    │   ├── test-cases.md                  ← All test cases (TC-SMK/E2E/API/REG-NNN)
-    │   ├── env.md                         ← Credentials (gitignored)
-    │   └── playwright-tests/
-    │       ├── playwright.config.ts
-    │       ├── {slug}-smoke.spec.ts
-    │       ├── {slug}-e2e.spec.ts
-    │       └── {slug}-regression.spec.ts
-    │
-    ├── bugs/                              ← Phase 8B outputs (optional)
-    │   ├── README.md                      ← Bug dashboard (P0–P4 counts, status)
-    │   └── BUG-NNN.md × N               ← One file per bug with evidence + fix log
-    │
-    ├── test-report.md                     ← Final test report (Phase 8B)
-    │
-    ├── api-docs/                          ← api-docs command outputs (optional)
-    │   ├── openapi.yml                    ← OpenAPI 3.1 spec
-    │   ├── postman-collection.json        ← Postman collection
-    │   └── consistency-report.md         ← Plan vs implementation drift
-    │
-    ├── tracking/                          ← tracking-plan command outputs (optional)
-    │   ├── tracking-plan.md              ← Event taxonomy + property schemas + funnels
-    │   └── snippets.md                   ← Ready-to-paste SDK code snippets
-    │
-    ├── security-check.md                  ← OWASP audit report (optional)
-    ├── release-readiness.md               ← Pre-ship checklist (Phase 9) [NEW v1.3]
-    ├── retrospective.md                   ← Post-launch retrospective (optional)
-    │
-    ├── sync-report.md                     ← Latest sync-verify report [NEW v1.3]
-    ├── sync-report.json                   ← Machine-readable sync data [NEW v1.3]
-    ├── change-log.md                      ← Change request history [NEW v1.3]
-    └── backlog.md                         ← Deferred changes (if any) [NEW v1.3]
-```
+| `forge` | All | **Main command.** Full lifecycle orchestrator with human gates |
+| `problem-discovery` | 0 | Validate the problem: JTBD analysis, interview script, Go/No-go |
+| `research` | 1 | Parallel research: competitors, UX, codebase, optional tech stack and metrics |
+| `product-spec` | 2 | Interactive product spec: journeys, wireframes, mockups, metrics |
+| `design-system-harvest` | 2H | Read-only manifest of the project's in-code design system |
+| `revalidate` | 3 | Review loop with Decision Log until the spec is approved |
+| `bridge` | 4 | Product spec → SpecKit `spec.md`, contracts, delta specs |
+| `i18n-harvest` | 4.5 | Extract strings, stub every locale |
+| `plan` | 5 | Technical plan with constitution check and cross-validation |
+| `tasks` | 5B | Task breakdown from plan.md |
+| `migration-plan` | 5.5 | Zero-downtime migration plan when the plan changes the schema |
+| `pre-impl-review` | 5C | Design, architecture and risk review before coding |
+| `implement` | 6 | Implementation with progressive verification checkpoints |
+| `code-review` | 6B | Multi-agent code review (optional cross-model review) |
+| `verify-full` | 7 | Full traceability verification across 11 layers |
+| `test-plan` | 8A | Test cases and Playwright specs generated from journeys |
+| `test-run` | 8B | Run tests with playwright-cli, auto-fix P0/P1 bugs, loop until done |
+| `release-readiness` | 9 | Pre-ship checklist: flags, rollout, docs, monitoring, security |
+| `monitoring-setup` | 9.5 | Dashboard JSON, alerts and SLO doc for your backend |
+| `experiment-design` | 9B | Pre-registered A/B plan: hypothesis, MDE, sample size, decision rule |
+| `spec-merge` | 10 | Merge delta specs into canonical `specs/` and archive the feature |
+| `retrospective` | post-launch | Predicted vs actual metrics, lessons appended to `.product-forge/lessons.md` |
+| `sync-verify` | any time | 10-layer artifact consistency check between phases |
+| `change-request` | any time | Formal scope change with impact analysis and propagation |
+| `status` | any time | Lifecycle status, gate audit trail, sync history, `--cost` roll-up |
+| `portfolio` | any time | Multi-feature table, file-conflict matrix, dependency graph |
+| `catalog` | any time | Build / verify the feature catalog carrier |
+| `retrieve` | any time | Query → matching features + the files to open |
+| `backfill` | entry | Reverse-engineer an existing module into a feature folder |
+| `feature-flag-cleanup` | any time | Find stale flags and produce removal recipes |
+| `api-docs` | post-impl | OpenAPI 3.1 + Postman collection, reconciled with contracts |
+| `security-check` | post-impl | OWASP audit scoped to the detected surfaces |
+| `tracking-plan` | post-spec | Analytics events, funnels, property schemas, SDK snippets |
 
 ---
 
 ## Installation
 
-Product Forge installs **two ways** from this same repository — as a **Claude Code / Claude plugin** or as the original **SpecKit extension**. Pick whichever matches your tooling; the workflows are identical.
-
 ### Option A — Claude Code plugin
 
-This repo is also a single-plugin Claude marketplace named **`vaiyav-plugins`** (defined in [`.claude-plugin/marketplace.json`](./.claude-plugin/marketplace.json), with the plugin manifest in [`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json)). Add the marketplace, then install the plugin.
-
-Inside Claude Code (or the Claude desktop app):
-
-```text
-/plugin marketplace add VaiYav/speckit-product-forge
-/plugin install speckit-product-forge@vaiyav-plugins
-```
-
-From the terminal:
+This repo is a single-plugin marketplace named **`vaiyav-plugins`**
+([`.claude-plugin/marketplace.json`](./.claude-plugin/marketplace.json)).
 
 ```bash
 claude plugin marketplace add VaiYav/speckit-product-forge
 claude plugin install speckit-product-forge@vaiyav-plugins
 ```
 
-Pin to a tag or branch with `@ref`:
+Pin a release with `@ref`, update with `marketplace update`:
 
 ```bash
 claude plugin marketplace add VaiYav/speckit-product-forge@v1.8.0
+claude plugin marketplace update vaiyav-plugins
 ```
 
-**Command names when installed as a plugin** are namespaced with the plugin name — e.g. `/speckit-product-forge:forge`, `/speckit-product-forge:status`, `/speckit-product-forge:research`. (As a SpecKit extension the same commands are `/speckit.product-forge.forge`, etc. — see Option B.)
-
-Verify and update:
-
-```bash
-claude plugin marketplace update vaiyav-plugins   # pull new commits / versions
-# In Claude Code, run /plugin to see speckit-product-forge listed and enabled.
-```
-
-> Validate the manifests locally before pushing changes: `claude plugin validate .`
+Packaging details and the command-name mapping: [docs/claude-plugin.md](./docs/claude-plugin.md).
 
 ### Option B — SpecKit extension
 
-#### Install (latest version)
-
-```bash
-specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/heads/main.zip
-```
-
-#### Install (specific version)
-
 ```bash
 specify extension add product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.8.0.zip
+specify extension list   # product-forge  v1.8.0  enabled
 ```
 
-#### Update to latest
+Use `.../archive/refs/heads/main.zip` for the latest commit, and
+`specify extension update product-forge --from <zip>` to upgrade.
 
-```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/heads/main.zip
-```
-
-#### Update to specific version
-
-```bash
-specify extension update product-forge --from https://github.com/VaiYav/speckit-product-forge/archive/refs/tags/v1.8.0.zip
-```
-
-#### Verify installation
-
-```bash
-specify extension list
-# Should show: product-forge  v1.8.0  enabled
-```
-
----
-
-### After installing: configure your project
-
-Copy the config template to your project root.
-
-SpecKit extension:
+### Configure your project
 
 ```bash
 mkdir -p .product-forge
-cp $(specify extension path product-forge)/config-template.yml .product-forge/config.yml
+# SpecKit extension:
+cp "$(specify extension path product-forge)/config-template.yml" .product-forge/config.yml
+# Claude plugin:
+curl -fsSL https://raw.githubusercontent.com/VaiYav/speckit-product-forge/v1.8.0/config-template.yml -o .product-forge/config.yml
 ```
 
-Claude plugin (the template ships in the plugin cache; pull it straight from the repo):
-
-```bash
-mkdir -p .product-forge
-curl -fsSL https://raw.githubusercontent.com/VaiYav/speckit-product-forge/main/config-template.yml \
-  -o .product-forge/config.yml
-```
-
-Edit `.product-forge/config.yml`:
-
-```yaml
-project_name: "My App"
-project_tech_stack: "Node.js + Express + Postgres"
-project_domain: "mobile fitness app"
-codebase_path: "./src"
-features_dir: "features"
-default_speckit_mode: "ask"   # classic | v-model | ask
-```
-
-### Run
-
-```
-# SpecKit extension
-/speckit.product-forge.forge Build a push notification preferences screen
-
-# Claude plugin (namespaced with the plugin name)
-/speckit-product-forge:forge Build a push notification preferences screen
-```
-
----
-
-## Configuration
-
-See [config-template.yml](./config-template.yml) and [docs/config.md](./docs/config.md) for all options.
-
-Key settings:
-- `project_name` — used in all research prompts
-- `project_tech_stack` — helps tech research agents
-- `codebase_path` — required for codebase analysis and project-styled mockups
-- `default_wireframe_detail` — `text` / `basic-html` / `detailed-html`
-- `default_speckit_mode` — `ask` / `classic` / `v-model`
+Set at least `project_name`, `project_tech_stack`, `project_domain` and
+`codebase_path`. Commonly changed: `default_feature_mode`, `flow_mode`
+(`gated` / `fluid`), `storage_strategy` (how feature folders are grouped) and the
+`require_*` keys that make optional phases mandatory. Every key is documented in
+[docs/config.md](./docs/config.md); a personal `~/.product-forge/config.yml` can hold
+cross-project defaults.
 
 ---
 
 ## Requirements
 
-- **SpecKit** >= 0.1.0
-- **Agent with web search capabilities** — for research phase (Phases 1)
-- **Agent with file system access** — for codebase analysis and artifact creation
+- **SpecKit** ≥ 0.1.0 (extension form) or Claude Code (plugin form).
+- An agent with **web search** (research) and **file-system access**.
+- **Node.js ≥ 22** for the bundled helper scripts (catalog, retrieve, gate risk,
+  traceability validation, `status --cost`). Without Node the workflows still run;
+  each script call falls back to the documented LLM path with a warning.
+- **Testing phases (8A/8B, optional):** [`playwright-cli`](https://github.com/microsoft/playwright-cli)
+  (`npm install -g playwright-cli`) and Playwright browsers (`npx playwright install`).
+- **V-Model mode only:** [`leocamello/spec-kit-v-model`](https://github.com/leocamello/spec-kit-v-model)
+  ≥ 0.5.0. Without it, `--mode=v-model` aborts with the install command instead of
+  silently falling back. See [docs/v-model-integration.md](./docs/v-model-integration.md).
 
-### V-Model mode (optional, required only for `feature_mode: v-model`)
+---
 
-- **[`leocamello/spec-kit-v-model`](https://github.com/leocamello/spec-kit-v-model)** >= 0.5.0 — external SpecKit extension that
-  implements the formal V-Model artifact progression (requirements →
-  system / architecture / module design, paired with system / integration /
-  unit test plans, trace checkpoints, peer review, test results ingestion,
-  audit report). Product Forge delegates phases V1–V13 to this plugin when
-  `feature_mode: v-model` is selected.
+## Documentation
 
-  Install:
-  ```bash
-  specify extension add v-model \
-    --from https://github.com/leocamello/spec-kit-v-model/archive/refs/tags/v0.5.0.zip
-  ```
-
-> **Hard dependency only for v-model mode.** Without this plugin,
-> `lite` and `standard` modes work exactly the same — nothing degrades.
-> When you invoke `/speckit.product-forge.forge --mode=v-model` without
-> it, the orchestrator aborts with the install command above and does
-> **not** silently fall back to standard mode. This is intentional —
-> regulated / safety-critical work (medical IEC 62304, automotive
-> ISO 26262, avionics DO-178C) must not ship without the formal
-> artifacts. Domain selection lives in `v-model-config.yml` at the
-> project root and is read by the delegated commands. Full flow in
-> [docs/v-model-integration.md](./docs/v-model-integration.md).
-
-### Phases 8A–8B: Testing
-
-- **[`playwright-cli`](https://github.com/microsoft/playwright-cli)** — interactive browser agent used by Phase 8B (`test-run`) to execute test cases step-by-step, capture screenshots, record traces, and manage auth sessions.
-
-  Install:
-  ```bash
-  npm install -g playwright-cli
-  ```
-
-- **Playwright browsers** — required for both `playwright-cli` (agent-driven) and `.spec.ts` CI/CD runs:
-  ```bash
-  npx playwright install
-  ```
-
-> **Note:** Phases 8A and 8B are optional. If you skip testing phases, `playwright-cli` is not needed.
+| Read | For |
+|------|-----|
+| [docs/concept.md](./docs/concept.md) | the 10-minute mental model, producer → consumer map, a worked run |
+| [docs/phases.md](./docs/phases.md) | what every phase produces and gates on |
+| [docs/file-structure.md](./docs/file-structure.md) | the on-disk layout of a feature |
+| [docs/config.md](./docs/config.md) | every config key |
+| [docs/runtime.md](./docs/runtime.md) · [docs/policy.md](./docs/policy.md) · [docs/schema.md](./docs/schema.md) | the normative rules (in that precedence) |
+| [ROADMAP.md](./ROADMAP.md) | open ideas not yet scheduled |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | changing Product Forge itself (`node scripts/doctor.js` is the gate) |
 
 ---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE)
-
----
+MIT — see [LICENSE](./LICENSE).
 
 ## Author
 
-Valentin Yakovlev — [github.com/VaiYav](https://github.com/VaiYav)
-
-Contributions welcome. See [CHANGELOG.md](./CHANGELOG.md) for version history.
+Valentin Yakovlev — [github.com/VaiYav](https://github.com/VaiYav). Contributions welcome.

@@ -41,6 +41,8 @@ files are the human-readable narrative. They must stay in sync (sync-verify chec
 | `STEP-NNN` | An ordered step within a journey (an action + expected result). |
 | `EDGE-NNN` | An alternate / error / boundary case branching off a step or journey. |
 
+These are the journey-local IDs; the full cross-artifact ID system is in
+[schema.md §8](./schema.md#8-cross-artifact-id-system).
 IDs are stable and referenced from `traceability.yml`, tests (`TC-E2E-*`), and the
 design-system component map (`CMP-*`). Every user story (`US-NNN`) maps to ≥1
 `JRN-NNN`; every `JRN/STEP/EDGE` maps to ≥1 `TC-E2E`/`TC-SMK` once testing runs.

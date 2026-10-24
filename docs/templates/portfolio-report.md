@@ -10,6 +10,7 @@
 # {Project Name} — Portfolio
 
 > Generated: {ISO-8601 timestamp}
+> Source: {catalog.yml (fresh, `--check` passed) | full enumerate() scan (catalog stale or absent)}
 > Feature count: {total} ({in-flight}, {completed}, {archived})
 
 ## 1. Feature table

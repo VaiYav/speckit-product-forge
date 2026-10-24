@@ -25,21 +25,10 @@ Each phase updates the rows it owns; verification checks the matrix for gaps.
 
 ## ID system (first-class cross-links)
 
-> The canonical home for the ID system is [`docs/schema.md` §8](../schema.md#8-cross-artifact-id-system).
-> This table mirrors it for convenience next to the matrix; keep the two in sync.
-
-| Prefix | Artifact | Source phase |
-|--------|----------|--------------|
-| `REQ-` | Canonical requirement | V-Model pack / `backfill` / canonical `specs/` |
-| `US-`  | User story | product-spec |
-| `JRN-` | User journey (`STEP-`, `EDGE-` nested) | product-spec (journeys) |
-| `FR-`  | Functional requirement | bridge / plan |
-| `CMP-` | Design-system component | design-system-harvest / component-map |
-| `API-` | Endpoint / event contract | bridge / plan (OpenAPI + AsyncAPI) |
-| `TASK-`| Implementation task — canonical form `T0NN` (e.g. `T012`); `TASK-NNN` accepted as alias (see schema.md §8) | tasks |
-| `REV-` | Code-review finding | code-review |
-| `TC-`  | Test case (`TC-SMK/E2E/API/UNIT/INT/REG`) | test-plan |
-| `EVT-` | Telemetry event | tracking-plan |
+The ID prefixes (`REQ`, `US`, `JRN`/`STEP`/`EDGE`, `FR`, `CMP`, `API`, `T0NN`, `TC-*`,
+`EVT`, `SEC`, `F`) and the phase that mints each are canonical in
+[schema.md §8](../schema.md#8-cross-artifact-id-system) — this template does not
+restate them.
 
 IDs are stable across artifacts. Every downstream artifact references upstream IDs
 rather than restating content (de-duplication, Theme C).

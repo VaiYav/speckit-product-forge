@@ -7,7 +7,22 @@
 
 This document describes the orchestration runtime — how the forge skill loads
 config, resumes state, transitions between phases, writes to status files
-safely, and runs sync-verify.
+safely, and runs sync-verify. It is the highest-precedence normative doc: when
+it disagrees with policy.md, schema.md or a command file, this file wins.
+
+**Contents** — [1 Load config](#1-step-0--load-config) ·
+[1A `${PLUGIN_ROOT}`](#1a-locating-bundled-scripts-plugin_root) ·
+[2 State lock & status writes](#2-state-lock-protocol-a2) (§2.9 [status-write procedure](#29-status-write-procedure)) ·
+[3 Resume](#3-step-1--feature-detection--resume) ·
+[4 Pre-flight](#4-step-2--pre-flight-check) ·
+[5 Sync-verify](#5-sync-verify-integration) ·
+[6 Gates](#6-gate-audit-trail) ·
+[7 Dry-run](#7-dry-run-semantics) ·
+[8 Digests](#8-phase-digest-requirement-a4) ·
+[9 Monorepo](#9-monorepo-aware-operations-b15) ·
+[10 Context budget](#10-context-budget-behavior) ·
+[11 Phase prerequisites](#11-phase-prerequisites--fluid-mode-runnable-set) ·
+[12 Path resolution](#12-path-resolution-contract)
 
 ---
 
@@ -807,7 +822,7 @@ read only when a specific cross-artifact check requires them.
 
 ---
 
-## 11. Fluid-Mode Runnable-Set Resolution
+## 11. Phase Prerequisites & Fluid-Mode Runnable Set
 
 Under `flow_mode: fluid` (see [policy.md §4.0.1](./policy.md#401-flow-mode-gated-vs-fluid)
 and [commands/forge.md §"Flow Mode"](../commands/forge.md)), the orchestrator

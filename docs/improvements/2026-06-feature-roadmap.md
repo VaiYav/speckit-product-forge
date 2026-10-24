@@ -1,5 +1,9 @@
 # Product Forge — Feature & Improvement Roadmap (2026-06)
 
+> **Status (2026-10):** P1-B, P1-C, P2-A, P2-C, P3-A, P3-B and P3-C shipped in
+> v1.7.0. The open items — P1-A, P2-B, P2-D — are tracked in the root
+> [ROADMAP.md](../../ROADMAP.md). This note is kept as their rationale.
+
 > **Method:** triangulated three lenses against the current repo (HEAD after the
 > 2026-06 hardening + gate-deepening passes):
 > 1. **Ecosystem gap** — the SpecKit community catalog
