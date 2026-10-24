@@ -33,6 +33,10 @@ slug (one feature) or `all` / no slug (portfolio).
 
 ## Step 1: Find Features
 
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+Keys used: `features_dir`, `storage_strategy`. `status` is read-only — it never
+writes `.forge-status.yml` (and so ignores `--dry-run`, runtime §7.2).
+
 Enumerate feature roots via the Path-Resolution Contract `enumerate()`
 ([docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) —
 depth-tolerant over `flat` (depth 1) and `domain-nested` (depth 2), skipping
@@ -55,29 +59,28 @@ Which feature to inspect? (enter number or name, or "all" for overview)
 
 ## Step 2: Read Status File
 
-Read `{FEATURE_DIR}/.forge-status.yml`.
+Read `{FEATURE_DIR}/.forge-status.yml`. Note `feature_mode` (absent → `standard`),
+`speckit_mode` (may be unset — express/lite have no bridge), and `backfilled`.
 
 ---
 
 ## Step 3: Check Artifact Existence
 
-For each phase, check whether the expected artifacts exist:
+Build the phase list from [`docs/schema/phase-map.yml`](../docs/schema/phase-map.yml)
+— the single source for the phase set — for the feature's `feature_mode`:
 
-| Phase | Expected Artifact | Exists? |
-|-------|------------------|---------|
-| 1. Research | `research/README.md` | ✅/❌ |
-| 2. Product Spec | `product-spec/README.md` | ✅/❌ |
-| 3. Revalidation | `review.md` with "APPROVED" | ✅/❌ |
-| 4. Bridge | `spec.md` | ✅/❌ |
-| 5. Plan | `plan.md` | ✅/❌ |
-| 5B. Tasks | `tasks.md` | ✅/❌ |
-| 5C. Pre-Impl Review | `pre-impl-review.md` | ✅/❌/⏭️ |
-| 6. Implementation | All tasks `[x]` in tasks.md | ✅/❌ |
-| 6B. Code Review | `code-review.md` | ✅/❌/⏭️ |
-| 7. Verification | `verify-report.md` | ✅/❌ |
-| 8A. Test Plan | `testing/test-plan.md` | ✅/❌/⏭️ |
-| 8B. Test Run | `test-report.md` | ✅/❌/⏭️ |
-| 9. Release Readiness | `release-readiness.md` | ✅/❌/⏭️ |
+- `yes` / `opt` cell → the phase is in scope; show it, in phase-map order.
+- `no` cell (or `phases.<key>.status: not_applicable`, e.g. on a backfilled
+  feature) → out of scope; omit it from the lifecycle view (or collapse into one
+  `n/a: …` line). It is never "missing".
+
+For each in-scope phase, check its expected artifact — the **Artifact Signal**
+column of the Phase Map in [forge.md](./forge.md) (lint-pinned to `phase-map.yml`).
+Mode-specific signals: in `express` / `lite` there is no `tasks.md`, so
+Implement progress comes from the inline `## Tasks` list in `plan.md` plus
+`task_log[]`.
+
+Report each as ✅ (exists) / ❌ (missing) / ⏭️ (`skipped`).
 
 ---
 
@@ -91,9 +94,11 @@ For each phase, check whether the expected artifacts exist:
   Feature:  {feature-slug}
   Created:  {created_at}
   Updated:  {last_updated}
-  Mode:     SpecKit {speckit_mode} (set in Phase 4)
+  Mode:     {feature_mode}                      (express / lite / standard / v-model)
+  SpecKit sub-flow: {speckit_mode}              (only when set — standard / v-model, written by Phase 4)
+  {If backfilled: "Backfilled: yes — reverse-engineered from code (see gaps-report.md)"}
 
-  Phase Lifecycle:
+  Phase Lifecycle:   (example: standard mode — render only the Step 3 phase list)
   ─────────────────────────────────────────
   ✅ Phase 1 · Research          [COMPLETE]
      └── {N} research documents in research/
@@ -120,7 +125,7 @@ For each phase, check whether the expected artifacts exist:
      └── tasks.md {✅/⏳}
          {If exists: Progress: {N}/{N} tasks complete [{%%}]}
 
-  ⏳ Phase 5C · Pre-Impl Review   [PENDING / SKIPPED]
+  ⏭️ Phase 5C · Pre-Impl Review   [SKIPPED — "{skip_reason}"]
      └── pre-impl-review.md — design + architecture + risk
 
   ⏳ Phase 6 · Implementation    [PENDING]
@@ -136,8 +141,8 @@ For each phase, check whether the expected artifacts exist:
   ⏳ Phase 8A · Test Plan         [PENDING / SKIPPED]
      └── testing/ — {N} test cases across {N} test types
 
-  ⏳ Phase 8B · Test Run          [PENDING / SKIPPED]
-     └── test-report.md — {pass rate}% pass rate, {N} bugs
+  ⚠️ Phase 8B · Test Run          [COMPLETE WITH KNOWN ISSUES]
+     └── test-report.md — {pass rate}% pass rate, {N} bugs ({N} deferred)
 
   ⏳ Phase 9 · Release Readiness  [PENDING / SKIPPED]
      └── release-readiness.md — ship checklist
@@ -175,25 +180,30 @@ For each phase, check whether the expected artifacts exist:
 
 ## Status Legend
 
-| Icon | Meaning |
-|------|---------|
-| ✅ | Phase complete, artifacts verified |
-| 🔄 | Phase in progress |
-| ⏳ | Phase not yet started |
-| ⚠️ | Phase started but has issues |
-| ⏭️ | Phase skipped by user |
-| ❌ | Phase failed or artifacts missing |
+One icon per `phases.<key>.status` value (canonical set:
+[schema/forge-status-v3.schema.yml](../docs/schema/forge-status-v3.schema.yml)):
+
+| Icon | Status | Meaning |
+|------|--------|---------|
+| ✅ | `completed` (legacy `approved` on `revalidation`) | Phase complete, artifacts verified |
+| ⚠️ | `completed_with_known_issues` | Phase finished with documented open issues |
+| 🔄 | `in_progress` | Phase in progress |
+| ⏳ | `pending` | Phase not yet started |
+| ⏭️ | `skipped` | Optional phase skipped by user — always show `skip_reason` (or "no reason recorded") |
+| n/a | `not_applicable` | Never in scope (mode excludes it, or backfilled) — omitted by default |
+| ❌ | — | Status says done but the expected artifact is missing |
 
 ---
 
 ## Special Flags
 
-If artifact file exists but status says pending → flag inconsistency:
+If artifact file exists but status says pending → flag inconsistency (status
+reports it; it does not repair it):
 ```
 ⚠️  Status mismatch detected:
     .forge-status.yml says "Phase 2: pending"
     but product-spec/README.md exists.
-    Run /speckit.product-forge.status --repair to sync status file.
+    Re-run the phase (or /speckit.product-forge.forge to resume) to reconcile.
 ```
 
 If `verify-report.md` exists with CRITICAL findings:
@@ -212,11 +222,15 @@ If `verify-report.md` exists with CRITICAL findings:
   🔨 Product Forge — All Features Overview
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Feature                    Phase         Progress   Updated
-  ─────────────────────────────────────────────────────────
-  push-notifications         5/7 Plan      ████░░░    2026-03-28
-  onboarding-v2              2/7 Spec      ██░░░░░    2026-03-25
-  compatibility-screen       7/7 Complete  ███████    2026-03-20
+  Feature                    Mode       Phase          Progress   Updated
+  ──────────────────────────────────────────────────────────────────────
+  push-notifications         standard   7/20 Plan      ████░░░    2026-03-28
+  onboarding-v2              lite       1/5 Spec       ██░░░░░    2026-03-25
+  compatibility-screen       express    4/4 Complete   ███████    2026-03-20
+
+  Progress = done / in-scope phases for the feature's mode (Step 3); `done`
+  counts completed, completed_with_known_issues and skipped; not_applicable is
+  excluded from both sides.
 
   Total: {N} features — {N} complete, {N} in progress, {N} pending
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

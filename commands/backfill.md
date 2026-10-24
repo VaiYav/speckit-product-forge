@@ -4,7 +4,8 @@ description: >
   Brown-field entry point: reverse-engineer a Product Forge feature folder
   from existing code. Reads a target module/directory, synthesises retro
   product-spec, plan, and simplified tasks, then writes `.forge-status.yml`
-  with all phases marked `completed` and `backfilled: true`. Produces a
+  (v3, `backfilled: true`) with the reconstructed phases `completed`, the
+  never-run ones `not_applicable` and the rest `pending`. Produces a
   gaps-report.md listing what a modern Product Forge run would have
   required but is currently missing (tests, tracking, ADRs).
   Use: "backfill module", "create feature from existing code", "/speckit.product-forge.backfill"
@@ -40,14 +41,17 @@ Parse for:
   (e.g. `back/src/modules/core/users`, `apps/web/src/features/checkout`).
 - `--slug=<feature-slug>` — optional. Default: last path component of source.
 - `--dry-run` — do everything except write files; report what would be produced.
+  Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics)
+  (artifacts under `{FEATURE_DIR}/.forge-dry-run/backfill/`, no `.forge-status.yml`).
 
 ---
 
 ## Step 0: Load Config
 
-Read `.product-forge/config.yml`:
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+Keys used:
 - `project_name`, `project_tech_stack`, `project_domain`, `codebase_path`,
-  `features_dir`.
+  `features_dir`, `storage_strategy`.
 
 ---
 
@@ -84,7 +88,7 @@ Keep this inventory short — it feeds the retro-spec; it is not the artifact.
 
 ## Step 3: Synthesize Retro Artifacts
 
-Create `{features_dir}/<slug>/` with the following content. Each file MUST
+Create `{FEATURE_DIR}` (resolved in Step 1) with the following content. Each file MUST
 include a banner at the top:
 
 ```markdown
@@ -139,9 +143,22 @@ can be marked completed without bypassing the digest rule from
 
 ---
 
-## Step 4: Write `.forge-status.yml`
+## Step 4: Write digests, then `.forge-status.yml`
 
-Produce a v3 status file:
+**First** produce minimal `<phase>/digest.md` files for product-spec, plan,
+tasks, implement, verify (verify's is the 3D file) so the digest rule is
+satisfied before any phase is marked `completed`
+([runtime.md §8](../docs/runtime.md#8-phase-digest-requirement-a4)). Each digest
+notes `backfilled: true` in the handoff notes section.
+
+**Then** write the status file via the status-write procedure
+([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)). A new
+feature starts from the v3 initial document in
+[schema.md §3.1](../docs/schema.md#31-initial-document-new-features) with
+`feature_mode: "standard"` — pinned, not `default_feature_mode`, because backfill
+synthesizes the standard artifact set (`tasks.md` would be `not_applicable` in
+express/lite). Every phase in [`schema/phase-map.yml`](../docs/schema/phase-map.yml)
+gets an object entry; backfill then merges its own keys:
 
 ```yaml
 schema_version: 3
@@ -149,61 +166,47 @@ feature: "{slug}"
 created_at: "{today}"
 last_updated: "{now ISO}"
 feature_mode: "standard"
+v2_native: true
 backfilled: true
 phases:
-  # Phases that never ran — not skipped by choice, simply not applicable
-  # to a reverse-engineered feature. See docs/policy.md §3 — skip-reason
-  # policy does not apply to `not_applicable`.
-  problem_discovery:
-    status: "not_applicable"
-  research:
-    status: "not_applicable"
-  revalidation:
-    status: "not_applicable"
-  bridge:
-    status: "not_applicable"
-  # Phases where we inferred the artifact from code — digests required.
-  product_spec:
-    status: "completed"
-    digest_path: "product-spec/digest.md"
-  plan:
-    status: "completed"
-    digest_path: "plan/digest.md"
-  tasks:
-    status: "completed"
-    digest_path: "tasks/digest.md"
-  implement:
-    status: "completed"
-    digest_path: "implement/digest.md"
-  verify:
-    status: "completed"
-    digest_path: "verify/digest.md"
-  # Remaining phases are pending — the user may choose to run them
-  # retroactively, so they stay as real optional phases, not not_applicable.
-task_log: []     # optional population in a later run
+  # Never ran — not skipped by choice, simply not applicable to a
+  # reverse-engineered feature (docs/policy.md §3 — no skip_reason, no gate).
+  problem_discovery:     { status: "not_applicable" }
+  research:              { status: "not_applicable" }
+  revalidation:          { status: "not_applicable" }
+  bridge:                { status: "not_applicable" }
+  # Inferred from code — digests written above.
+  product_spec:          { status: "completed", digest_path: "product-spec/digest.md" }
+  plan:                  { status: "completed", digest_path: "plan/digest.md" }
+  tasks:                 { status: "completed", digest_path: "tasks/digest.md" }
+  implement:             { status: "completed", digest_path: "implement/digest.md" }
+  verify:                { status: "completed", digest_path: "verify/digest.md" }
+  # Every other phase-map phase stays a real (optional) phase the user may run
+  # retroactively — pending, not not_applicable.
+  design_system_harvest: { status: "pending" }
+  i18n_harvest:          { status: "pending" }
+  migration_plan:        { status: "pending" }
+  pre_impl_review:       { status: "pending" }
+  code_review:           { status: "pending" }
+  test_plan:             { status: "pending" }
+  test_run:              { status: "pending" }
+  release_readiness:     { status: "pending" }
+  monitoring_setup:      { status: "pending" }
+  experiment_design:     { status: "pending" }
+  spec_merge:            { status: "pending" }
 gates: []
-sync_runs:
-  last_run: ""
-  total_runs: 0
-dependencies:
-  depends_on: []
-  depended_on_by: []
-role_approvals:
-  solo_mode: true
+task_log: []     # optional population in a later run
 ```
 
-Write atomically (temp-file + rename). Acquire the state lock per
-[runtime.md §2](../docs/runtime.md#2-state-lock-protocol-a2).
-
-Also produce minimal `<phase>/digest.md` files for product-spec, plan,
-tasks, implement, verify so the digest rule is satisfied. Each digest
-notes `backfilled: true` in the handoff notes section.
+If `{FEATURE_DIR}/.forge-status.yml` already exists, never re-initialize it —
+merge only the keys above (runtime §2.9 step 4), keeping its gate trail and any
+phase a real run already completed.
 
 ---
 
 ## Step 5: Gaps Report
 
-Write `{features_dir}/<slug>/gaps-report.md`. This is the primary
+Write `{FEATURE_DIR}/gaps-report.md`. This is the primary
 decision-driver for the user — it tells them what they are inheriting.
 
 Sections (required):
@@ -237,7 +240,7 @@ Sections (required):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Source:      {source path}
-  Feature dir: {features_dir}/{slug}/
+  Feature dir: {FEATURE_DIR}
   Verdict:     {Low / Medium / High} gap
   Missing:     {N} artifacts
 
@@ -262,7 +265,7 @@ Ask: *"Open the gaps report?"* — do not auto-open.
 2. **Conservative inference.** When unsure, mark a claim as
    NEEDS-CLARIFICATION rather than inventing a plausible-sounding fact.
 3. **No code changes.** Backfill is strictly read-only against the source.
-   It writes only to `{features_dir}/<slug>/`.
+   It writes only to `{FEATURE_DIR}` (plus initial canonical `specs/`).
 4. **Respect the digest rule.** Even skipped/completed phases get a
    minimal digest so the runtime rule is honored uniformly.
 5. **Do not mark `release_readiness` completed.** A backfilled feature has

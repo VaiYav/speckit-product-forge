@@ -28,11 +28,18 @@ Parse the input:
 4. **`--fix`** → after reporting, apply approved resolutions (default: report only)
 5. **Empty** → enumerate features (contract `enumerate()`, [docs/runtime.md §12.3](../docs/runtime.md#12-path-resolution-contract)) and ask which to check, then run full 10-layer scan
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+`sync-report.md` / `.json` go under `{FEATURE_DIR}/.forge-dry-run/sync_verify/`,
+`--fix` applies nothing (resolutions are listed as `would-modify`), and
+`sync_runs` is not written.
+
 ---
 
 ## Step 0: Load Context
 
-1. Read `.product-forge/config.yml` for `features_dir`
+1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+   Keys used: `features_dir`, `storage_strategy`, `constitution_path`,
+   `sync_verify.*` (`contract_differ`, `contract_regen`, `drift_budget`, `auto_resolve`).
 2. Read `{FEATURE_DIR}/.forge-status.yml` for current phase state
 3. Determine which artifacts exist (only check layers where both sides are present)
 
@@ -142,7 +149,8 @@ Skip layers where either side doesn't exist yet. Report skipped layers.
 
 ### Layer 7: Cross-link Integrity
 
-- Scan all `.md` files in FEATURE_DIR for markdown links `[text](path)`
+- Scan all `.md` files in FEATURE_DIR for markdown links `[text](path)` — skip the
+  transient / archived trees `.forge-dry-run/` and `_rewound/`
 - Verify each link target exists
 - **WARNING** for each broken link
 - Check all document navigation headers (`> Related:`) are consistent
@@ -175,7 +183,7 @@ source of truth: **FE → contract → BE** (no DB leg).
 The forward/backward shape checks above are an LLM read. When the project
 opts in, run a **deterministic OpenAPI differ** instead, so contract drift is
 a tool exit code, not a prose judgement. Read `sync_verify.contract_differ`
-from `.product-forge/config.yml`:
+from the effective config (Step 0):
 
 ```yaml
 sync_verify:
@@ -225,9 +233,8 @@ verdict**:
 - Clean (`breaking` exit 0, empty `diff`) → Layer 8 contract-shape check is ✅.
 
 > Defaults to the prose path **by design** (`contract_differ: none`); the
-> executable differ is opt-in. Config keys `sync_verify.contract_differ` /
-> `sync_verify.contract_regen` must also be documented in `config-template.yml`
-> + `docs/config.md` (out of this file's scope — cross-file dependency).
+> executable differ is opt-in. Both keys are documented in `config-template.yml`
+> and [docs/config.md](../docs/config.md).
 
 ### Layer 9: Doc ↔ Code Reconciliation (v1.6, Theme G)
 
@@ -367,7 +374,7 @@ behavior*.
 | Category | Examples | Auto-resolve eligible? |
 |----------|----------|------------------------|
 | **structural** | Missing requirement, renamed field, different data shape, divergent API contract, removed user story, phase skip with no reason, **Markdown heading-level shift** (changes parsed tree and anchor identity), **renamed section heading** (breaks cross-links) | **Never.** Always human-in-the-loop. |
-| **cosmetic** | Trailing whitespace, bullet-list indentation drift, bullet style (`-` vs `*`), fenced-code language hint missing, stale `last_updated` timestamp, Windows vs Unix line endings, redundant blank lines | Only when `sync_verify.auto_resolve.cosmetic: true` in project config (default `false`). |
+| **cosmetic** | Trailing whitespace, bullet-list indentation drift, bullet style (`-` vs `*`), fenced-code language hint missing, stale `last_updated` timestamp, Windows vs Unix line endings, redundant blank lines | Only when `sync_verify.auto_resolve.cosmetic: true` in the effective config (default `false`). |
 
 Heuristic: if a drift item can change the *meaning* of what any artifact
 says — **including the parsed document structure, anchor identity, or
@@ -382,7 +389,7 @@ to that slug.
 
 ### Budget
 
-Read `sync_verify.drift_budget` from `.product-forge/config.yml`:
+Read `sync_verify.drift_budget` from the effective config (Step 0):
 
 ```yaml
 sync_verify:
@@ -535,7 +542,8 @@ For each approved resolution:
 
 ## Step 7: Update Status
 
-Update `.forge-status.yml`:
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+sync-verify owns only the `sync_runs` block (it records no phase status and no gate entry):
 
 ```yaml
 sync_runs:
@@ -550,7 +558,8 @@ sync_runs:
 
 ## Quick Mode (`--quick`)
 
-When called with `--quick` by the forge orchestrator between phase transitions, only run the layer(s) directly relevant to the transition:
+When called with `--quick` by the forge orchestrator between phase transitions, only run the layer(s) directly relevant to the transition.
+The authoritative transition table is [docs/runtime.md §5.1](../docs/runtime.md#51-automatic-quick-sync); this copy mirrors it — on any disagreement, §5.1 wins:
 
 | Transition | Layers to Check |
 |-----------|----------------|

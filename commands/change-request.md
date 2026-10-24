@@ -27,17 +27,29 @@ Parse the input:
 ---
 
 > **Delta specs (v1.6, Theme B):** express the change as a **delta** against the
-> canonical `specs/` source of truth — `features/{slug}/specs/<domain>/spec.md` with
+> canonical `specs/` source of truth — `{FEATURE_DIR}/specs/<domain>/spec.md` with
 > `## ADDED / ## MODIFIED / ## REMOVED Requirements` referencing stable `FR-*` ids.
 > Propagate the change through `traceability.yml` rows. On acceptance & completion,
 > [`spec-merge`](./spec-merge.md) folds the delta into canonical `specs/`. A
 > `DEFERRED` or `REJECTED` change-request emits **no delta**.
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+artifact edits go under `{FEATURE_DIR}/.forge-dry-run/change_request/`, nothing is
+archived, and no status, gate or `change_requests[]` entry is written.
+
 ## Step 0: Load Context
 
-1. Read `.product-forge/config.yml`
+1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+   Keys used: `features_dir`, `storage_strategy`. Resolve `FEATURE_DIR` via
+   `resolve(slug)` ([docs/runtime.md §12.2](../docs/runtime.md#122-resolveslug--feature_dir)).
 2. Read `{FEATURE_DIR}/.forge-status.yml` — determine current lifecycle phase
-3. Load all existing artifacts that might be affected (including canonical `specs/` and `traceability.yml`)
+3. **Phase 6 guard** ([docs/policy.md §8](../docs/policy.md#8-change-management)): if
+   `phases.implement.status == in_progress` **and** a `task_log[]` entry has
+   `status: in_progress` (a task is mid-flight), the CR is **blocked**. Stop with:
+   *"CR blocked: task {T0NN} is mid-implementation. Commit it (finish it in
+   implement) or explicitly discard its changes, then re-run change-request."*
+   Implement being `in_progress` *between* tasks does not block.
+4. Load all existing artifacts that might be affected (including canonical `specs/` and `traceability.yml`)
 
 ---
 
@@ -157,6 +169,10 @@ Phase rollback needed:
 
 If ACCEPTED:
 
+If Step 2B flagged a phase rollback, settle 4B **first**: artifacts owned by the
+rewound phases are archived and regenerated when those phases re-run, so 4A edits
+only the artifacts of phases *before* the rollback target.
+
 ### 4A: Update Artifacts (in dependency order)
 
 1. **product-spec/product-spec.md** — Add/modify user stories with `<!-- CR-{NNN} -->` marker
@@ -165,7 +181,7 @@ If ACCEPTED:
 4. **spec.md** — Add/modify US-NNN, FR-NNN, acceptance criteria with marker
 5. **plan.md** — Add/modify architecture sections with marker
 6. **tasks.md** — Add new tasks, modify existing tasks with marker
-7. **features/{slug}/specs/<domain>/spec.md** — Write/update the **delta spec** for
+7. **{FEATURE_DIR}/specs/<domain>/spec.md** — Write/update the **delta spec** for
    each domain the change touches, in delta format (`## ADDED / ## MODIFIED / ##
    REMOVED Requirements`) keyed on the affected `FR-*` ids (the same ids changed in
    spec.md above), each carrying the `<!-- CR-{NNN} -->` marker. This is the delta
@@ -194,9 +210,43 @@ If the change requires re-running an earlier phase:
   Proceed? [Yes — rollback to Phase {N}] [No — apply only to current artifacts]
 ```
 
-If user confirms rollback:
-- Update `.forge-status.yml` to set affected phases back to `in_progress`
-- The forge orchestrator will pick up from the rolled-back phase on next run
+The rollback target must be a phase that is already `completed` for this feature
+([docs/runtime.md §6.3](../docs/runtime.md#63-gate-prompt)); otherwise there is
+nothing to rewind — apply the change to current artifacts instead.
+
+**No** → no gate entry, no status change; continue with 4A on current artifacts.
+
+**Yes** (decision `rolled_back`, [docs/policy.md §2](../docs/policy.md#2-gate-decisions)):
+
+1. **Archive, never delete** ([docs/policy.md §8](../docs/policy.md#8-change-management)).
+   Move the artifacts produced by the target phase and every later phase (e.g.
+   `plan.md`, `tasks.md`, `pre-impl-review.md`, `code-review.md`,
+   `verify-report.md`, their `<phase>/digest.md`) to
+   `{FEATURE_DIR}/_rewound/{date}-CR-{NNN}/`, keeping each file's relative path.
+   Code in the repository is never moved — only feature-dir artifacts.
+2. **Reset status** ([docs/runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision)).
+   Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
+
+   ```yaml
+   phases:
+     {rolled_back_to}:         # and every later phase in phase-map order
+       status: pending
+       completed_at: null      # stale — the phase will re-run
+       digest_path: null       # the digest was archived in step 1
+       skip_reason: null       # a previously skipped phase is re-offered at its gate
+   gates:
+     - phase: "{current phase}"
+       decision: rolled_back
+       rolled_back_to: "{rolled_back_to}"
+       timestamp: "{ISO timestamp}"
+       notes: "CR-{NNN}: {reason}; rewound artifacts archived to _rewound/{date}-CR-{NNN}/"
+   ```
+
+   Phases that are `not_applicable` stay `not_applicable` (they were never in
+   scope for this mode). The original completions remain in `gates[]` history.
+   change-request is never a forge-delegated phase, so it always writes this gate
+   entry itself ([docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)).
+3. The forge orchestrator resumes from the rolled-back phase on its next run.
 
 ### 4C: Run Sync-Verify
 
@@ -241,7 +291,8 @@ Append to `{FEATURE_DIR}/change-log.md`:
 
 ## Step 6: Update Status
 
-Update `.forge-status.yml`:
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)) —
+for every decision (accepted / deferred / rejected), append to `change_requests`:
 
 ```yaml
 change_requests:

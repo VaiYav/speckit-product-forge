@@ -907,11 +907,13 @@ and archive the change with audit history (living, spec-anchored source of truth
   2. [Skip — I'll merge later]
 ```
 
-If user confirms → **Delegate to:** `speckit.product-forge.spec-merge`.
+If user confirms → **Delegate to:** `speckit.product-forge.spec-merge` (with
+`--from-forge` it applies the deltas and returns the summary + `ARCHIVE_DIR`, but does
+not write status or archive — see its "Orchestrated run" note).
 
 After completion:
 - **Gate:** `[Gate] Spec Merge complete — delta specs merged into canonical specs/ and the change archived. How do you want to proceed? 1. Approve (recommended) → finish [approved] · 2. Revise — re-run spec-merge with feedback [revised] · 3. Rollback to an earlier phase [rolled_back, set rolled_back_to] · 4. Abort [aborted] · (or type your own answer)` — no Skip: nothing follows. Always human (also under `--ci`).
-- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)). No canonical `specs/` in the project: `phases.spec_merge.status: not_applicable`, no gate.
+- Record the gate (forge writes it, [docs/runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) and set status from the decision ([§6.2](../docs/runtime.md#62-status-follows-the-decision)) **while the folder is still at `FEATURE_DIR`**. On `approved`, write `phases.spec_merge.archived_to` in the same write, then move the folder to `ARCHIVE_DIR` (spec-merge Step 5) — this is the last write to the feature. No canonical `specs/` in the project: `phases.spec_merge.status: not_applicable`, no gate.
 
 ---
 
