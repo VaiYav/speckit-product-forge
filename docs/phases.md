@@ -1,14 +1,22 @@
 # Product Forge — Phase Reference
 
-Full documentation for all Product Forge lifecycle phases: 1 optional pre-phase (Phase 0),
-7 required phases (1–7), 5 optional phases (5C, 6B, 8A, 8B, 9), plus cross-cutting commands.
+What each Product Forge phase does, what it writes, and what its gate checks — in
+`forge.md` phase order, plus the cross-cutting and supporting commands.
+
+**Which phases run** depends on the feature mode: the single source is
+[schema/phase-map.yml](./schema/phase-map.yml) (`yes` / `opt` / `no` per mode), and
+mode rules (triage, escalation) are in [policy.md §4](./policy.md#4-feature-modes-e1).
+Each phase below states its standard-mode role. In `express` / `lite` only Product
+Spec → Plan → Implement → Verify run (plus optional Phase 0 in lite); per-mode inputs
+are in [runtime.md §11.2](./runtime.md#112-per-phase-required-upstream-artifacts).
+All paths are relative to `FEATURE_DIR`.
 
 ---
 
 ## Phase 0: Problem Discovery *(Optional)*
 
 **Command:** `/speckit.product-forge.problem-discovery`
-**Output:** `features/{slug}/problem-discovery/`
+**Output:** `problem-discovery/`
 **Gate:** Go / Investigate further / No-go decision
 
 ### What happens
@@ -36,7 +44,7 @@ Hypotheses H1–HN are passed to Phase 1 research agents to guide investigation.
 ## Phase 1: Research
 
 **Command:** `/speckit.product-forge.research`
-**Output:** `features/{slug}/research/`
+**Output:** `research/`
 **Gate:** User approves research before Phase 2
 
 ### What happens
@@ -66,7 +74,7 @@ Two additional agents run **if opted-in**:
 ## Phase 2: Product Spec
 
 **Command:** `/speckit.product-forge.product-spec`
-**Output:** `features/{slug}/product-spec/`
+**Output:** `product-spec/`
 **Gate:** User approves document plan before writing, then approves output
 
 ### What happens
@@ -87,17 +95,28 @@ conducts a brief interview, then generates all documents.
 | `product-spec/mockups/index.html` + screens (clickable, design-system-grounded) | If UI |
 | `product-spec/mockups/component-map.yml` (region → `CMP-*` → code path) | If UI |
 
-> **Design system (helper):** `/speckit.product-forge.design-system-harvest`
-> discovers the project's in-code design system and emits the read-only
-> `design-system/manifest.yml` that grounds mockups, component decomposition, and
-> UI verification. The design system stays in code as the single source of truth.
+In express the product spec is minimal (1 journey + acceptance criteria); in lite it
+is light.
+
+---
+
+## Phase 2H: Design System Harvest *(Optional, UI features)*
+
+**Command:** `/speckit.product-forge.design-system-harvest`
+**Output:** `design-system/manifest.yml` + `manifest.md` (read-only)
+**Gate:** none of its own — runs as a Phase 2 helper
+
+Discovers the project's in-code design system and emits the read-only manifest
+(`CMP-*` components, props, variants, stable selectors, token references) that
+grounds mockups, component decomposition, and UI verification. The design system
+stays in code as the single source of truth.
 
 ---
 
 ## Phase 3: Revalidation
 
 **Command:** `/speckit.product-forge.revalidate`
-**Output:** `features/{slug}/review.md`
+**Output:** `review.md`
 **Gate:** Explicit "APPROVED" / "LGTM" from user
 
 ### What happens
@@ -118,7 +137,7 @@ Before locking, the agent automatically verifies:
 ## Phase 4: Bridge → SpecKit
 
 **Command:** `/speckit.product-forge.bridge`
-**Output:** `features/{slug}/spec.md`
+**Output:** `spec.md`
 **Gate:** User approves spec.md; then SpecKit mode is selected
 
 ### What happens
@@ -127,19 +146,30 @@ All research and product-spec artifacts are synthesized into a single `spec.md`.
 This spec is richer than a manually written spec: it includes research context,
 competitive intelligence, UX recommendations, and technical integration notes.
 
-### SpecKit Mode Selection
+### SpecKit sub-flow (`speckit_mode`)
 
-| Mode | When to use | Phases triggered |
+| Value | When to use | Sub-flow |
 |------|-------------|-----------------|
-| Classic | Well-scoped features, clear requirements | plan → tasks → implement → verify |
-| V-Model | Complex features, safety-critical, need full traceability | v-model-requirements → architecture → design → implement |
+| `classic` | Well-scoped features, clear requirements | plan → tasks → implement → verify |
+| `v-model` | Complex / safety-critical features, full traceability | V-Model SpecKit commands (requirements → architecture → design) → implement |
+
+Chosen per `default_speckit_mode`; forced to `v-model` when `feature_mode: v-model`.
+How the two switches relate: [policy.md §4.1](./policy.md#41-phase-maps).
+
+---
+
+## Phase 4.5: i18n Harvest *(Optional, multi-locale projects)*
+
+**Command:** `/speckit.product-forge.i18n-harvest`
+**Output:** `i18n/keys.yml` + `report.md` + per-locale stubs
+**Gate:** user approves harvested keys
 
 ---
 
 ## Phase 5: Plan
 
 **Command:** `/speckit.product-forge.plan`
-**Output:** `features/{slug}/plan.md`
+**Output:** `plan.md`
 **Gate:** User approves plan
 
 ### What happens
@@ -152,12 +182,15 @@ Delegates to SpecKit `plan` with product-spec context, then cross-validates:
 | Integration matches codebase analysis? | Warning |
 | NFR approach defined? | Warning |
 
+In express/lite there is no bridge or tasks phase: the plan reads the product spec
+directly and ends with an inline `## Tasks` list that implement executes.
+
 ---
 
 ## Phase 5B: Tasks
 
 **Command:** `/speckit.product-forge.tasks`
-**Output:** `features/{slug}/tasks.md`
+**Output:** `tasks.md`
 **Gate:** User approves tasks
 
 ### What happens
@@ -173,10 +206,19 @@ Delegates to SpecKit `tasks` with product-spec context, then cross-validates:
 
 ---
 
+## Phase 5.5: Migration Plan *(Conditional)*
+
+**Command:** `/speckit.product-forge.migration-plan`
+**Trigger:** the `plan.md` Data Model section introduces schema changes
+**Output:** `migrations/migration-plan.md`, `forward.sql`, `rollback.sql`, `validation.sql`, optional `backfill.md`, `risk-matrix.md`
+**Gate:** user approves strategy and scripts
+
+---
+
 ## Phase 5C: Pre-Implementation Review *(Optional)*
 
 **Command:** `/speckit.product-forge.pre-impl-review`
-**Output:** `features/{slug}/pre-impl-review.md`
+**Output:** `pre-impl-review.md`
 **Gate:** User approves review (or skips)
 
 ### What happens
@@ -196,14 +238,14 @@ Optional for features with ≤5 tasks and no UI.
 ## Phase 6: Implementation
 
 **Command:** `/speckit.product-forge.implement`
-**Output:** Code files (per tasks.md) + `implementation-log.md`
+**Output:** Code files (per tasks.md, or the plan's inline `## Tasks` in express/lite) + `implementation-log.md`
 **Gate:** All tasks `[x]`
 
 ### What happens
 
 Delegates to SpecKit `implement` with product-spec context (wireframes, user journeys, AC).
 
-**Progressive verification** (new in v1.3.0): after every N completed tasks (configurable),
+**Progressive verification:** after every N completed tasks (`progressive_verify_interval`),
 a mini-verify checkpoint runs:
 - Task-code correspondence
 - Spec AC alignment
@@ -217,7 +259,7 @@ Results logged in `implementation-log.md`. CRITICAL drift pauses implementation.
 ## Phase 6B: Code Review *(Optional)*
 
 **Command:** `/speckit.product-forge.code-review`
-**Output:** `features/{slug}/code-review.md`
+**Output:** `code-review.md`
 **Gate:** User approves review (or skips)
 
 ### What happens
@@ -231,14 +273,16 @@ Multi-agent code review with 4 parallel dimensions:
 | Patterns | Consistency with codebase-analysis.md conventions |
 | Tests | Coverage against spec.md requirements and acceptance criteria |
 
-Findings use `REV-NNN` IDs with CRITICAL/HIGH/MEDIUM/LOW severity.
+Findings are written to `gate-review.md` as `F-NNN` (one namespace with pre-impl-review
+and verify-full — [policy.md §9.1](./policy.md#91-unified-gate-review-artifact-a3)) with
+CRITICAL/HIGH/MEDIUM/LOW severity; `REV-NNN` is the legacy id.
 
 ---
 
 ## Phase 7: Full Verification
 
 **Command:** `/speckit.product-forge.verify-full`
-**Output:** `features/{slug}/verify-report.md`
+**Output:** `verify-report.md`
 **Gate:** No CRITICAL findings (or user acknowledges)
 
 ### Verification Layers
@@ -257,6 +301,9 @@ Consumes the live `traceability.yml` (does not re-derive the chain). Layers:
 | 8: UI ↔ Design System *(v1.6)* | Built UI uses the mapped `CMP-*` components (Theme E) |
 | 9: FE ↔ BE contract drift *(v1.6)* | Contracts implemented + called on both sides (Theme F) |
 | 10: Doc ↔ Code *(v1.6)* | No unimplemented docs / undocumented code (Theme G) |
+| 11: Constitution ↔ Code *(v1.7)* | Code honours the project constitution (`constitution_path`); N/A without one |
+
+The layer definitions are owned by [verify-full](../commands/verify-full.md).
 
 ### Severity levels
 
@@ -272,7 +319,7 @@ Consumes the live `traceability.yml` (does not re-derive the chain). Layers:
 ## Phase 8A: Test Plan *(Optional)*
 
 **Command:** `/speckit.product-forge.test-plan`
-**Output:** `features/{slug}/testing/`
+**Output:** `testing/`
 **Gate:** User approves test plan before execution
 
 ### What happens
@@ -291,13 +338,15 @@ Auto-detects test setup and generates test cases. E2E specs are generated
 | E2E | `TC-E2E-NNN` | All user stories |
 | API | `TC-API-NNN` | Functional requirements |
 | Regression | `TC-REG-NNN` | Adjacent existing features |
+| Unit | `TC-UNIT-NNN` | Test-first tasks and module logic |
+| Integration | `TC-INT-NNN` | Cross-module / API integration points |
 
 ---
 
 ## Phase 8B: Test Run *(Optional)*
 
 **Command:** `/speckit.product-forge.test-run`
-**Output:** `features/{slug}/bugs/`, `features/{slug}/test-report.md`
+**Output:** `bugs/`, `test-report.md`
 **Gate:** ≥80% pass rate AND zero P0/P1 open bugs
 
 ### What happens
@@ -320,7 +369,7 @@ Auto-fix loop for P0/P1 bugs with retest and smoke regression check.
 ## Phase 9: Release Readiness *(Optional)*
 
 **Command:** `/speckit.product-forge.release-readiness`
-**Output:** `features/{slug}/release-readiness.md`
+**Output:** `release-readiness.md`
 **Gate:** User confirms readiness verdict
 
 ### What happens
@@ -341,10 +390,40 @@ Verdict: READY TO SHIP / CONDITIONALLY READY / NOT READY.
 
 ---
 
+## Phase 9.5: Monitoring Setup *(Optional)*
+
+**Command:** `/speckit.product-forge.monitoring-setup`
+**Output:** `monitoring/dashboard.json`, `alerts.yml`, `slo.md`
+**Gate:** user confirms artifacts before ship
+
+---
+
+## Phase 9B: Experiment Design *(Conditional)*
+
+**Command:** `/speckit.product-forge.experiment-design`
+**Trigger:** `flags/registry.yml` has a flag with `experiment: true`
+**Output:** `experiment/experiment-design.md` + `experiment.yml`
+**Gate:** user pre-registers hypothesis and decision rule before ship
+
+---
+
+## Phase 10: Spec Merge *(Optional, living spec)*
+
+**Command:** `/speckit.product-forge.spec-merge`
+**Output:** updates canonical `specs/<domain>/spec.md`; archives the feature to `{features_dir}/_archived/<date>-<slug>/`
+**Gate:** user approves the merge diff
+
+Merges a completed feature's delta specs into the canonical `specs/` source of truth
+(upsert by `FR-*`, idempotent) and archives the change with audit history (OpenSpec
+model), so the spec stays a living source of truth across the feature's lifetime.
+Consumes verify-full's "Suggested canonical-spec updates".
+
+---
+
 ## Post-Launch: Retrospective
 
 **Command:** `/speckit.product-forge.retrospective`
-**Output:** `features/{slug}/retrospective.md`
+**Output:** `retrospective.md`
 **Recommended:** Run ≥14 days after shipping
 
 ### What happens
@@ -360,7 +439,7 @@ Produces lessons learned and next-step recommendations.
 ### Sync & Verify
 
 **Command:** `/speckit.product-forge.sync-verify`
-**Output:** `features/{slug}/sync-report.md` + `sync-report.json`
+**Output:** `sync-report.md` + `sync-report.json`
 
 Runnable between ANY phases. Checks 10 artifact layers (incl. contract-drift + doc↔code) for forward and backward drift.
 `--quick` mode runs automatically between forge phase transitions.
@@ -369,22 +448,32 @@ Human-in-the-loop for each CRITICAL/WARNING resolution.
 ### Change Request
 
 **Command:** `/speckit.product-forge.change-request`
-**Output:** `features/{slug}/change-log.md`
+**Output:** `change-log.md`
 
 Formal scope change management: capture → impact analysis → effort delta → propagate.
 Traces changes with `CR-NNN` markers across all affected artifacts. Emits **delta
 specs** (`## ADDED / ## MODIFIED / ## REMOVED`) against canonical `specs/` (v1.6).
 Runs sync-verify after application.
 
-### Spec Merge *(v1.6, living spec)*
+### Portfolio
 
-**Command:** `/speckit.product-forge.spec-merge`
-**Output:** updates canonical `specs/<domain>/spec.md`; archives the change folder.
+**Command:** `/speckit.product-forge.portfolio`
+**Output:** `{features_dir}/_portfolio/portfolio.md` (feature table, file-conflict matrix, dependency graph, suggested merge order). Read-only; reads `catalog.yml` as a freshness-gated fast path.
 
-Merges a completed feature's delta specs into the canonical `specs/` source of truth
-and archives the change with audit history (OpenSpec model). Makes the spec
-spec-anchored — a living source of truth across the feature's lifetime. Wired in
-after Phase 9 / release-readiness. See [Theme B](./improvements/2026-05-sdd-flow-improvements.md).
+### Catalog & Retrieve
+
+**Commands:** `/speckit.product-forge.catalog`, `/speckit.product-forge.retrieve`
+**Output:** `{features_dir}/_portfolio/catalog.yml` ([shape](./schema/catalog.yml)); retrieve returns the 1–3 matching features and the files to open.
+
+### Backfill
+
+**Command:** `/speckit.product-forge.backfill`
+**Brown-field entry.** Creates a feature folder from existing code with `backfilled: true` on the status file and a `gaps-report.md`.
+
+### Feature Flag Cleanup
+
+**Command:** `/speckit.product-forge.feature-flag-cleanup`
+**Output:** `{features_dir}/_portfolio/flag-cleanup-{date}.md` with removal recipes for stale flags. Read-only (`--apply` is not implemented).
 
 ---
 
@@ -398,64 +487,3 @@ after Phase 9 / release-readiness. See [Theme B](./improvements/2026-05-sdd-flow
 | `/speckit.product-forge.tracking-plan` | Analytics events, funnels, SDK snippets |
 
 ---
-
-## Appendix A — Phases added in v1.5.0
-
-### Phase 4.5: i18n Harvest (optional, conditional)
-
-**Command:** `/speckit.product-forge.i18n-harvest`
-**Trigger:** multi-locale project detected.
-**Output:** `features/{slug}/i18n/keys.yml` + per-locale stubs.
-**Gate:** user approves harvested keys.
-
-### Phase 5.5: Migration Plan (optional, conditional)
-
-**Command:** `/speckit.product-forge.migration-plan`
-**Trigger:** `plan.md` Data Model section introduces schema changes.
-**Output:** `features/{slug}/migrations/migration-plan.md`, `forward.sql`, `rollback.sql`, `validation.sql`, optionally `backfill.md`.
-**Gate:** user approves strategy and scripts.
-
-### Phase 9.5: Monitoring Setup (optional)
-
-**Command:** `/speckit.product-forge.monitoring-setup`
-**Trigger:** after Phase 9.
-**Output:** `features/{slug}/monitoring/dashboard.json`, `alerts.yml`, `slo.md`.
-**Gate:** user confirms artifacts before ship.
-
-### Phase 9B: Experiment Design (optional, conditional)
-
-**Command:** `/speckit.product-forge.experiment-design`
-**Trigger:** `flags/registry.yml` has a flag with `experiment: true`.
-**Output:** `features/{slug}/experiment/experiment-design.md` + `experiment.yml`.
-**Gate:** user pre-registers hypothesis and decision rule before ship.
-
-## Appendix B — Cross-cutting commands added in v1.5.0
-
-### Portfolio
-
-**Command:** `/speckit.product-forge.portfolio`
-**Output:** `features/_portfolio/portfolio.md` (feature table, file-conflict matrix, dependency graph, suggested merge order).
-**Read-only.** Runnable any time.
-
-### Backfill
-
-**Command:** `/speckit.product-forge.backfill`
-**Brown-field entry.** Creates `features/<slug>/` from existing code with `backfilled: true` on status file and a gaps-report.
-
-### Feature Flag Cleanup
-
-**Command:** `/speckit.product-forge.feature-flag-cleanup`
-**Output:** `features/_portfolio/flag-cleanup-{date}.md` with removal recipes for stale flags.
-**Read-only in v1.5.0** (`--apply` reserved for a later wave).
-
-## Appendix C — Feature modes (v1.5.0)
-
-| Mode | Active phases | Excluded phases |
-|------|---------------|-----------------|
-| `express` *(v1.6)* | product-spec (minimal), plan (inline), implement, verify | everything else → `status: "not_applicable"` |
-| `lite` | problem-discovery (opt), product-spec, plan, implement, verify | everything else → `status: "not_applicable"` |
-| `standard` | all phases per the matrix above | — |
-| `v-model` | standard + V-Model artifact phases via `speckit:v-model-*` | — |
-
-See [`docs/policy.md §4`](./policy.md#4-feature-modes-e1) for mode
-selection, escalation triggers, and deselection rules.

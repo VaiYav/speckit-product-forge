@@ -200,6 +200,11 @@ mirrors / links back to this table.
 IDs are stable across artifacts. Every downstream artifact references upstream
 IDs rather than restating content (de-duplication, Theme C).
 
+`F-NNN` findings are written as `- **F-NNN**` bold bullets in `gate-review.md`;
+that exact form is grepped by `forge.md`'s auto-recommend pre-gate, so it is
+load-bearing. File names and artifact-local IDs (`BUG-`, `CR-`, `DRIFT-`, `ADR-`,
+`D-`/`A-`/`R-`) are listed in [file-structure.md](./file-structure.md#naming-conventions).
+
 In the standard forward flow, delta specs / `spec-merge` key on `FR-*` (minted
 by `bridge`); `REQ-*` is the canonical id only for the V-Model pack / `backfill`
 reverse-engineering path. On a forward-flow row, `req` may therefore be `null`.

@@ -43,7 +43,7 @@ node scripts/lint-docs.js          # XREF, CMD-COUNT, VERSION, ENUM, GATE-POLICY
 
 - **Adding a command:** create `commands/<name>.md` AND its `provides.commands`
   entry in `extension.yml`; the frontmatter `name:` must be
-  `speckit.product-forge.<name>`. Keep README / how-it-works / QA counts in sync
+  `speckit.product-forge.<name>`. Keep README / CLAUDE.md / QA counts in sync
   (CMD-COUNT checks this).
 - **Adding a config key:** a command or an orchestrator doc (policy/runtime) must
   actually *read* it — a documented-but-unread key is a dead switch (CONFIG-READER).

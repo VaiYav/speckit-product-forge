@@ -18,7 +18,7 @@
 //                 and NONE escapes the plugin root (../.. is forbidden — the
 //                 plugin is copied to ~/.claude/plugins/cache at install).
 //   CMD-COUNT   — commands/*.md  ==  extension.yml provides.commands  ==  count
-//                 claimed in README/how-it-works/claude-plugin/QA docs.
+//                 claimed anywhere in the corpus (README, CLAUDE.md, docs/).
 //   VERSION     — extension.yml version == .claude-plugin/plugin.json version,
 //                 no stale "vN.N adds" narrative, no stale current-version claim
 //                 (install pins, doc-title stamps), no version in a command

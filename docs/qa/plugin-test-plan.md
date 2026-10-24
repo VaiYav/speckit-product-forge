@@ -89,11 +89,13 @@ the two shell helpers.
   (narrative), schema/forge-status-v3.schema.yml (canonical YAML),
   schema/migration-v2-to-v3.md, templates (phase-digest,
   portfolio-report), lessons-format, v-model-integration,
-  testing-strategy, phases, file-structure, config, how-it-works-v2,
-  qa/plugin-test-plan.md (this file).
+  testing-strategy, phases, file-structure, config, concept,
+  schema/catalog.yml, qa/plugin-test-plan.md (this file).
 - **Helpers in `scripts/`:** migrate-status-v2-to-v3.js + .ts stub,
   acquire-lock.sh, release-lock.sh, gate-risk.js, validate-traceability.js,
-  lib-yaml.js, lib-paths.js (shared Path-Resolution Contract resolver/enumerator).
+  lib-yaml.js, lib-paths.js (shared Path-Resolution Contract resolver/enumerator),
+  build-catalog.js, retrieve-catalog.js, cost-report.js, check-links.js,
+  lint-docs.js, doctor.js (the aggregate self-check).
 - **`extension.yml`** registers all commands, declares
   `leocamello/spec-kit-v-model` as an optional extension, lists tags.
 - **`config-template.yml`** documents every config key.
@@ -101,10 +103,9 @@ the two shell helpers.
   carried internal-only ADRs, brainstorms, and self-review reports
   under `docs/adr/`, `docs/brainstorms/`, and `docs/reviews/`. These
   directories have been removed from the current tree. Any surviving
-  cross-references to them from `README.md`, `CHANGELOG.md`, or
-  `docs/how-it-works-v2.md` point to files that no longer exist and
-  should be treated as known broken links until resolved (see §6.2
-  Layer B for the check).
+  cross-references to them from `README.md` or `CHANGELOG.md` point to
+  files that no longer exist and should be treated as known broken links
+  until resolved (see §6.2 Layer B for the check).
 
 ---
 
@@ -393,8 +394,7 @@ Remaining at time of the v1.5.0 release:
 ### Resolved in v1.5.0 release candidate
 
 - Broken cross-references to `docs/adr/`, `docs/brainstorms/`,
-  `docs/reviews/` in `CHANGELOG.md`, `README.md`,
-  `docs/how-it-works-v2.md` — references removed.
+  `docs/reviews/` in `CHANGELOG.md` and `README.md` — references removed.
 - Spec ambiguity in `docs/policy.md §3` on empty skip reasons — rule 3
   now explicitly rejects the gate under `require_skip_reason: true`.
 - Enum validation for `feature_mode` and every `phases.<name>.status`

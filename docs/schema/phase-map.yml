@@ -3,7 +3,7 @@
 #
 # Product Forge restates the phase map in two forge.md tables (the standard-mode
 # "Phase Map" and the "Phase execution map by mode"), plus prose in policy.md /
-# phases.md / how-it-works. Historically those drifted (14-vs-18 phase counts).
+# phases.md. Historically those drifted (14-vs-18 phase counts).
 # This file is the machine-readable source; scripts/lint-docs.js (PHASEMAP rule)
 # reads it and asserts the forge.md tables agree — every phase id present in both,
 # the row counts equal, and each per-mode cell matching.
