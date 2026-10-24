@@ -1,153 +1,131 @@
 ---
 name: speckit.product-forge.test-run
 description: >
-  Phase 8B: Executes test cases via playwright-cli (interactive browser agent),
-  tracks bugs in bugs/<BUG-NNN>.md, auto-fixes P0/P1 bugs and retests,
-  performs gap analysis when bugs require spec changes.
-  Loop continues until all P0/P1 bugs closed and exit criteria met.
-  Use with: "run tests", "execute tests", "/speckit.product-forge.test-run"
+  Runs the feature's test cases (Phase 8B) with playwright-cli and the test
+  framework, files BUG-NNN reports, auto-fixes and retests P0/P1 bugs, and loops
+  until the exit criteria are met. Use after test-plan.
 ---
 
 # Product Forge — Phase 8B: Test Execution & Bug Fix Loop
 
-You are the **Test Execution Coordinator** for Product Forge Phase 8B.
-Your goal: execute every test case from `testing/test-cases.md` using **playwright-cli**
-(interactive browser agent), track every bug, auto-fix and retest,
-and manage the loop until the feature is ready to ship.
+You are the **Test Execution Coordinator**. Execute every case in
+`testing/test-cases.md`, track every bug, fix and retest P0/P1 bugs, and repeat
+until the feature meets its exit criteria; the output is `test-report.md` plus
+`bugs/`.
 
-**Execution model:** You drive the browser step-by-step using `playwright-cli` commands.
-You read each test case's steps from `testing/test-cases.md`, open the browser,
-execute each action, take screenshots as evidence, and record PASS / FAIL.
-The `.spec.ts` files generated in Phase 8A are for CI/CD pipelines — they are NOT used here.
+You drive the browser yourself with `playwright-cli`: read each case's steps,
+execute each action, take screenshots as evidence, record PASS / FAIL. The
+Phase 8A `.spec.ts` files are for CI/CD pipelines; this phase does not run them.
 
-**Journey mapping (Theme H):** every test case carries its `JRN`/`STEP`/`EDGE` ids
-(from `product-spec/journeys/journeys.yml`). When a case fails, record the failing
-`JRN`/`STEP` (or `EDGE`) id in the `bugs/BUG-NNN.md` record and update the matching
-row in `traceability.yml`, so a failure points straight back to the journey step it
-broke. Run order stays Smoke → E2E (per `e2e_runner: playwright-cli`).
+Every case carries its `JRN` / `STEP` / `EDGE` ids (from
+`product-spec/journeys/journeys.yml`). A failure records the failing id in its
+`bugs/BUG-NNN.md` and updates the matching `traceability.yml` row, so it points
+straight back to the journey step it broke.
 
-**a11y + component/token conformance (v1.6, W5-B2/B5):** the WCAG-AA accessibility
-floor (axe-core) and the design-system component/token conformance check run **as
-part of the normal browser run** — see [§4.7](#47-a11y--componenttoken-conformance-v16-w5-b2b5).
-They are not a separate phase or gate: an axe violation or a conformance failure
-is filed as an ordinary `BUG-NNN.md`, mapped back to the same `JRN`/`STEP`/`EDGE`
-id as functional failures (the `Journey: / Step/Edge:` carrier added in Track-1),
-triaged in [Step 5](#step-5-collect-and-triage-all-results), and resolved through
-the same auto-fix loop and exit criteria. The automated floor does **not** replace
-manual a11y review — it is a deterministic minimum bar that flows into the existing
-bug pipeline.
+The WCAG-AA accessibility floor (axe-core) and the component / design-token
+conformance check run inside the normal browser run (Step 4.7), not as a separate
+phase or gate: their failures are ordinary `BUG-NNN.md` records mapped to the
+same `JRN` / `STEP` / `EDGE` ids, triaged in Step 5 and resolved through the same
+fix loop and exit criteria. The automated floor is a minimum bar; manual a11y
+review is still required.
 
-## User Input
+## Input
 
 ```text
 $ARGUMENTS
 ```
 
-If `$ARGUMENTS` contains **`--dry-run`**, honor [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
-tests may still execute (read-only), but write `test-report.md` / `bugs/` under
-`{FEATURE_DIR}/.forge-dry-run/test_run/`, do **not** apply auto-fixes to source,
-do **not** update `.forge-status.yml`, emit a `DRY-RUN-REPORT.md`, and make no
-external side-effect.
+Follow the [command contract](../docs/runtime.md#0-command-contract).
 
----
+- **Phase key:** `test_run` (Phase 8B)
+- **Config keys:** `e2e_runner`, `a11y_gate`, `codebase_path` / `codebase.paths`,
+  `release_readiness`, `require_skip_reason`
+- **Writes:** `test-report.md`, `bugs/BUG-NNN.md`, `bugs/README.md`,
+  `testing/playwright-results/*`, `testing/results-{run_n}.json`, source fixes,
+  approved `spec.md` / `product-spec.md` updates, `review.md`, `traceability.yml`
+  (`tests`, `status: tested`), the feature `README.md`, `phases.test_run.status`
+- **Contract deltas:**
+  - Also writes the top-level `testing:` block, and on *Skip Release Readiness*
+    `phases.release_readiness.status: skipped` + `skip_reason`.
+  - `resume` continues the fix loop of an earlier run (Step 11 option
+    *Continue*); Step 1 rebuilds its counters from the existing bugs and results.
+  - `--dry-run`: tests may still execute (read-only); bugs are filed and
+    `test-report.md` is written under `.forge-dry-run/test_run/`; the fix loop
+    is skipped (Step 7 → Step 11), so no auto-fix touches source.
+  - `--from-forge`: the `traceability.yml` rows to set `tested` are returned to
+    forge instead of written (Step 13).
 
-## Step 1: Validate Prerequisites
+## Step 1: Check readiness
 
-Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
-Keys used: `e2e_runner`, `a11y_gate`, `codebase_path` / `codebase.paths`,
-`release_readiness`, `require_skip_reason` (Step 13 gate).
+1. `.forge-status.yml` → `phases.test_plan.status: completed`.
+2. `testing/test-plan.md` exists.
+3. `testing/test-cases.md` exists with at least one `TC-*-NNN` entry.
+4. `testing/env.md` exists with `FRONTEND_URL` configured.
+5. `playwright-cli` is available (or `npx playwright-cli`).
 
-1. `{FEATURE_DIR}/.forge-status.yml` → `phases.test_plan.status: completed`
-2. `testing/test-plan.md` exists
-3. `testing/test-cases.md` exists with at least one `TC-*-NNN` entry
-4. `testing/env.md` exists with FRONTEND_URL configured
-5. `playwright-cli` is available (or `npx playwright-cli`)
-
-If not ready:
+When a check fails, stop with:
 > ⚠️ Test plan not found. Run `/speckit.product-forge.test-plan` first.
 
-Load from `testing/test-plan.md`:
-- `FRONTEND_URL`, `API_URL`, `TEST_TYPES`, test case counts
-- Entry/exit criteria
+Load `FRONTEND_URL`, `API_URL`, `TEST_TYPES`, case counts and the entry / exit
+criteria from `testing/test-plan.md`; load `TEST_EMAIL`, `TEST_PASSWORD`,
+`TEST_ADMIN_EMAIL`, `TEST_ADMIN_PASSWORD` (when present) and other
+environment-specific values from `testing/env.md`.
 
-Load from `testing/env.md`:
-- `TEST_EMAIL`, `TEST_PASSWORD`, `TEST_ADMIN_EMAIL`, `TEST_ADMIN_PASSWORD` (if present)
-- Any additional environment-specific values
+Initialize: `TEST_RUN = 1`, `BUGS_FOUND = 0`, `BUGS_FIXED = 0`, `BUGS_OPEN = 0`,
+`BUG_SEQ = 1` (next `BUG-NNN` number).
 
-Initialize counters:
-```
-TEST_RUN = 1
-BUGS_FOUND = 0
-BUGS_FIXED = 0
-BUGS_OPEN  = 0
-BUG_SEQ    = 1    ← next BUG-NNN number
-```
+With `resume`, rebuild the state instead, so a resumed run never overwrites an
+existing bug or resets the retry cap:
 
----
+- `BUG_SEQ` = highest existing `bugs/BUG-*.md` number + 1.
+- `TEST_RUN` = highest `testing/results-{run_n}.json` number (or the highest
+  `Test Run: #` in the bug files) + 1.
+- `BUGS_FOUND` / `BUGS_FIXED` / `BUGS_OPEN` = counted from the bug statuses.
+- Fix attempts per bug = the number of `Attempt {n}:` lines in its § Fix Applied.
 
-## Step 2: Pre-flight Checks
+Then run Step 2 and Step 3 (app reachable, auth state) and continue at Step 8.
 
-Verify the app is reachable before opening any browser:
+## Step 2: Pre-flight
 
-```
-🔍 Pre-flight check:
+Check before opening any test browser:
 
-  playwright-cli available?  → playwright-cli --version
-  App reachable?             → playwright-cli open {FRONTEND_URL} → snapshot → close
-  API reachable?             → playwright-cli open {API_URL}/health → snapshot → close
-  Test credentials?          → Verify testing/env.md is populated
-  axe-core reachable?        → for the §4.7 a11y floor (v1.6, W5-B2)
-  manifest present?          → design-system/manifest.yml for §4.7 conformance (v1.6, W5-B5)
-```
-
-**a11y + conformance pre-flight (v1.6, W5-B2/B5).** Step 4.7 injects `axe-core`
-into the live page and checks rendered components against the harvested design
-system. Verify both inputs **before** the run so a missing dependency records
-`BLOCKED` rather than passing-by-default (a silent skip would re-introduce the
-"callout-deep" defect this floor exists to close):
+| Check | How |
+|-------|-----|
+| playwright-cli available | `playwright-cli --version` |
+| App reachable | `playwright-cli open {FRONTEND_URL}` → `snapshot` → `close` |
+| API reachable | `playwright-cli open {API_URL}/health` → `snapshot` → `close` |
+| Test credentials | `testing/env.md` is populated |
+| axe-core resolvable (Step 4.7a) | command below |
+| Design-system manifest present (Step 4.7b) | command below |
 
 ```bash
-# axe-core resolvable? (local node_modules or CDN fallback used by §4.7)
 test -f node_modules/axe-core/axe.min.js && echo "axe-core: local" \
   || echo "axe-core: will load from CDN in §4.7 (network required)"
-
-# design-system manifest present? (owns CMP-* selectors + tokens for §4.7)
 test -f {FEATURE_DIR}/design-system/manifest.yml && echo "manifest: ok" \
   || echo "manifest: MISSING → §4.7 conformance leg records BLOCKED"
 ```
 
-- If `axe-core` cannot be resolved (no `node_modules`, no network) → the §4.7
-  a11y leg is recorded **BLOCKED** for every browser journey (not PASS).
-- If `design-system/manifest.yml` is absent → the §4.7 conformance leg is
-  recorded **BLOCKED** (no token/selector source to assert against).
+- axe-core cannot be resolved (no `node_modules`, no network) → record the 4.7
+  a11y leg **BLOCKED** for every browser journey.
+- `design-system/manifest.yml` absent → record the 4.7 conformance leg **BLOCKED**.
 
-**App reachability check:**
-```bash
-playwright-cli open {FRONTEND_URL}
-playwright-cli snapshot
-playwright-cli close
-```
+A missing dependency is recorded BLOCKED, never PASS.
 
-If the snapshot shows an error page, connection refused, or blank page:
+When the reachability snapshot shows an error page, connection refused or a blank
+page, report it and wait:
+
 ```
 ⚠️ Cannot reach {FRONTEND_URL}.
 Is the app running? Start it with:
-  {suggest start command from package.json scripts.dev / scripts.start}
-
+  {start command from package.json scripts.dev / scripts.start}
 Waiting for your confirmation before running tests...
 ```
 
-Do NOT proceed until app is reachable.
+Result: the app is reachable — proceed only then.
 
----
+## Step 3: Set up the auth session
 
-## Step 3: Auth Session Setup
-
-Before running any tests that require authentication, establish a reusable auth session:
-
-```
-🔐 Setting up auth session...
-```
+Before any authenticated case, log in once and save the state:
 
 ```bash
 playwright-cli -s=pf-auth open {FRONTEND_URL}/login
@@ -160,418 +138,176 @@ playwright-cli -s=pf-auth state-save testing/playwright-results/auth-state.json
 playwright-cli -s=pf-auth close
 ```
 
-Use the snapshot to find the correct element refs (`e1`, `e2`, etc.).
-If login succeeds → save auth state for reuse across all authenticated tests.
-If login fails → create BUG-001 (P0 Blocker) and stop.
+Take element refs (`e1`, `e2`, …) from the snapshot. Login succeeds → reuse the
+saved state for every authenticated case. Login fails → create `BUG-001` (P0
+Blocker) and stop.
 
----
+## Step 4: Execute the tests
 
-## Step 4: Execute Tests — Ordered by Type
+Order (cheapest first):
 
-Execute test cases in this order (cheapest/fastest first):
+1. Smoke — `TC-SMK-NNN` (failures block all others)
+2. E2E — `TC-E2E-NNN`
+3. API — `TC-API-NNN`
+4. Regression — `TC-REG-NNN`
 
-```
-Execution order:
-  1. Smoke Tests     (TC-SMK-NNN) — block all others if failing
-  2. E2E Tests       (TC-E2E-NNN)
-  3. API Tests       (TC-API-NNN)
-  4. Regression Tests (TC-REG-NNN)
-```
+Unit (`TC-UNIT-NNN`, 4E) and integration (`TC-INT-NNN`, 4F) cases run through the
+test framework, not the browser.
 
-### For each test case, follow this execution pattern:
+**Browser cases** (smoke, E2E, regression) follow 4.1–4.6, plus 4.7 for smoke
+and E2E journeys:
 
-#### 4.1 Read the test case
+#### 4.1 Read the case
 
-From `testing/test-cases.md`, read:
-- `TC-ID` (e.g. TC-E2E-003)
-- Preconditions (auth required? specific data state?)
-- Test steps (numbered actions)
-- Expected result
+From `testing/test-cases.md`: the TC-ID, preconditions (auth? data state?), the
+numbered steps, the expected result.
 
-#### 4.2 Open browser and prepare
+#### 4.2 Open the browser
 
 ```bash
-# For authenticated tests — load saved auth state:
 playwright-cli -s=pf-test open {FRONTEND_URL}{start_path}
-playwright-cli -s=pf-test state-load testing/playwright-results/auth-state.json
-
-# For unauthenticated tests:
-playwright-cli -s=pf-test open {FRONTEND_URL}{start_path}
-```
-
-Start tracing for evidence:
-```bash
+playwright-cli -s=pf-test state-load testing/playwright-results/auth-state.json   # authenticated cases only
 playwright-cli -s=pf-test tracing-start
 ```
 
 #### 4.3 Execute each step
 
-For each numbered step in the test case, translate to playwright-cli commands:
-
-| Test case action | playwright-cli command |
-|-----------------|------------------------|
+| Case action | playwright-cli command |
+|-------------|------------------------|
 | Navigate to URL | `playwright-cli -s=pf-test goto {URL}` |
-| Click element | `playwright-cli -s=pf-test snapshot` → find ref → `playwright-cli -s=pf-test click e{N}` |
-| Fill input | `playwright-cli -s=pf-test snapshot` → find ref → `playwright-cli -s=pf-test fill e{N} "{value}"` |
+| Click element | `snapshot` → find ref → `playwright-cli -s=pf-test click e{N}` |
+| Fill input | `snapshot` → find ref → `playwright-cli -s=pf-test fill e{N} "{value}"` |
 | Select dropdown | `playwright-cli -s=pf-test select e{N} "{value}"` |
 | Check checkbox | `playwright-cli -s=pf-test check e{N}` |
 | Press key | `playwright-cli -s=pf-test press Enter` |
-| Wait for element | `playwright-cli -s=pf-test snapshot` → verify element is present |
+| Wait for element | `snapshot` → verify the element is present |
 | Scroll | `playwright-cli -s=pf-test mousewheel 0 300` |
 | Verify text present | `playwright-cli -s=pf-test eval "document.body.innerText.includes('{text}')"` |
 | Verify URL | `playwright-cli -s=pf-test eval "window.location.pathname"` |
 | Check network error | `playwright-cli -s=pf-test console` / `playwright-cli -s=pf-test network` |
 
-Take a snapshot **after every meaningful action** to confirm state.
+Take a snapshot after every meaningful action and confirm the state before the
+next step.
 
-#### 4.4 Take evidence screenshot
+#### 4.4 Take the evidence screenshot
 
 ```bash
 playwright-cli -s=pf-test screenshot --filename=testing/playwright-results/{TC_ID}-final.png
 ```
 
+Every case gets its final-state screenshot (PASS and FAIL); every FAIL also keeps
+its trace.
+
 #### 4.5 Stop tracing and close
 
 ```bash
-playwright-cli -s=pf-test tracing-stop
-# → saves to testing/playwright-results/{TC_ID}-trace.zip automatically
+playwright-cli -s=pf-test tracing-stop   # saves testing/playwright-results/{TC_ID}-trace.zip
 playwright-cli -s=pf-test close
 ```
 
-#### 4.6 Record result
+#### 4.6 Record the result
 
-Compare final snapshot with **Expected Result** from test case:
-- **PASS** — final state matches expected result
-- **FAIL** — state does not match, error shown, or unexpected behavior
-- **BLOCKED** — prerequisite step failed (e.g. auth not available)
+Compare the final snapshot with the expected result:
+- **PASS** — the final state matches.
+- **FAIL** — it does not match, an error shows, or behaviour is unexpected.
+- **BLOCKED** — a prerequisite step failed (e.g. auth unavailable).
 
-#### 4.7 a11y + component/token conformance (v1.6, W5-B2/B5)
+#### 4.7 a11y + component/token conformance
 
-For **browser** journeys only — Smoke ([4A](#4a-smoke-tests)) and E2E
-([4B](#4b-e2e-tests)). **N/A** for API ([4C](#4c-api-tests)), Unit
-([4E](#4e-unit-tests-tc-unit-nnn)), and Integration ([4F](#4f-integration-tests-tc-int-nnn)):
-those are non-browser, so axe and DOM/computed-style conformance do not apply —
-do not run this substep for them.
+Browser journeys only (Smoke 4A, E2E 4B); not applicable to API (4C), Unit (4E)
+or Integration (4F). Run once per journey at its final state, in the same
+`pf-test` session, before 4.5 closes it. Scripts:
+[docs/reference/test-run-a11y-conformance.md](../docs/reference/test-run-a11y-conformance.md).
 
-Run **once per journey at its final state** (B2 is JRN-scoped), against the same
-`pf-test` session that just executed the case, before [§4.5](#45-stop-tracing-and-close)
-closes it. Failures here become bugs exactly like functional failures (mapped to
-the case's `JRN`/`STEP`/`EDGE`).
+**(a) WCAG-AA floor — axe-core**, gated on `a11y_gate` (default `axe`):
+- `a11y_gate: none` → skip the leg (test-plan generated no axe check) and record
+  `a11y: skipped (a11y_gate=none)` in the run notes.
+- `a11y_gate: axe` → run the axe script (WCAG 2.0/2.1 A + AA):
+  - `{ blocked: true }` → a11y leg **BLOCKED** for this journey, never PASS.
+  - `violations: []` → a11y floor PASS.
+  - each violation → one `BUG-NNN.md` (or one per `{id × target}`), with the
+    case's `JRN` / `STEP` / `EDGE` and the `helpUrl` in Evidence.
 
-**(a) WCAG-AA accessibility floor — axe-core (W5-B2).** **Gated on the `a11y_gate`
-config key** (default `axe`): when `a11y_gate: none`, skip this leg entirely
-(the test-plan generator emitted no axe check, so there is nothing to run) and
-record `a11y: skipped (a11y_gate=none)` in the run notes rather than silently
-passing. When `a11y_gate: axe`, inject axe-core into the
-live page and run it scoped to WCAG 2.0/2.1 A + AA rules. This is a deterministic
-minimum bar; manual a11y review is still required.
+**(b) Component + design-token conformance** (DOM presence + computed style; no
+pixel diffing). Resolve the `CMP-*` selector list from the manifest, then run the
+conformance script:
+- `missingComponents` non-empty → one `BUG-NNN.md` per missing component (its
+  component-map region names the `JRN` / `STEP` it backs).
+- `offTokenStyles` non-empty → one `BUG-NNN.md` for the design-token drift.
+- manifest absent (Step 2) → leg **BLOCKED**, never PASS.
+- colors shipped as Tailwind classes (empty token allow-set) → keep only the
+  component-presence check and record the token check BLOCKED.
 
-```bash
-playwright-cli -s=pf-test run-code "async page => {
-  // Inject axe-core: prefer local node_modules, else CDN (network required).
-  try {
-    await page.addScriptTag({ path: 'node_modules/axe-core/axe.min.js' });
-  } catch (e) {
-    await page.addScriptTag({ url: 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js' });
-  }
-  const result = await page.evaluate(async () => {
-    if (typeof axe === 'undefined') return { blocked: true };
-    const r = await axe.run(document, {
-      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }
-    });
-    return {
-      blocked: false,
-      violations: r.violations.map(v => ({
-        id: v.id, impact: v.impact, help: v.help, helpUrl: v.helpUrl,
-        nodes: v.nodes.map(n => ({ target: n.target, html: n.html }))
-      }))
-    };
-  });
-  return JSON.stringify(result);
-}"
-```
+### 4A: Smoke tests
 
-- `{ blocked: true }` (axe undefined) → record the a11y leg **BLOCKED** for this
-  journey (per the [Step 2](#step-2-pre-flight-checks) pre-flight) — never PASS.
-- `violations: []` → a11y floor PASS for this journey.
-- Each violation → one `BUG-NNN.md` (or one per `{id × target}`), severity mapped
-  in [Step 5](#step-5-collect-and-triage-all-results), `Journey:`/`Step|Edge:` set
-  to the running case's ids. Record the `helpUrl` in the bug's Evidence.
-
-**(b) Component + design-token conformance — DOM/computed-style (W5-B5).** Assert
-the rendered DOM uses the harvested design system: every region declared in
-`mockups/component-map.yml` resolves to a `CMP-*` whose `selector` (owned by
-`design-system/manifest.yml`) is present, and the rendered computed colors use the
-design system's **token** values rather than off-system hardcoded hex. No pixel
-diffing — DOM presence + computed-style only.
-
-First, **produce the selector list** from the manifest (do not assume it exists —
-extract it). The manifest stores `components[].selector`; the repo's zero-dep YAML
-parser ([`scripts/lib-yaml.js`](../scripts/lib-yaml.js)) reads it without a
-dependency:
-
-```bash
-# Resolve {SELECTORS} for the journey — the CMP-* selectors the manifest owns.
-# $PLUGIN_ROOT per docs/runtime.md §1A; if lib-yaml.js is unreachable, fall back
-# to reading the selector list inline from the manifest by hand.
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(specify extension path product-forge 2>/dev/null || echo .)}"
-node -e "const {parseYaml}=require('$PLUGIN_ROOT/scripts/lib-yaml.js');const fs=require('fs');
-  const m=parseYaml(fs.readFileSync('{FEATURE_DIR}/design-system/manifest.yml','utf8'));
-  console.log(JSON.stringify((m.components||[]).map(c=>c.selector).filter(Boolean)));"
-```
-
-Substitute that array as `{SELECTORS}` below. **Allowed token colors are NOT
-hardcoded** — the manifest keeps token *names* / CSS-var references, not resolved
-hex. Resolve them at runtime from the live page (the design system is loaded), so
-the comparison is real: read every `--*` custom property off `:root`, take the
-color-valued ones as the allow-set, then flag any computed color not in it.
-
-```bash
-playwright-cli -s=pf-test run-code "async page => {
-  const expected = {SELECTORS};   // CMP-* selectors resolved from manifest.yml (step above)
-  const report = await page.evaluate((expected) => {
-    const missing = expected.filter(sel => !document.querySelector(sel));
-    // Build the allow-set from the design system's own CSS custom properties
-    // resolved on the live page (token VALUES, not names) — plus transparents.
-    const rootCS = getComputedStyle(document.documentElement);
-    const allowed = new Set(['rgba(0, 0, 0, 0)', 'transparent']);
-    for (const name of Array.from(rootCS)) {
-      if (!name.startsWith('--')) continue;
-      const val = rootCS.getPropertyValue(name).trim();
-      if (/^(#|rgb|hsl)/i.test(val)) allowed.add(val);
-    }
-    const offToken = [];
-    for (const sel of expected) {
-      for (const el of document.querySelectorAll(sel)) {
-        const cs = getComputedStyle(el);
-        for (const prop of ['color', 'background-color', 'border-color']) {
-          const v = cs.getPropertyValue(prop).trim();
-          if (v && v !== 'rgba(0, 0, 0, 0)' && !allowed.has(v)) {
-            offToken.push({ selector: sel, prop, value: v });
-          }
-        }
-      }
-    }
-    return { missingComponents: missing, offTokenStyles: offToken };
-  }, expected);
-  return JSON.stringify(report);
-}"
-```
-
-- `missingComponents` non-empty → a declared `CMP-*` did not render → one
-  `BUG-NNN.md` per missing component (the component-map region tells you which
-  `JRN`/`STEP` it backs).
-- `offTokenStyles` non-empty → a rendered on-system component uses a color that is
-  not one of the design system's resolved token values (design-token drift) → one
-  `BUG-NNN.md`.
-- If `design-system/manifest.yml` is absent (Step 2 pre-flight) → record this leg
-  **BLOCKED**, not PASS — there is no token/selector source to assert against.
-- Note: if the design system ships colors as Tailwind classes rather than `:root`
-  custom properties, the allow-set is empty and this leg degrades to the
-  component-presence check only — record the token-lint as BLOCKED for that case
-  rather than flagging every color.
-
----
-
-### 4A: Smoke Tests
+Run every `TC-SMK-*` case. When one FAILs, stop and ask:
 
 ```
-🚬 Running Smoke Tests (TC-SMK-NNN)...
-```
-
-Execute each `TC-SMK-*` test case using the pattern above.
-
-**If any smoke test results in FAIL:**
-```
-🚫 BLOCKER: Smoke test {TC-SMK-NNN} failed.
-
-{description of failure from snapshot/screenshot}
-
+[Smoke blocker] Smoke test {TC-SMK-NNN} failed — {failure from snapshot/screenshot}.
 Smoke failures block all further testing.
-Options:
-  1. [FIX] Auto-fix — I'll analyze and fix the issue now
-  2. [SKIP] Skip this smoke test and continue (mark as blocked)
-  3. [ABORT] Stop testing session
+
+  1. FIX (recommended) — analyze and fix the issue now
+  2. SKIP — mark this smoke test blocked and continue
+  3. ABORT — stop the testing session
+  (or type your own answer)
 ```
 
-Wait for user choice before continuing.
+Continue only after the answer.
 
-### 4B: E2E Tests
+### 4B: E2E tests
 
-```
-🎭 Running E2E Tests (TC-E2E-NNN)...
-  {N} test cases covering {N} user stories
-```
+Run every `TC-E2E-*` case, reusing the `pf-auth` state for authenticated cases.
 
-Execute each `TC-E2E-*` test case. Reuse `pf-auth` auth state for authenticated tests.
+### 4C: API tests
 
-### 4C: API Tests
+When `TC-API-*` cases exist, run them per
+[docs/reference/test-run-test-types.md → 4C](../docs/reference/test-run-test-types.md#4c-api-tests-tc-api-nnn)
+and compare the actual status and body with the expected values.
 
-If `TC-API-*` test cases exist in `testing/test-cases.md`:
+### 4D: Regression tests
 
-```
-🔌 Running API Tests (TC-API-NNN)...
-```
+Run every `TC-REG-*` case: existing features must still work.
 
-For each API test case:
-```bash
-# Navigate to the API endpoint directly to verify response
-playwright-cli -s=pf-api open {API_URL}{endpoint}
-playwright-cli -s=pf-api snapshot
-# Or use eval for POST/PUT:
-playwright-cli -s=pf-api run-code "async page => {
-  const res = await page.evaluate(async () => {
-    const r = await fetch('{API_URL}{endpoint}', {
-      method: '{METHOD}',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({PAYLOAD})
-    });
-    return { status: r.status, body: await r.json() };
-  });
-  return JSON.stringify(res);
-}"
-playwright-cli -s=pf-api close
-```
+### 4E: Unit tests (TC-UNIT-NNN)
 
-Compare actual response status and body vs expected in test case.
+Run through the detected test framework per
+[docs/reference/test-run-test-types.md → 4E](../docs/reference/test-run-test-types.md#4e-unit-tests-tc-unit-nnn);
+results go to `testing/results-{run_n}.json`.
 
-### 4D: Regression Tests
+### 4F: Integration tests (TC-INT-NNN)
+
+Start the backing services and run per
+[docs/reference/test-run-test-types.md → 4F](../docs/reference/test-run-test-types.md#4f-integration-tests-tc-int-nnn);
+a missing Docker socket for testcontainers records the case BLOCKED.
+
+Result: every case has PASS / FAIL / BLOCKED (SKIP for framework-skipped unit
+cases) and its evidence.
+
+## Step 5: Collect and triage results
+
+Show the run summary:
 
 ```
-🔄 Running Regression Tests (TC-REG-NNN)...
-  Checking existing features are not broken by new implementation
-```
-
-Execute each `TC-REG-*` test case.
-
-### 4E: Unit Tests (TC-UNIT-NNN)
-
-Non-browser. Runs via the detected test framework (Vitest / Jest /
-pytest / go test / cargo test / RSpec / PHPUnit / etc.). No Playwright
-context, no browser, no auth setup.
-
-```
-🧪 Running Unit Tests (TC-UNIT-NNN)...
-  Framework: {detected}
-  Workspace filter: {scope.paths joined}
-  Affected-only: {true if tasks touched paths; false runs full suite}
-```
-
-**Execution pattern per test case:**
-
-1. Read the TC-UNIT from `testing/test-cases.md`.
-2. Locate the existing source test file (if any) or the file the test
-   belongs in by convention (`*.spec.ts`, `*_test.go`, etc.).
-3. Resolve the workspace-scoped command (monorepo mode — see
-   [runtime.md §9.3](../docs/runtime.md#93-test-runner-resolution)):
-   - Single-root pnpm: `pnpm test --run -t "TC-UNIT-{NNN}"`
-   - Monorepo pnpm: `pnpm --filter={workspace} test --run -t "TC-UNIT-{NNN}"`
-   - pytest: `pytest -k "TC_UNIT_{NNN}"`
-   - go test: `go test -run TestTCUnit{NNN} ./...`
-4. Execute, capture stdout + stderr + exit code.
-5. Parse result: PASS / FAIL / SKIP.
-6. Record in `testing/results-{run_n}.json` with duration and stack on
-   FAIL.
-
-**Evidence on failure** — no screenshot (non-browser). Capture:
-- Full test output (stdout + stderr).
-- Source diff if implementation changed between runs.
-- Heap snapshot (opt-in, for memory-sensitive tests).
-
-Test results are ingested into the same triage + auto-fix loop as
-browser tests (Step 6–8). The fix pattern differs slightly: unit
-fixes are usually pure-logic patches, so the fix diff is small and
-the retest is single-task.
-
-### 4F: Integration Tests (TC-INT-NNN)
-
-Non-browser. May need a backing service (DB, cache, queue) started via
-docker-compose or testcontainers. Heavier than unit but lighter than
-E2E.
-
-```
-🔗 Running Integration Tests (TC-INT-NNN)...
-  Backing services: {list, e.g. "postgres-test, redis-test"}
-  Started via: {testcontainers | docker-compose | in-memory | shared}
-```
-
-**Pre-flight for 4F:**
-
-1. Read `testing/test-plan.md` §5F to find the backing services per
-   TC-INT case.
-2. If `testcontainers` — ensure Docker socket is available; skip
-   gracefully with a warning if not, record as BLOCKED.
-3. If `docker-compose` — start the referenced compose file in
-   detached mode, wait for health checks, verify service endpoints.
-4. If `in-memory` stand-in (miniredis, SQLite) — initialised by the
-   test itself, no pre-flight.
-5. If `shared test DB` — acquire a transaction scope that will roll
-   back on test completion.
-
-**Execution pattern per test case:**
-
-1. Resolve the command per workspace_type (same templates as 4E).
-2. Pass environment variables with connection strings to backing
-   services (typically `TEST_DATABASE_URL`, `TEST_REDIS_URL`).
-3. Execute. Each test runs in its own transaction (rolled back) or
-   its own container (torn down).
-4. Capture exit code, duration, and any collected coverage data.
-5. Parse result.
-6. Record in `testing/results-{run_n}.json`.
-
-**Evidence on failure:**
-- Full test output.
-- Last 100 lines of relevant backing-service logs (DB query log,
-  Redis MONITOR output, queue events).
-- Container state dump (`docker inspect`) if using testcontainers /
-  docker-compose.
-- Schema / migration state snapshot (for DB integration failures).
-
-**Isolation guarantees:**
-- Every 4F test must start and end with the same backing-service state
-  the next test expects. Enforced via transactions, containers, or
-  explicit truncate steps.
-- A test that depends on prior test state is a bug; log it as a
-  quarantine candidate (see flaky-test handling in
-  [testing-strategy.md §7](../docs/testing-strategy.md#7-flaky-test-handling)).
-
-**Monorepo note:** a cross-workspace TC-INT (e.g. frontend apiClient
-hitting backend /users) runs under the runner of `scope.primary`. If
-`scope.primary` is ambiguous, default to the consumer workspace
-(frontend in the example).
-
----
-
-## Step 5: Collect and Triage All Results
-
-After all test types complete, aggregate:
-
-```
-📊 Test Run #{RUN_N} Results
-══════════════════════════════════════════
-
+Test Run #{RUN_N} Results
   Unit Tests:        {N_pass}/{N_total} PASS  {N_fail} FAIL
   Integration Tests: {N_pass}/{N_total} PASS  {N_fail} FAIL  {N_block} BLOCKED
   Smoke Tests:       {N_pass}/{N_total} PASS  {N_fail} FAIL
   E2E Tests:         {N_pass}/{N_total} PASS  {N_fail} FAIL
   API Tests:         {N_pass}/{N_total} PASS  {N_fail} FAIL
   Regression Tests:  {N_pass}/{N_total} PASS  {N_fail} FAIL
-                     ─────────────────────────────────────
   Total:             {N_pass}/{N_total} PASS  {N_fail} FAIL
-  Pass Rate:        {%%}
-
-  ❌ Failed tests:
-  {list each: TC-ID | title | brief failure description}
+  Pass Rate:         {%%}
+  ❌ Failed: {TC-ID | title | brief failure} per line
 ```
 
-For each FAILED test → auto-assign severity:
+Severity for each FAILED case:
 - **P0** — smoke failure, auth broken, or app unreachable
-- **P1** — Must Have story E2E failure (happy path)
-- **P2** — Should Have story or error-state failure
-- **P3** — Edge case, cosmetic, or minor flow failure
-- **P4** — Regression on low-risk path
+- **P1** — Must-Have story E2E failure (happy path)
+- **P2** — Should-Have story or error-state failure
+- **P3** — edge case, cosmetic, or minor flow failure
+- **P4** — regression on a low-risk path
 
-For each **§4.7 a11y / conformance** finding → auto-assign severity (v1.6, W5-B2/B5):
+Severity for each 4.7 finding:
 
 | Finding | Source field | Severity |
 |---------|--------------|----------|
@@ -582,118 +318,57 @@ For each **§4.7 a11y / conformance** finding → auto-assign severity (v1.6, W5
 | Missing `CMP-*` component | `missingComponents[]` | **P2** |
 | Off-token computed style | `offTokenStyles[]` | **P3** |
 
-These flow through the same triage, bug creation, auto-fix loop, and exit criteria
-as functional failures — they are not a separate gate.
+## Step 6: Create bug reports
 
----
+For each failure, write `{BUGS_DIR}/BUG-{NNN}.md` (numbered from `BUG_SEQ`) from
+[docs/templates/test-run-bug.md](../docs/templates/test-run-bug.md), status Open,
+with the case's `Journey:` / `Step/Edge:` ids; update the matching
+`traceability.yml` row. Update the `{BUGS_DIR}/README.md` dashboard and bug list.
 
-## Step 6: Create Bug Reports
+A 4.7 finding uses the same format:
+- `## Evidence` → the axe `id` + `impact` + `helpUrl`, or the missing `CMP-*`
+  selector / off-token `{selector, prop, value}` from the script output.
+- `## Gap Analysis` → usually "Implementation bug" (a11y / token drift is fixed
+  in code); a spec gap only when the AC itself lacks the requirement.
 
-For EACH failed test, create `{BUGS_DIR}/BUG-{NNN}.md`:
+## Step 7: Gap analysis — spec impact
 
-```markdown
-# BUG-{NNN}: {short title}
-
-> Severity: P{0-4} | Status: 🔴 Open
-> Test Run: #{RUN_N} | Date: {date}
-> Test Case: {TC-ID} | Story: {US-NNN}
-> Journey: {JRN-NNN} | Step/Edge: {STEP-NNN|EDGE-NNN}
-
-## Description
-{Clear one-sentence description of what's wrong}
-
-## Steps to Reproduce
-1. Open: {FRONTEND_URL}{start_path}
-2. {step}
-3. {step}
-
-## Expected Behavior
-{What should happen per acceptance criteria}
-> AC Reference: {US-NNN} — {AC text from spec.md}
-
-## Actual Behavior
-{What actually happened — from final snapshot / screenshot}
-
-## Evidence
-- Screenshot: `testing/playwright-results/{TC-ID}-final.png`
-- Trace: `testing/playwright-results/{TC-ID}-trace.zip`
-- Console errors: {from playwright-cli console output}
-- Network: {from playwright-cli network output if applicable}
-
-## Gap Analysis
-- [ ] Implementation bug (code doesn't match spec — fix code)
-- [ ] Spec gap (spec is ambiguous — needs clarification)
-- [ ] Test issue (test steps are wrong — fix test case)
-- [ ] Environment issue (test env problem — not a product bug)
-
-## Fix Approach
-{Agent's analysis of root cause and fix plan}
-
-## Fix Applied
-{Filled after fix — files changed, description of change}
-
-## Retest Result
-{Filled after retest — PASS / FAIL / BLOCKED}
-```
-
-Update `{BUGS_DIR}/README.md` dashboard with all new bugs.
-
-**a11y / conformance findings use this same pipeline (v1.6, W5-B2/B5).** A §4.7
-axe violation or component/token conformance failure is filed as an ordinary
-`BUG-NNN.md` — no separate format. Populate the existing fields:
-- `Journey:` / `Step/Edge:` → the running case's `JRN`/`STEP`/`EDGE` (line above),
-  and update the matching `traceability.yml` row, exactly as for functional bugs.
-- `## Evidence` → record the axe `id` + `impact` + `helpUrl`, or the missing
-  `CMP-*` selector / off-token `{selector, prop, value}` from §4.7's JSON output.
-- `## Gap Analysis` → typically "Implementation bug" (a11y/token drift is fixed in
-  code); escalate to a spec gap only if the AC itself is missing the requirement.
-
----
-
-## Step 7: Gap Analysis — Spec Impact Check
-
-For each open bug, analyze whether it requires spec changes.
-Read `spec.md` → find the acceptance criteria for the broken user story.
-
-**Decision matrix:**
+For each open bug, read the broken story's acceptance criteria in `spec.md` and
+classify:
 
 | Bug type | Impact on spec | Action |
 |----------|---------------|--------|
-| Implementation doesn't match clear AC | None — code is wrong | Fix code only |
-| AC is ambiguous | Minor — clarify spec.md | Update spec.md § acceptance criteria |
-| Bug reveals missing requirement | Medium — spec gap | Add to spec.md + product-spec.md |
-| Bug reveals incorrect requirement | Medium — spec error | Update spec.md + product-spec.md |
-| Valid behavior per spec but bad UX | Medium — UX gap | Ask user — should spec change? |
+| Implementation doesn't match a clear AC | None — code is wrong | Fix code only |
+| AC is ambiguous | Minor — clarify spec.md | Update spec.md acceptance criteria |
+| Bug reveals a missing requirement | Medium — spec gap | Add to spec.md + product-spec.md |
+| Bug reveals an incorrect requirement | Medium — spec error | Update spec.md + product-spec.md |
+| Valid per spec but bad UX | Medium — UX gap | Ask the user whether the spec should change |
 
-For bugs that need spec updates, show the user:
+The spec is the truth: when test and code disagree, check the spec first. For
+each bug that needs a spec update, ask:
+
 ```
-📋 Spec Gap Detected — BUG-{NNN}
+[Spec gap] BUG-{NNN} shows {spec.md § User Stories} needs clarification.
+Current:  "{current AC text}"
+Proposed: "{proposed clearer text}"
 
-The failing test reveals that {spec.md § User Stories} needs clarification:
-
-Current spec text:
-> "{current AC text}"
-
-Proposed update:
-> "{proposed clearer text}"
-
-Apply this spec update? [Yes / No / Modify]
+  1. Yes — apply the update
+  2. No — keep the current text
+  3. Modify — edit the proposal first
+  (or type your own answer)
 ```
 
-Log all spec updates in `review.md` (continue the revalidation chain).
+Log every applied spec update in `review.md` (continuing the revalidation chain).
 
----
+With `--dry-run`, propose spec updates without applying them, skip Steps 8–10
+(no fix is applied, so nothing to retest) and go to Step 11.
 
-## Step 8: Auto-Fix Loop
+## Step 8: Auto-fix loop
 
-For each P0/P1 bug (in severity order), fix and retest:
+Fix P0/P1 bugs one at a time, in severity order; every P0/P1 bug is fixed or
+explicitly deferred with the user's approval.
 
 ### 8A: Fix
-
-```
-🔧 Fixing BUG-{NNN}: {title}
-   Severity: P{N} | Test: {TC-ID}
-```
 
 Launch a Fix Agent:
 > *"You are the Bug Fix Agent for Product Forge.*
@@ -704,235 +379,122 @@ Launch a Fix Agent:
 > *Gap analysis: {implementation / spec / test / env}*
 > *Fix ONLY what's needed. Report: files changed + description."*
 
-After fix agent returns:
-- Update `BUG-NNN.md` § Fix Applied — append one line per attempt
-  (`Attempt {n}: {files changed} — {description}`). The bug file is the fix log;
-  `review.md` stays the revalidation log and only receives spec updates (Step 7).
+Append one line per attempt to `BUG-NNN.md` § Fix Applied:
+`Attempt {n}: {files changed} — {description}`. The bug file is the fix log;
+`review.md` receives only spec updates (Step 7).
 
-### 8B: Retest the Fixed Bug
+### 8B: Retest the fixed bug
 
-Re-execute ONLY the failed test case using playwright-cli:
+Re-run only the failed case:
 
 ```bash
 playwright-cli open {FRONTEND_URL}{start_path}
 playwright-cli state-load testing/playwright-results/auth-state.json  # if needed
-# ... re-run exact steps from TC-{ID} ...
+# ... re-run the exact steps of the case ...
 playwright-cli screenshot --filename=testing/playwright-results/{TC_ID}-retest.png
 playwright-cli close
 ```
 
-If PASS → update `BUG-NNN.md` status: `✅ Verified`
-If FAIL → escalate:
-```
-⚠️ BUG-{NNN} still failing after fix attempt {n}/3.
-
-Fix applied: {what was changed}
-Still failing: {snapshot / error description}
-
-Options:
-  1. [RETRY] Try a different fix approach   ← only while n < 3
-  2. [MANUAL] Mark for manual developer review
-  3. [SKIP] Skip and continue (lowers coverage)
-```
-
-**Retry cap: 3 fix attempts per bug.** After the third failed retest, do not offer
-RETRY: set `BUG-NNN.md` § Retest Result to `BLOCKED — 3 fix attempts exhausted`,
-mark it `⛔ Blocked` in `{BUGS_DIR}/README.md`, move on to the next bug, and list
-every blocked bug in the exit-criteria check (Step 11) and the gate outcome (Step 13).
-
-### 8C: Smoke Regression Check After Fix
-
-After fixing any P0/P1 bug, re-run the smoke test cases to ensure no regression:
-
-```bash
-# Re-execute all TC-SMK-NNN cases using playwright-cli
-```
-
-If new smoke failures appeared:
-```
-⚠️ Fix for BUG-{NNN} caused smoke regression:
-  {TC-SMK-NNN} now failing.
-  Rolling back and trying alternative approach...
-```
-
-### 8D: Progress Update
-
-After each fix+retest:
-```
-Bug Fix Progress: {N}/{N} fixed ✅ | {N} remaining | {N} skipped
-```
-
----
-
-## Step 9: Mid-Session Report (every 5 bugs or on request)
+PASS → set the bug status to Verified. FAIL → ask:
 
 ```
-📊 Testing Session Report — Run #{RUN_N}
-══════════════════════════════════════════
+[Fix failed] ⚠️ BUG-{NNN} still failing after fix attempt {n}/3.
+Fix applied: {what was changed}. Still failing: {snapshot / error}.
 
-  Bugs found:  {N}
-    🔴 P0 Blocker:  {N open} / {N total}
-    🔴 P1 Critical: {N open} / {N total}
-    🟡 P2 High:     {N open} / {N total}
-    🟢 P3 Medium:   {N open} / {N total}
-    🟢 P4 Low:      {N open} / {N total}
-
-  Auto-fixed:   {N} ✅
-  Spec updates: {N} clarifications applied
-
-  Blocking issues:
-    {list P0 open bugs}
-
-  Story coverage:
-    Full PASS: {N}/{N_must_have} Must Have stories
-    Partial:   {N}
-    Blocked:   {N}
+  1. RETRY — try a different fix approach   ← only while n < 3
+  2. MANUAL — mark for manual developer review
+  3. SKIP — skip and continue (lowers coverage)
+  (or type your own answer)
 ```
 
-Ask: *"Continue fixing remaining bugs, or want to take over any fixes manually?"*
+**Retry cap: 3 fix attempts per bug.** After the third failed retest, offer no
+RETRY: set § Retest Result to `BLOCKED — 3 fix attempts exhausted`, set the bug
+to Blocked in `{BUGS_DIR}/README.md`, move to the next bug, and list every
+blocked bug in the Step 11 exit-criteria check and the Step 13 gate outcome.
 
----
+### 8C: Smoke check after each fix
 
-## Step 10: Full Retest Pass
+After every P0/P1 fix, re-run all `TC-SMK-*` cases. A new smoke failure means the
+fix caused a regression: report "Fix for BUG-{NNN} caused smoke regression:
+{TC-SMK-NNN} now failing", roll the fix back and try an alternative approach.
 
-After ALL auto-fixes applied, run the complete suite once more using playwright-cli:
+### 8D: Progress
+
+After each fix + retest: `Bug Fix Progress: {N}/{N} fixed ✅ | {N} remaining | {N} skipped`.
+
+## Step 9: Mid-session report (every 5 bugs, or on request)
+
+Report for run `#{RUN_N}`: bugs found, open / total per severity (P0–P4),
+auto-fixed count, spec clarifications applied, open P0 bugs (blocking), and
+Must-Have story coverage (full PASS / partial / blocked). Then ask whether to
+continue fixing or whether the user takes over any fixes manually.
+
+## Step 10: Full retest pass
+
+After all auto-fixes, re-run the complete suite (4A–4D) as run `#{RUN_N+1}` and
+compare:
 
 ```
-🔁 Full Retest — Run #{RUN_N+1}
-   Re-executing all test cases after fixes...
-```
-
-Re-execute all test cases (Steps 4A–4D) using the same playwright-cli pattern.
-
-Compare vs. previous run:
-```
-Δ Retest Results:
+Retest delta:
   Before: {N_pass}/{N_total} ({%%})
   After:  {N_pass}/{N_total} ({%%})
   Improvement: +{N} tests now passing
   New failures: {N} (regression check)
 ```
 
----
+## Step 11: Check exit criteria
 
-## Step 11: Check Exit Criteria
-
-Load exit criteria from `testing/test-plan.md`:
+Check the exit criteria from `testing/test-plan.md`:
 
 ```
-🎯 Exit Criteria Check:
-
-  [✅/❌] All P0 smoke tests PASS          — {N}/{N}
-  [✅/❌] All E2E happy paths PASS          — {N}/{N}
-  [✅/❌] ≥80% of all tests PASS            — {%%} (need 80%)
-  [✅/❌] Zero P0/P1 open bugs              — {N} open
-  [✅/❌] All P2+ bugs documented           — {N} with workarounds
+Exit Criteria Check:
+  [✅/❌] All P0 smoke tests PASS   — {N}/{N}
+  [✅/❌] All E2E happy paths PASS   — {N}/{N}
+  [✅/❌] ≥80% of all tests PASS     — {%%} (need 80%)
+  [✅/❌] Zero P0/P1 open bugs       — {N} open
+  [✅/❌] All P2+ bugs documented    — {N} with workarounds
 ```
 
-### If EXIT CRITERIA MET → proceed to Step 12
-
-### If NOT MET:
+All met → Step 12. Otherwise list what is missing and the blocked bugs (retry cap
+reached, or "none"), and ask:
 
 ```
-⚠️ Exit criteria not yet met:
-  {list what's missing}
+[Exit criteria] ⚠️ Exit criteria not yet met: {missing}. Blocked bugs: {BUG-NNN list or "none"}.
 
-  Blocked bugs (retry cap reached): {BUG-NNN list or "none"}
-
-Options:
-  A. Continue fixing P0/P1 bugs — [/speckit.product-forge.test-run resume]
-  B. Override exit criteria — accept current state with documented risks
-  C. Defer bugs to next sprint — mark feature as conditional-done
+  1. Continue fixing P0/P1 bugs (recommended) — /speckit.product-forge.test-run resume
+  2. Override exit criteria — accept the current state with documented risks
+  3. Defer bugs to next sprint — mark the feature conditional-done
+  (or type your own answer)
 ```
 
-Wait for user decision:
-- **A** → back to Step 8; the phase stays `in_progress`.
-- **B** / **C** → proceed to Step 12 with `KNOWN_ISSUES = true`. The Step 13 approval
-  is then recorded as `approved_with_conditions` with `conditions` listing the
-  unmet criteria (B) or the deferred/blocked `BUG-NNN` ids (C), and
+- **Continue** → back to Step 8; the phase stays `in_progress`.
+- **Override** / **Defer** → Step 12 with `KNOWN_ISSUES = true`. The Step 13
+  approval is then `approved_with_conditions`, with `conditions` listing the unmet
+  criteria (Override) or the deferred / blocked `BUG-NNN` ids (Defer), and
   `phases.test_run.status: completed_with_known_issues`. Every open bug goes into
-  the test report's *Known Issues / Deferred Bugs* section.
+  the report's *Known Issues / Deferred Bugs* section with rationale and
+  workaround.
 
----
+## Step 12: Write the test report
 
-## Step 12: Generate Test Report
+Write `{FEATURE_DIR}/test-report.md` from
+[docs/templates/test-run-test-report.md](../docs/templates/test-run-test-report.md).
 
-Create `{FEATURE_DIR}/test-report.md`:
+## Step 13: Gate and completion
 
-```markdown
-# Test Report: {Feature Name}
-
-> Test Run: #{FINAL_RUN_N} | Date: {date}
-> Execution: playwright-cli (agent-driven, step-by-step)
-> Result: ✅ PASS / ⚠️ PASS WITH KNOWN ISSUES / ❌ FAIL
-
-## Executive Summary
-{2-3 sentences: what was tested, how, overall outcome, key stats}
-
-## Results Summary
-
-| Type | Pass | Fail | Skip | Total | Pass Rate |
-|------|------|------|------|-------|-----------|
-| Smoke | {N} | {N} | {N} | {N} | {%%} |
-| E2E | {N} | {N} | {N} | {N} | {%%} |
-| API | {N} | {N} | {N} | {N} | {%%} |
-| Regression | {N} | {N} | {N} | {N} | {%%} |
-| **Total** | **{N}** | **{N}** | **{N}** | **{N}** | **{%%}** |
-
-## Story Coverage
-
-| Story | Priority | Test Cases | Result |
-|-------|----------|-----------|--------|
-| US-001: {title} | Must Have | TC-E2E-001, TC-E2E-002 | ✅ PASS |
-| US-002: {title} | Must Have | TC-E2E-005 | ⚠️ BUG-003 known |
-
-## Bugs Summary
-
-| ID | Title | Severity | Status |
-|----|-------|----------|--------|
-| BUG-001 | {title} | P1 | ✅ Fixed & Verified |
-| BUG-002 | {title} | P2 | ⚠️ Deferred to next sprint |
-
-## Evidence
-All screenshots and traces saved in `testing/playwright-results/`:
-- {TC-ID}-final.png — final state screenshot per test
-- {TC-ID}-trace.zip — Playwright trace for debugging
-
-## Spec Changes Applied During Testing
-{List spec.md / product-spec.md updates from gap analysis}
-
-## Known Issues / Deferred Bugs
-{Bugs accepted or deferred — with rationale and workaround}
-
-## Conclusion
-{Feature status: Ready to Ship / Ship with Known Issues / Needs More Work}
-
-## Traceability
-Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → Bugs → Fixes → Verified
-```
-
----
-
-## Step 13: Gate and Final Completion
-
-Present the **Gate** prompt from
-[interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)
-(`{Phase}` = Test Run, outcome = pass rate + open/blocked bug count,
-`{next phase}` = Release Readiness). Offer **Skip Release Readiness** only when
-it is `opt` for the feature's mode and `release_readiness` is not `required`
-([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)). Map the answer per
-[runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+Gate: `{Phase}` = Test Run; outcome = pass rate + open / blocked bug count; next
+phase = Release Readiness. Offer **Skip Release Readiness** only when it is `opt`
+for the feature's mode and `release_readiness` is not `required`.
 
 | Option | Decision | `phases.test_run.status` |
 |--------|----------|--------------------------|
 | Approve, exit criteria met, no open bugs | `approved` | `completed` |
-| Approve with `KNOWN_ISSUES` (Step 11 B/C) | `approved_with_conditions` (`conditions` = unmet criteria / open `BUG-NNN` ids) | `completed_with_known_issues` |
-| Skip Release Readiness | `skipped` + `skip_reason` (ask when `require_skip_reason: true`) | `completed` or `completed_with_known_issues` as above; `phases.release_readiness.status: skipped` + `skip_reason` |
+| Approve with `KNOWN_ISSUES` (Step 11 Override / Defer) | `approved_with_conditions` (`conditions` = unmet criteria / open `BUG-NNN` ids) | `completed_with_known_issues` |
+| Skip Release Readiness | `skipped` + `skip_reason` (asked when `require_skip_reason: true`) | `completed` or `completed_with_known_issues` as above; `phases.release_readiness.status: skipped` + `skip_reason` |
 | Revise | `revised` | `in_progress` (resume the test loop) |
 | Rollback | `rolled_back` + `rolled_back_to` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
 | Abort | `aborted` | unchanged |
 
-Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
 ```yaml
 phases:
   test_run:
@@ -945,70 +507,57 @@ testing:                     # legacy top-level block, declared in the canonical
   test_runs_total: {N}
 ```
 
-Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
-run only**: append one `gates[]` entry (`phase: test_run`, the decision, plus
-`conditions` / `skip_reason` / `rolled_back_to` as applicable). When `$ARGUMENTS`
-contains `--from-forge`, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return the outcome, `conditions` and
-the `testing` counts to the orchestrator, which writes the entry.
+The gate entry is `phase: test_run` with `conditions` / `skip_reason` /
+`rolled_back_to` as applicable. With `--from-forge`, return the outcome,
+`conditions`, the `testing` counts and the traceability rows from item 1 below
+(the reconciled `tests` columns and the rows to set `status: tested`) as gate
+extras; forge applies them after an approving gate, so test-run leaves
+`traceability.yml` row status unwritten.
 
-The steps below run on an approving decision (approved / approved_with_conditions /
-skipped).
+On an approving decision (`approved` / `approved_with_conditions` / `skipped`):
 
-Update the live traceability matrix (`{FEATURE_DIR}/traceability.yml`, see
-[docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md)):
-- Confirm/complete the `tests: [TC-*]` column for the rows whose cases ran
-  (`test-plan` seeded it; reconcile against what actually executed).
-- For each row whose covering cases all **passed**, advance `status: tested`
-  (`test-run` is the canonical producer of the `tested` status; `verified` is set
-  later by release-readiness / spec-merge). Rows with open P0/P1 bugs stay at their
-  prior status.
-- In the `journeys` block, the per-edge `tests:` reflect the edge cases that ran.
+1. Standalone: update `{FEATURE_DIR}/traceability.yml`
+   ([docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md)):
+   - reconcile the `tests: [TC-*]` column (seeded by `test-plan`) with the cases
+     that actually ran;
+   - each row whose covering cases all **passed** → `status: tested` (`test-run`
+     is the canonical producer of `tested`; `verified` comes later from
+     release-readiness / spec-merge); rows with open P0/P1 bugs keep their status;
+   - the `journeys` block's per-edge `tests:` reflect the edge cases that ran.
+2. Close browser sessions: `playwright-cli close-all`.
+3. Mark Phase 8B ✅ Complete in the feature `README.md`.
+4. Final message: pass rate (`{N}/{N}`), bugs found / auto-fixed / deferred
+   (documented), test runs, evidence in `testing/playwright-results/`
+   (`{N}` screenshots, `{N}` traces), the traceability chain (Research → Product
+   Spec → spec.md → Plan → Tasks → Code → Verified → Tested), then either "Ships
+   with known issues — see test-report.md § Known Issues." (`KNOWN_ISSUES`) or
+   "This feature is READY TO SHIP.", and the artifact list (`testing/test-plan.md`,
+   `testing/test-cases.md`, `testing/playwright-tests/` for CI/CD,
+   `testing/playwright-results/`, `bugs/README.md` + `{N}` `BUG-*.md`,
+   `test-report.md`).
 
-Clean up browser sessions:
-```bash
-playwright-cli close-all
-```
+## Done when
 
-Update feature `README.md` — Phase 8B ✅ Complete.
-
-Show final message:
-```
-🎉 Testing Complete: {Feature Name}
-
-Final Results:
-  Pass rate:     {%%} ({N}/{N} tests passing)
-  Bugs found:    {N} total
-  Bugs fixed:    {N} auto-fixed ✅
-  Bugs deferred: {N} (documented)
-  Test runs:     {N} total
-  Evidence:      testing/playwright-results/ ({N} screenshots, {N} traces)
-
-Traceability chain:
-  Research ✅ → Product Spec ✅ → spec.md ✅ → Plan ✅
-  → Tasks ✅ → Code ✅ → Verified ✅ → Tested ✅
-
-{KNOWN_ISSUES ? "Ships with known issues — see test-report.md § Known Issues." : "This feature is READY TO SHIP. 🚀"}
-
-All artifacts: {FEATURE_DIR}/
-  testing/test-plan.md
-  testing/test-cases.md
-  testing/playwright-tests/     ← .spec.ts files for CI/CD
-  testing/playwright-results/   ← screenshots + traces
-  bugs/README.md + {N} BUG-*.md files
-  test-report.md
-```
-
----
-
-## Operating Principles
-
-1. **Smoke first.** Smoke failures block everything — fix before running anything else.
-2. **playwright-cli is the execution engine.** Read test case steps → translate to CLI commands → verify from snapshot.
-3. **Snapshot after every action.** Never assume state — always take a snapshot to confirm before the next step.
-4. **Reuse auth state.** Log in once, save with `state-save`, load with `state-load` for all authenticated tests.
-5. **Evidence is mandatory.** Screenshot + trace for every FAIL. Screenshots for every PASS final state.
-6. **Never skip P0/P1.** Must be fixed or explicitly deferred with user approval.
-7. **One bug at a time.** Fix sequentially to avoid conflicting fixes.
-8. **Smoke after every P0/P1 fix.** Catch regressions immediately.
-9. **Spec is the truth.** When test vs. code disagrees — check spec first.
-10. **Transparent deferred bugs.** Any unfixed bug must be documented with rationale and workaround.
+- Every case in `testing/test-cases.md` has a recorded result (PASS / FAIL /
+  BLOCKED) and evidence; every browser journey has its 4.7 a11y and conformance
+  legs recorded as PASS, BLOCKED, filed as bugs, or skipped by `a11y_gate: none`.
+- Every failure has a `BUG-NNN.md` with severity, `Journey:` / `Step/Edge:` and
+  gap analysis, and `bugs/README.md` reflects every bug's status.
+- Loop stop rules held:
+  - a smoke FAIL halted testing until FIX / SKIP / ABORT was answered;
+  - every P0/P1 bug is Verified, Blocked after 3 fix attempts, marked manual /
+    skipped by the user, or deferred;
+  - Step 11 either met all exit criteria, or the user chose Override / Defer
+    (`KNOWN_ISSUES`, `completed_with_known_issues`); Continue returned to Step 8
+    with the phase `in_progress`.
+- `test-report.md` is written, with every open bug under *Known Issues /
+  Deferred Bugs* when `KNOWN_ISSUES`.
+- Standalone: the gate was shown, the decision recorded and
+  `phases.test_run.status` plus the `testing:` block set from it; on an approving
+  decision `traceability.yml` rows are `tested` where all their cases passed.
+  `--from-forge`: the outcome, `conditions`, `testing` counts and the
+  traceability rows to set `tested` returned to forge, with no gate prompt, no
+  status write and no row-status write.
+- `resume` started from the rebuilt `BUG_SEQ`, `TEST_RUN` and per-bug attempt
+  counts, overwriting no existing `BUG-NNN.md`. `--dry-run` filed its bugs under
+  `.forge-dry-run/test_run/` and ran no fix loop.
