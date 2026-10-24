@@ -20,12 +20,21 @@ written from scratch, because it's backed by exhaustive research and user-approv
 $ARGUMENTS
 ```
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+`spec.md`, `contracts/` and delta specs are written under
+`{FEATURE_DIR}/.forge-dry-run/bridge/`, no status or gate entry is written, and
+SpecKit is not launched (Step 8).
+
 ---
 
 ## Step 1: Validate Prerequisites
 
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+Keys used: `features_dir`, `default_speckit_mode`.
+
 Check that Phase 3 was approved:
-1. Read `{FEATURE_DIR}/.forge-status.yml` — `revalidation` must be `approved`
+1. Read `{FEATURE_DIR}/.forge-status.yml` — `phases.revalidation.status` must be
+   `completed` (canonical) or the legacy literal `approved`
 2. Verify `{FEATURE_DIR}/product-spec/product-spec.md` exists
 3. Verify `{FEATURE_DIR}/review.md` contains "APPROVED"
 
@@ -60,7 +69,7 @@ This drives whether the Consumer Contract section is included in spec.md (Step 4
 ## Step 2.5: Dependency Discovery
 
 Before writing the spec, identify related features that may block or overlap with this one.
-`{features_dir}` comes from `.product-forge/config.yml`.
+`{features_dir}` comes from the effective config (Step 1).
 
 1. Enumerate feature roots via `enumerate()` (Path-Resolution Contract, [docs/runtime.md §12](../docs/runtime.md#12-path-resolution-contract)) — read each `.forge-status.yml` for phase status
 2. For each feature that shares a domain keyword or module with the current feature:
@@ -74,7 +83,11 @@ Before writing the spec, identify related features that may block or overlap wit
 
 ## Step 3: Choose SpecKit Mode
 
-Ask the user (unless `default_speckit_mode` is set to `classic` or `v-model` in config):
+Resolve per [policy.md §4.1](../docs/policy.md#41-phase-maps) ("`speckit_mode` vs `feature_mode`"):
+
+- `feature_mode: v-model` → `SPECKIT_MODE = v-model`. Do **not** ask.
+- Otherwise (`standard`): if `default_speckit_mode` is `classic` or `v-model`, use it
+  without asking; if it is `ask`, ask the user:
 
 *"How would you like to proceed with SpecKit after the spec is created?"*
 
@@ -411,7 +424,7 @@ backend tasks share one source:
 
 **Delta specs (Theme B).** Express this change against the canonical `specs/`
 source of truth (see [spec-merge](./spec-merge.md)): write
-`features/{slug}/specs/<domain>/spec.md` using `## ADDED / ## MODIFIED / ##
+`{FEATURE_DIR}/specs/<domain>/spec.md` using `## ADDED / ## MODIFIED / ##
 REMOVED Requirements` with stable `FR-*` ids — the same `FR-*` requirements minted
 in the Functional Requirements table above. On completion, `spec-merge` folds these
 into canonical `specs/`. For a brand-new domain, all requirements are `ADDED`.
@@ -451,7 +464,7 @@ Before presenting, self-check:
 8. **[if `## Testing Specification` section is present]** At least 3 TC entries and at least 1 E2E scenario exist
 9. **[if `## Prerequisites` section is present]** All rows have a non-empty Relationship and What's Needed column
 10. **[if `## Consumer Contract` section is present]** Public API code block is filled in and Fallback Behaviour table has at least one row
-11. Delta spec `features/{slug}/specs/<domain>/spec.md` exists with at least one `## ADDED` / `## MODIFIED` / `## REMOVED` Requirements section and valid `FR-*` ids (matching the Functional Requirements table)
+11. Delta spec `{FEATURE_DIR}/specs/<domain>/spec.md` exists with at least one `## ADDED` / `## MODIFIED` / `## REMOVED` Requirements section and valid `FR-*` ids (matching the Functional Requirements table)
 
 Fix any issues found silently.
 
@@ -478,13 +491,49 @@ Contents:
 SpecKit mode: {SPECKIT_MODE}
 ```
 
-Ask: *"spec.md looks good? Approve to proceed to Phase 5 (Plan + Tasks), or would you like to adjust anything?"*
+Then present the **Gate** prompt from
+[interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)
+(`{Phase}` = Bridge, `{next phase}` = Plan). Map the answer per
+[runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+
+| Option | Decision | Next |
+|--------|----------|------|
+| Approve | `approved` | Step 7 (`phases.bridge.status: completed`), then Step 8 |
+| Revise | `revised` | Adjust `spec.md` / deltas with the feedback and return to Step 5; the phase stays `in_progress` |
+| Rollback | `rolled_back` | Offer only `completed` phases; that phase and every later one → `pending`, rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management); stop |
+| Abort | `aborted` | Statuses unchanged; stop |
+
+Skip is offered only per the Gate template's computed rule
+([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)) — never for a required phase.
+Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)): on a
+standalone run, append one `gates[]` entry for `bridge`; when `$ARGUMENTS`
+contains `--from-forge`, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return the outcome to the orchestrator.
 
 ---
 
-## Step 7: Launch SpecKit
+## Step 7: Update Status
 
-After user approves spec.md, trigger SpecKit commands.
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+Keys written to `{FEATURE_DIR}/.forge-status.yml`:
+```yaml
+phases:
+  bridge:
+    status: completed
+speckit_mode: "{SPECKIT_MODE}"
+```
+
+Delta files written in Step 4.6 are not listed in the status file — `spec-merge`
+discovers them under `{FEATURE_DIR}/specs/`.
+
+Update `{FEATURE_DIR}/README.md` — mark Phase 4 as ✅ Complete.
+
+---
+
+## Step 8: Launch SpecKit
+
+After the gate is approved and status written, trigger SpecKit commands. When
+`$ARGUMENTS` contains `--from-forge`, skip this step — the orchestrator runs the
+next phase.
 
 ### If `SPECKIT_MODE = classic`:
 
@@ -522,19 +571,3 @@ Phases:
 ```
 
 Delegate to SpecKit `v-model-requirements` with the same context note above.
-
----
-
-## Step 8: Update Status
-
-Update `{FEATURE_DIR}/.forge-status.yml`:
-```yaml
-phases:
-  bridge: completed
-speckit_mode: "{SPECKIT_MODE}"
-delta_specs:                    # delta files written in Step 4.6 (for spec-merge)
-  - "specs/{domain}/spec.md"
-last_updated: "{ISO timestamp}"
-```
-
-Update `{FEATURE_DIR}/README.md` — mark Phase 4 as ✅ Complete.

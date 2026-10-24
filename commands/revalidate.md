@@ -28,6 +28,10 @@ $ARGUMENTS
 > fallback — at the genuine approve/revise decision rather than a free-form
 > "say APPROVED" prompt. Mid-loop change confirmations stay free-text.
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+`review.md` and product-spec edits are redirected under
+`{FEATURE_DIR}/.forge-dry-run/revalidation/`, and no status or gate entry is written.
+
 ---
 
 ## Step 1: Load All Artifacts
@@ -145,14 +149,33 @@ Then present the **Gate** prompt from
 
   1. Approve (recommended) — lock the spec and continue to bridge
   2. Revise — list changes to apply (you can give several in one message)
-  3. Skip — proceed without revalidation (a reason may be required)
-  4. Rollback — return to an earlier phase by name
-  5. Abort — stop the lifecycle for this feature
+  3. Rollback — return to an earlier, completed phase by name
+  4. Abort — stop the lifecycle for this feature
   (or type your own answer)
 ```
 
-Read the full documents in `{FEATURE_DIR}/product-spec/` first. **Revise** routes to
-the revision loop (Step 3); **Approve** routes to Step 4.
+No Skip option: revalidation and the next phase (bridge) are both required in
+`standard` / `v-model` ([phase-map.yml](../docs/schema/phase-map.yml),
+[runtime.md §6.3](../docs/runtime.md#63-gate-prompt)).
+
+Read the full documents in `{FEATURE_DIR}/product-spec/` first, then route the
+answer per [runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+
+| Option | Decision | Next |
+|--------|----------|------|
+| Approve | `approved` | Step 4 → `phases.revalidation.status: completed` |
+| Revise | `revised` | Step 3 revision loop; the phase stays `in_progress` (rounds are logged in `review.md`, not as gate entries) |
+| Rollback | `rolled_back` | Offer only phases already `completed`; set the chosen phase and every later phase to `pending`, archive rewound artifacts per [policy.md §8](../docs/policy.md#8-change-management), record `rolled_back_to`, and stop |
+| Abort | `aborted` | Leave all statuses unchanged and stop |
+
+On the first Revise, set `phases.revalidation.status: in_progress` if it is still
+`pending`. Every terminal decision (approved / rolled_back / aborted) is written via the
+status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)): on a
+standalone run, append one `gates[]` entry (`phase: revalidation`, the decision,
+`rolled_back_to` when rolling back); when `$ARGUMENTS` contains `--from-forge`,
+the revision loop still runs (it is this phase's work), but once the user approves
+the spec, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return to the orchestrator.
 
 ---
 
@@ -274,7 +297,9 @@ revision iterations:
   (or type your own answer)
 ```
 
-**Revise** loops back (Step 3F); **Approve** routes to Step 4.
+**Revise** loops back (Step 3F); **Approve** routes to Step 4; **Abort** is handled
+as in the Step 2 table. To roll back from mid-loop, type it — it is handled as in
+Step 2.
 
 ### 3F. Loop Back
 
@@ -329,11 +354,11 @@ Update `{FEATURE_DIR}/review.md` final status:
 **Status: LOCKED — Ready for SpecKit Bridge (Phase 4)**
 ```
 
-Update `{FEATURE_DIR}/.forge-status.yml`:
+Update `{FEATURE_DIR}/.forge-status.yml`. Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
 ```yaml
 phases:
-  revalidation: approved
-last_updated: "{ISO timestamp}"
+  revalidation:
+    status: completed   # readers still accept the legacy literal `approved`
 ```
 
 Update `{FEATURE_DIR}/README.md` phase status table:

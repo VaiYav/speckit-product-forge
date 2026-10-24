@@ -35,8 +35,9 @@ or status change, emit a `DRY-RUN-REPORT.md`, and make no external side-effect.
 
 ## Step 0: Load Context
 
-1. Read `.product-forge/config.yml` for project settings
-2. Read `{FEATURE_DIR}/.forge-status.yml` — verify `implement: completed` (Phase 6 done)
+1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+   Keys used: `review.cross_model` (Step 2.5).
+2. Read `{FEATURE_DIR}/.forge-status.yml` — verify `phases.implement.status: completed` (Phase 6 done)
 3. If implement phase is not completed: **STOP** — "Phase 6 (Implementation) must be completed first."
 
 Load artifacts:
@@ -406,16 +407,24 @@ Gate (structured — see [interaction-prompts.md](../docs/templates/interaction-
 
   1. Approve (recommended) — all CRITICAL/HIGH addressed; proceed to Phase 7
   2. Revise — re-run the review (or re-review affected files after fixes)
-  3. Skip — proceed without addressing (not recommended; reason may be required)
-  4. Rollback — return to an earlier phase by name (e.g. Phase 6 Implement)
-  5. Abort — stop the lifecycle for this feature
+  3. Rollback — return to an earlier, completed phase by name (e.g. Phase 6 Implement)
+  4. Abort — stop the lifecycle for this feature
   (or type your own answer)
 ```
 
-- **Approve** maps to `approved`. If the user accepts open findings as warnings
-  (the per-finding *Acknowledge* path above), record `approved_with_conditions`.
-- **Revise** → `revised`; **Skip** → `skipped`; **Rollback** → `rolled_back` (with
-  `rolled_back_to`); **Abort** → `aborted`.
+No Skip at this gate: the next phase (Verify Full) is required in every mode
+([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)). Proceeding with open
+findings is an **Approve** with those findings acknowledged.
+
+Map the answer per [runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+
+| Option | Decision | `phases.code_review.status` |
+|--------|----------|-----------------------------|
+| Approve, nothing open | `approved` | `completed` |
+| Approve with open findings acknowledged (the per-finding *Acknowledge* path) | `approved_with_conditions` (list the acknowledged `REV-*` ids in `conditions`) | `completed` |
+| Revise | `revised` | `in_progress` (the review re-runs) |
+| Rollback | `rolled_back` + `rolled_back_to` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
+| Abort | `aborted` | unchanged |
 - Per-finding handling (**Fix now** / **Acknowledge** / **Not applicable**) is offered
   inside option 1/2 above; it tunes the finding set, the gate decision stays one of the
   canonical literals.
@@ -424,14 +433,19 @@ Gate (structured — see [interaction-prompts.md](../docs/templates/interaction-
 
 ## Step 6: Update Status
 
-Update `.forge-status.yml`:
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+Set `phases.code_review.status` from the Step 5 table:
 
 ```yaml
 phases:
-  code_review: completed  # or "skipped"
+  code_review:
+    status: "{completed | in_progress}"   # per the decision; pending on rollback, unchanged on abort
 ```
 
-Record gate decision:
+Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
+run only**. When `$ARGUMENTS` contains `--from-forge`, do **not** show the Gate prompt,
+set the phase `status`, or append; return the findings summary plus `findings`, `reviewed_by_model` and `cross_model_findings` to
+the orchestrator, which writes the entry. On a standalone run, append:
 
 ```yaml
 gates:
@@ -442,7 +456,7 @@ gates:
     notes: "{summary}"
     reviewed_by_model: "{reviewer-id or null}"   # v1.7 P1-B — set when --cross-model ran; null otherwise
     cross_model_findings: {N}                     # v1.7 P1-B — new findings the cross-model reviewer added (0 if not run)
-    findings:
+    findings:                   # map — counts by severity
       critical: {N}
       high: {N}
       medium: {N}

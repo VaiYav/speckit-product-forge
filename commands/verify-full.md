@@ -29,6 +29,11 @@ write `verify-report.md` and any `gate-review.md` additions under
 `{FEATURE_DIR}/.forge-dry-run/verify/`, record no status change, emit a
 `DRY-RUN-REPORT.md`, and make no external side-effect.
 
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+Keys used: `codebase_path` / `codebase.paths`, `verify.ac_judge`,
+`sync_verify.contract_differ` + `sync_verify.contract_regen`, `constitution_path`,
+`require_testing`, `require_skip_reason` (Step 5 gate).
+
 ---
 
 ## Step 0: Deterministic pre-gate (W5-A1)
@@ -289,6 +294,7 @@ Check all document links are valid:
 - feature README.md links all exist
 - spec.md references to product-spec/ are valid
 - No broken relative paths
+- Skip the transient / archived trees `.forge-dry-run/` and `_rewound/`
 
 Flags:
 - Broken link → ⚠️ WARNING
@@ -652,16 +658,45 @@ Verdict: {PASS / PASS WITH WARNINGS / FAIL}
 Full report: {FEATURE_DIR}/verify-report.md
 ```
 
-### If CRITICAL issues exist:
-Ask: *"There are {N} critical issues that need to be resolved. I recommend fixing them and re-running `/speckit.product-forge.verify-full`. Would you like me to help fix them, or do you want to address them manually?"*
+Write the Phase Digest (section below) now — before any status write.
 
-### If only WARNINGS:
-Ask: *"Verification passed with {N} warnings. These are advisory — you can review and address them or acknowledge and close. Ready to mark this feature as complete?"*
+Then present the **Gate** prompt from
+[interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)
+(`{Phase}` = Verify Full, `{next phase}` = Test Plan). The approve option is
+labelled **Acknowledge** when warnings remain, and is **not offered** while
+CRITICAL > 0 — then **Revise** (fix the CRITICALs, re-run verify-full) is the
+recommended first option. Skip Test Plan is offered only when CRITICAL = 0, Test
+Plan is `opt` for the feature's mode, and `require_testing` is not `true`
+([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)); in `express`/`lite` the
+next phase is not in scope, so the option is dropped.
 
-### If all PASSED:
-Update `.forge-status.yml`: `verify: completed`
+Map the answer per [runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
 
-Show completion summary:
+| Option | Decision | Status |
+|--------|----------|--------|
+| Approve (all passed) | `approved` | `phases.verify.status: completed` |
+| Acknowledge (warnings only) | `approved_with_conditions` (`conditions` = the acknowledged `WARNING-*` ids) | `phases.verify.status: completed` |
+| Skip Test Plan | `skipped` + `skip_reason` (ask when `require_skip_reason: true`) | `phases.verify.status: completed`; `phases.test_plan.status: skipped` + `skip_reason` |
+| Revise | `revised` | `phases.verify.status: in_progress` |
+| Rollback | `rolled_back` + `rolled_back_to` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
+| Abort | `aborted` | unchanged |
+
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
+
+```yaml
+phases:
+  verify:
+    status: completed              # per the table above
+    digest_path: "verify/digest.md"
+```
+
+Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
+run only**: append one `gates[]` entry (`phase: verify`, the decision, plus
+`conditions` / `skip_reason` / `rolled_back_to` as applicable). When `$ARGUMENTS`
+contains `--from-forge`, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return the outcome and the
+CRITICAL / WARNING / PASSED counts to the orchestrator, which writes the entry.
+
+On `approved`, show the completion summary:
 ```
 🎉 Feature Complete: {Feature Name}
 
@@ -677,9 +712,10 @@ Report saved: verify-report.md
 
 ## Phase Digest (required)
 
-Before returning, write `{FEATURE_DIR}/verify/digest.md` using the template at
-[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) and record
-its path on `.forge-status.yml` under `phases.verify.digest_path`.
+On every run, write `{FEATURE_DIR}/verify/digest.md` using the template at
+[`docs/templates/phase-digest.md`](../docs/templates/phase-digest.md) **before** the
+Step 5 status write, and record its path as `phases.verify.digest_path` in that
+same write.
 
 The digest must include:
 - **Key decisions** — overall verdict (clean / blocked), which CRITICAL findings drove the verdict.

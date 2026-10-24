@@ -4,7 +4,7 @@ description: >
   Phase 8A: Creates a comprehensive test plan from feature artifacts. Asks about test
   types (smoke, E2E Playwright, API/integration, regression), environment setup, credentials,
   auto-detects project test framework, and generates test cases mapped to user stories.
-  Saves to features/<name>/testing/. Use with: "create test plan", "/speckit.product-forge.test-plan"
+  Saves to the feature's testing/ directory. Use with: "create test plan", "/speckit.product-forge.test-plan"
 ---
 
 # Product Forge — Phase 8A: Test Planning
@@ -53,7 +53,11 @@ Product Forge supports **two complementary test execution models**. This phase g
 
 ## Step 1: Validate Prerequisites
 
-1. Read `.forge-status.yml` — `verify` must be `completed` (Phase 7 done)
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+Keys used: `e2e_runner`, `a11y_gate`, `codebase_path` / `codebase.paths`,
+`require_testing`, `require_skip_reason`.
+
+1. Read `{FEATURE_DIR}/.forge-status.yml` — `phases.verify.status` must be `completed` (Phase 7 done)
 2. Verify `spec.md` and `product-spec/product-spec.md` exist
 3. Verify all implementation tasks in `tasks.md` are `[x]`
 
@@ -770,29 +774,12 @@ Initialize `{BUGS_DIR}/README.md`:
 |----|-------|----------|--------|-----------|---------|
 
 ## Status Legend
-🔴 Open · 🟡 In Progress · 🟢 Fixed · ✅ Verified · ❌ Won't Fix
+🔴 Open · 🟡 In Progress · 🟢 Fixed · ✅ Verified · ⛔ Blocked (retry cap reached in test-run) · ❌ Won't Fix
 ```
 
 ---
 
-## Step 10: Update Status
-
-```yaml
-phases:
-  test_plan: completed
-testing:
-  types: [smoke, e2e, api, regression]
-  test_case_count: {N}
-  playwright_files: {N}
-  environment_url: "{FRONTEND_URL}"
-last_updated: "{ISO timestamp}"
-```
-
-Update feature `README.md` — add Phase 8A as ✅ Complete.
-
----
-
-## Step 11: Present Results
+## Step 10: Present Results and Gate
 
 ```
 📋 Test Plan Created: {Feature Name}
@@ -830,12 +817,53 @@ Then present the structured gate (template:
 
   1. Approve (recommended) — accept the test plan and continue to Phase 8B: Test Execution
   2. Revise — re-run test planning with feedback
-  3. Skip Phase 8B — move on without running tests (a reason may be required)
-  4. Rollback — return to an earlier phase by name
+  3. Skip Test Run — move on without running tests (a reason may be required)   ← only when allowed
+  4. Rollback — return to an earlier, completed phase by name
   5. Abort — stop the lifecycle for this feature
   (or type your own answer)
 ```
 
-Record the choice as a `gates[]` decision ∈ `approved | approved_with_conditions |
-revised | skipped | rolled_back | aborted` (with `rolled_back_to` when rolling back)
-per [policy §2](../docs/policy.md#2-gate-decisions).
+Offer option 3 only when Test Run is `opt` for the feature's mode and
+`require_testing` is not `true` ([runtime.md §6.3](../docs/runtime.md#63-gate-prompt));
+otherwise drop it and renumber. Map the answer per
+[runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision) and
+[policy §2](../docs/policy.md#2-gate-decisions):
+
+| Option | Decision | Status |
+|--------|----------|--------|
+| Approve | `approved` (or `approved_with_conditions` with `conditions` when typed with conditions) | `phases.test_plan.status: completed` |
+| Skip Test Run | `skipped` + `skip_reason` (ask when `require_skip_reason: true`; empty → re-ask) | `phases.test_plan.status: completed`; `phases.test_run.status: skipped` + `skip_reason` |
+| Revise | `revised` | `phases.test_plan.status: in_progress` |
+| Rollback | `rolled_back` + `rolled_back_to` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
+| Abort | `aborted` | unchanged |
+
+Then go to Step 11.
+
+---
+
+
+## Step 11: Update Status
+
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)),
+with the status from the Step 10 table:
+
+```yaml
+phases:
+  test_plan:
+    status: completed        # per the Step 10 decision
+  test_run:                  # only on "Skip Test Run"
+    status: skipped
+    skip_reason: "{reason}"
+```
+
+Test-case counts, Playwright file count and the environment URL live in
+`testing/test-plan.md`; they are not written to the status file (not in the
+canonical schema).
+
+Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
+run only**: append one `gates[]` entry (`phase: test_plan`, the decision, plus
+`conditions` / `skip_reason` / `rolled_back_to` as applicable). When `$ARGUMENTS`
+contains `--from-forge`, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return the outcome to the
+orchestrator, which writes the entry.
+
+On `approved`, update feature `README.md` — add Phase 8A as ✅ Complete.

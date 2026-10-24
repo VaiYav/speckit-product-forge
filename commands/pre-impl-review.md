@@ -20,12 +20,17 @@ architecture soundness, and identifying risks — before a single line of code i
 $ARGUMENTS
 ```
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+the review report and any `tasks.md` additions go under
+`{FEATURE_DIR}/.forge-dry-run/pre_impl_review/`; no status or gate entry is written.
+
 ---
 
 ## Step 0: Load Context
 
-1. Read `.product-forge/config.yml` for project settings
-2. Read `{FEATURE_DIR}/.forge-status.yml` — verify `tasks: completed` (Phase 5B done)
+1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+   Keys used: `require_pre_impl_review`, `require_skip_reason`.
+2. Read `{FEATURE_DIR}/.forge-status.yml` — verify `phases.tasks.status: completed` (Phase 5B done)
 3. If tasks phase is not completed: **STOP** — "Phase 5B (Tasks) must be completed first."
 
 Load all required artifacts:
@@ -69,7 +74,10 @@ Review sections:
   ✅ Risk Assessment — always included
 ```
 
-If total tasks <= 5 AND no UI tasks, offer to skip:
+If total tasks <= 5 AND no UI tasks, **and** `require_pre_impl_review` is not
+`true`, offer to skip (this phase is `opt` in
+[phase-map.yml](../docs/schema/phase-map.yml); when the config requires it, run
+the review without offering a skip):
 ```
 This feature has {N} tasks and no UI components.
 Pre-implementation review is optional for small backend features.
@@ -77,6 +85,11 @@ Pre-implementation review is optional for small backend features.
   1. [Run review anyway] (recommended for features with external API integrations)
   2. [Skip to implementation]
 ```
+
+Choosing Skip sets `phases.pre_impl_review.status: skipped` with `skip_reason`
+(ask for it when `require_skip_reason: true`; empty → re-ask), written via the
+status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)),
+with the gate entry handled as in Step 7.
 
 ---
 
@@ -391,30 +404,44 @@ Gate (structured — see [interaction-prompts.md](../docs/templates/interaction-
 [Gate] Pre-implementation review complete — {one-line outcome}. How do you want to proceed?
 
   1. Approve (recommended) — all conditions accepted; proceed to Phase 6
-  2. Revise — return to Phase 5 (Plan) / Phase 5B (Tasks) to address issues
-  3. Skip — acknowledge risks and proceed without resolving (reason may be required)
-  4. Rollback — return to an earlier phase by name
-  5. Abort — stop the lifecycle for this feature
+  2. Revise — fix the issues in plan.md / tasks.md, then re-run this review
+  3. Rollback — return to an earlier, completed phase by name
+  4. Abort — stop the lifecycle for this feature
   (or type your own answer)
 ```
 
-- **Approve** maps to `approved`. If conditions are accepted and tracked as tasks
-  rather than resolved now, record `approved_with_conditions`.
-- **Revise** → `revised`; **Skip** → `skipped`; **Rollback** → `rolled_back` (with
-  `rolled_back_to`); **Abort** → `aborted`.
+No Skip at this gate: the next phase (Implement) is required in every mode
+([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)). Accepting open risks is an
+**Approve** with the accepted counts recorded in `risks_accepted`.
+
+Map the answer to a decision and status per
+[runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+
+| Option | Decision | `phases.pre_impl_review.status` |
+|--------|----------|---------------------------------|
+| Approve, nothing deferred | `approved` | `completed` |
+| Approve, conditions tracked as tasks rather than resolved now | `approved_with_conditions` (list `conditions`) | `completed` |
+| Revise | `revised` | `in_progress` (the review re-runs) |
+| Rollback | `rolled_back` + `rolled_back_to` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
+| Abort | `aborted` | unchanged |
 
 ---
 
 ## Step 7: Update Status
 
-Update `.forge-status.yml`:
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)).
+Set `phases.pre_impl_review.status` from the Step 6 table:
 
 ```yaml
 phases:
-  pre_impl_review: completed  # or "skipped" if user skipped
+  pre_impl_review:
+    status: "{completed | in_progress | skipped}"   # per the decision; pending on rollback, unchanged on abort
 ```
 
-Record gate decision:
+Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
+run only**. When `$ARGUMENTS` contains `--from-forge`, do **not** show the Gate prompt,
+set the phase `status`, or append; return the findings summary, `conditions` and `risks_accepted` to the orchestrator, which writes
+the entry. On a standalone run, append:
 
 ```yaml
 gates:
@@ -426,7 +453,8 @@ gates:
     conditions:
       - "{condition 1}"
       - "{condition 2}"
-    risks_accepted:
+    skip_reason: "{reason}"     # only when decision is skipped (Step 1)
+    risks_accepted:             # map — counts of accepted open risks by severity
       critical: {N}
       high: {N}
 ```

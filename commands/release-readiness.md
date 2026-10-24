@@ -20,12 +20,19 @@ Your goal: ensure the feature is truly ready for production — not just "code w
 $ARGUMENTS
 ```
 
+Honors `--dry-run` per [docs/runtime.md §7](../docs/runtime.md#7-dry-run-semantics):
+`release-readiness.md`, `flags/`, `monitoring/` and `supply-chain/` outputs go
+under `{FEATURE_DIR}/.forge-dry-run/release_readiness/`, no provider-side flag
+registration happens, and no status or gate entry is written.
+
 ---
 
 ## Step 0: Load Context
 
-1. Read `.product-forge/config.yml` for project settings
-2. Read `{FEATURE_DIR}/.forge-status.yml` — verify Phase 7 (verify) completed
+1. Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+   Keys used: `codebase_path`, `telemetry.dashboards`, `supply_chain.license_allowlist`,
+   `require_skip_reason`.
+2. Read `{FEATURE_DIR}/.forge-status.yml` — verify `phases.verify.status` is `completed`
 3. If verify is not completed: **STOP** — "Phase 7 (Verification) must pass first."
 
 Load artifacts:
@@ -135,8 +142,8 @@ flags:
     experiment: false     # set to true to trigger Phase 9B experiment-design
 ```
 
-Record file path on `.forge-status.yml` under
-`release_readiness.flag_registry_path`.
+The registry lives at the fixed path `flags/registry.yml` (read from there by
+experiment-design and feature-flag-cleanup); it is not recorded in the status file.
 
 No standalone "Feature Flag Detection" or "Rollback Plan" report tables.
 The artifacts produced in 1D and the sections later compiled into
@@ -217,8 +224,8 @@ user applies it after review, or invokes
 If the configured provider's MCP/skill is unavailable, write `alerts.yml` and
 `slo.md` and mark "dashboard.json: provider unavailable" as an action item.
 
-Record paths on `.forge-status.yml` under
-`release_readiness.monitoring_paths`.
+These live at the fixed `monitoring/` paths above; they are not recorded in the
+status file.
 
 No standalone scan-and-report tables. Steps 3A and 3B are inputs; Step 3C
 is the only output.
@@ -289,8 +296,8 @@ command -v syft >/dev/null 2>&1 \
   || echo "ACTION ITEM (MUST): syft not installed — generate SBOM before ship (https://github.com/anchore/syft)"
 ```
 
-Record the SBOM path on `.forge-status.yml` under
-`release_readiness.sbom_path`.
+The SBOM path is recorded with the other supply-chain paths at the end of this
+step (`release_readiness.supply_chain_paths.sbom`).
 
 **(b) SCA — OSV-Scanner in PR-diff mode (block only on NEW high/critical):**
 
@@ -324,7 +331,7 @@ this gate is W5-B1's bundle; this phase stays a human gate at every risk per
 
 **(c) License allowlist — OSV-Scanner against an SPDX allowlist:**
 
-Read the allowlist from `.product-forge/config.yml` key
+Read the allowlist from the effective config (Step 0) key
 `supply_chain.license_allowlist` (literal default below if unset). Any package
 with a license outside the set is a violation.
 
@@ -364,7 +371,7 @@ Security category verdict:
 | Missing provenance step | SHOULD | recorded, non-blocking |
 
 Record paths on `.forge-status.yml` under
-`release_readiness.supply_chain_paths` (sbom / sca / licenses).
+`release_readiness.supply_chain_paths` (sbom / sca / licenses) in the Step 8 write.
 
 ---
 
@@ -452,49 +459,68 @@ Write `{FEATURE_DIR}/release-readiness.md`:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Gate (structured — see [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md), recommended option first, free-text fallback):
+Gate (structured — see [docs/templates/interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase), recommended option first, free-text fallback):
 
 ```
 [Gate] Release Readiness complete — verdict: {READY TO SHIP / CONDITIONALLY READY / NOT READY}. How do you want to proceed?
 
   1. Approve (recommended) — ship it: all MUST items done, proceed (or ship with documented known issues — accepted risks recorded as conditions)
   2. Revise — fix and re-check: address action items, then re-run the readiness check
-  3. Skip — mark this phase skipped and move on (a reason may be required)
-  4. Rollback — return to an earlier phase by name (e.g. implement, verify)
+  3. Skip Monitoring Setup — accept this phase and skip Phase 9.5 (a reason may be required)
+  4. Rollback — return to an earlier, completed phase by name (e.g. implement, verify)
   5. Abort — hold: not ready, stop the lifecycle for this feature here
   (or type your own answer)
 ```
 
-Maps to `gates[].decision` (Step 8). The readiness verdict drives the recommended
-option: READY TO SHIP / CONDITIONALLY READY recommend **Approve**; NOT READY
-recommends **Revise** or **Abort**.
+Option 3 follows the computed Skip rule ([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)):
+it names the **next** phase (9.5 Monitoring Setup, `opt`); release readiness
+itself is never skipped at its own gate (that choice is made at the test-run
+gate). Maps to `gates[].decision` (Step 8). The readiness verdict drives the
+recommended option: READY TO SHIP / CONDITIONALLY READY recommend **Approve**;
+NOT READY recommends **Revise** or **Abort**.
 
-**Next step:** on Approve, run `/speckit.product-forge.spec-merge` (Phase 10) to
-fold the shipped delta back into the canonical spec.
+**Next step (on Approve):** the post-ship phases follow
+[phase-map](../docs/schema/phase-map.yml) order, each optional and offered in turn:
+
+1. **9.5 Monitoring Setup** — `/speckit.product-forge.monitoring-setup` (extends `monitoring/`)
+2. **9B Experiment Design** — `/speckit.product-forge.experiment-design` (offered when
+   `flags/registry.yml` has a flag with `experiment: true`)
+3. **10 Spec Merge** — `/speckit.product-forge.spec-merge` (folds the shipped delta
+   back into canonical `specs/`)
 
 ---
 
 ## Step 8: Update Status
 
-Update `.forge-status.yml`:
+Map the Step 7 choice onto exactly one decision literal, and set status from it
+per [runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+
+| Step 7 choice | Verdict that recommends it | `decision` literal | Status |
+|---------------|----------------------------|--------------------|--------|
+| Approve (ship it) | READY TO SHIP | `approved` | `phases.release_readiness.status: completed` |
+| Approve (ship with known issues) | CONDITIONALLY READY | `approved_with_conditions` — populate `conditions[]` | `phases.release_readiness.status: completed` |
+| Skip Monitoring Setup | READY / CONDITIONALLY READY | `skipped` + `skip_reason` (ask when `require_skip_reason: true`) | `phases.release_readiness.status: completed`; `phases.monitoring_setup.status: skipped` + `skip_reason` |
+| Revise (fix and re-check) | NOT READY | `revised` | `phases.release_readiness.status: in_progress` |
+| Rollback | any | `rolled_back` — set `rolled_back_to: "<phase>"` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
+| Abort (hold) | NOT READY | `aborted` | unchanged |
+
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
 
 ```yaml
 phases:
-  release_readiness: completed  # or "skipped"
+  release_readiness:
+    status: completed      # per the table above
+release_readiness:         # top-level block declared in the canonical schema
+  supply_chain_paths:
+    sbom: "supply-chain/sbom.cdx.json"
+    sca: "supply-chain/osv-head.json"
+    licenses: "supply-chain/osv-licenses.json"
 ```
 
-Record the gate decision using the canonical enum
-(`approved | approved_with_conditions | revised | skipped | rolled_back | aborted`).
-Map the Step 7 choice onto exactly one literal:
-
-| Step 7 choice | Verdict that recommends it | `decision` literal |
-|---------------|----------------------------|--------------------|
-| Approve (ship it) | READY TO SHIP | `approved` |
-| Approve (ship with known issues) | CONDITIONALLY READY | `approved_with_conditions` — populate `conditions[]` |
-| Revise (fix and re-check) | NOT READY | `revised` |
-| Abort (hold) | NOT READY | `aborted` |
-| Rollback | any | `rolled_back` — set `rolled_back_to: "<phase>"` |
-| Skip (phase skipped) | n/a | `skipped` |
+Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
+run only**. When `$ARGUMENTS` contains `--from-forge`, do **not** show the Gate prompt,
+set the phase `status`, or append; return the findings summary, `conditions` and `action_items` to the orchestrator, which writes
+the entry. On a standalone run, append:
 
 ```yaml
 gates:
@@ -505,7 +531,8 @@ gates:
     conditions:           # required when decision == approved_with_conditions; the accepted risks
       - "{accepted risk / known issue documented at ship time}"
     rolled_back_to: "{phase}"  # required when decision == rolled_back; omit otherwise
-    action_items:
+    skip_reason: "{reason}"    # required when decision == skipped; omit otherwise
+    action_items:              # map — must/should/nice tally
       must: {N}
       must_completed: {N}
       should: {N}

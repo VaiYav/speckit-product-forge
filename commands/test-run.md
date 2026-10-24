@@ -53,7 +53,11 @@ external side-effect.
 
 ## Step 1: Validate Prerequisites
 
-1. `.forge-status.yml` → `test_plan: completed`
+Build the effective config ([docs/runtime.md §1](../docs/runtime.md#1-step-0--load-config)).
+Keys used: `e2e_runner`, `a11y_gate`, `codebase_path` / `codebase.paths`,
+`release_readiness`, `require_skip_reason` (Step 13 gate).
+
+1. `{FEATURE_DIR}/.forge-status.yml` → `phases.test_plan.status: completed`
 2. `testing/test-plan.md` exists
 3. `testing/test-cases.md` exists with at least one `TC-*-NNN` entry
 4. `testing/env.md` exists with FRONTEND_URL configured
@@ -701,8 +705,9 @@ Launch a Fix Agent:
 > *Fix ONLY what's needed. Report: files changed + description."*
 
 After fix agent returns:
-- Update `BUG-NNN.md` § Fix Applied
-- Record in `{FEATURE_DIR}/review.md` (testing phase section)
+- Update `BUG-NNN.md` § Fix Applied — append one line per attempt
+  (`Attempt {n}: {files changed} — {description}`). The bug file is the fix log;
+  `review.md` stays the revalidation log and only receives spec updates (Step 7).
 
 ### 8B: Retest the Fixed Bug
 
@@ -719,16 +724,21 @@ playwright-cli close
 If PASS → update `BUG-NNN.md` status: `✅ Verified`
 If FAIL → escalate:
 ```
-⚠️ BUG-{NNN} still failing after fix attempt.
+⚠️ BUG-{NNN} still failing after fix attempt {n}/3.
 
 Fix applied: {what was changed}
 Still failing: {snapshot / error description}
 
 Options:
-  1. [RETRY] Try a different fix approach
+  1. [RETRY] Try a different fix approach   ← only while n < 3
   2. [MANUAL] Mark for manual developer review
   3. [SKIP] Skip and continue (lowers coverage)
 ```
+
+**Retry cap: 3 fix attempts per bug.** After the third failed retest, do not offer
+RETRY: set `BUG-NNN.md` § Retest Result to `BLOCKED — 3 fix attempts exhausted`,
+mark it `⛔ Blocked` in `{BUGS_DIR}/README.md`, move on to the next bug, and list
+every blocked bug in the exit-criteria check (Step 11) and the gate outcome (Step 13).
 
 ### 8C: Smoke Regression Check After Fix
 
@@ -827,13 +837,21 @@ Load exit criteria from `testing/test-plan.md`:
 ⚠️ Exit criteria not yet met:
   {list what's missing}
 
+  Blocked bugs (retry cap reached): {BUG-NNN list or "none"}
+
 Options:
   A. Continue fixing P0/P1 bugs — [/speckit.product-forge.test-run resume]
   B. Override exit criteria — accept current state with documented risks
   C. Defer bugs to next sprint — mark feature as conditional-done
 ```
 
-Wait for user decision.
+Wait for user decision:
+- **A** → back to Step 8; the phase stays `in_progress`.
+- **B** / **C** → proceed to Step 12 with `KNOWN_ISSUES = true`. The Step 13 approval
+  is then recorded as `approved_with_conditions` with `conditions` listing the
+  unmet criteria (B) or the deferred/blocked `BUG-NNN` ids (C), and
+  `phases.test_run.status: completed_with_known_issues`. Every open bug goes into
+  the test report's *Known Issues / Deferred Bugs* section.
 
 ---
 
@@ -895,20 +913,46 @@ Research → Product Spec → spec.md → Plan → Tasks → Code → Tests → 
 
 ---
 
-## Step 13: Final Completion
+## Step 13: Gate and Final Completion
 
-Update `.forge-status.yml`:
+Present the **Gate** prompt from
+[interaction-prompts.md](../docs/templates/interaction-prompts.md#gate-after-every-phase)
+(`{Phase}` = Test Run, outcome = pass rate + open/blocked bug count,
+`{next phase}` = Release Readiness). Offer **Skip Release Readiness** only when
+it is `opt` for the feature's mode and `release_readiness` is not `required`
+([runtime.md §6.3](../docs/runtime.md#63-gate-prompt)). Map the answer per
+[runtime.md §6.2](../docs/runtime.md#62-status-follows-the-decision):
+
+| Option | Decision | `phases.test_run.status` |
+|--------|----------|--------------------------|
+| Approve, exit criteria met, no open bugs | `approved` | `completed` |
+| Approve with `KNOWN_ISSUES` (Step 11 B/C) | `approved_with_conditions` (`conditions` = unmet criteria / open `BUG-NNN` ids) | `completed_with_known_issues` |
+| Skip Release Readiness | `skipped` + `skip_reason` (ask when `require_skip_reason: true`) | `completed` or `completed_with_known_issues` as above; `phases.release_readiness.status: skipped` + `skip_reason` |
+| Revise | `revised` | `in_progress` (resume the test loop) |
+| Rollback | `rolled_back` + `rolled_back_to` (only `completed` phases offered) | that phase and every later one → `pending`; rewound artifacts archived per [policy.md §8](../docs/policy.md#8-change-management) |
+| Abort | `aborted` | unchanged |
+
+Write via the status-write procedure ([docs/runtime.md §2.9](../docs/runtime.md#29-status-write-procedure)):
 ```yaml
 phases:
-  test_run: completed        # or: completed_with_known_issues
-testing:
+  test_run:
+    status: completed        # per the table above (completed_with_known_issues with open bugs)
+testing:                     # legacy top-level block, declared in the canonical schema
   final_pass_rate: "{%%}"
   bugs_found: {N}
   bugs_fixed: {N}
-  bugs_deferred: {N}
+  bugs_deferred: {N}         # includes blocked bugs
   test_runs_total: {N}
-last_updated: "{ISO timestamp}"
 ```
+
+Gate entry ([runtime.md §6.1](../docs/runtime.md#61-gate-ownership)) — **standalone
+run only**: append one `gates[]` entry (`phase: test_run`, the decision, plus
+`conditions` / `skip_reason` / `rolled_back_to` as applicable). When `$ARGUMENTS`
+contains `--from-forge`, do **not** show the Gate prompt, set the phase `status`, or append — forge presents the single gate and writes both; return the outcome, `conditions` and
+the `testing` counts to the orchestrator, which writes the entry.
+
+The steps below run on an approving decision (approved / approved_with_conditions /
+skipped).
 
 Update the live traceability matrix (`{FEATURE_DIR}/traceability.yml`, see
 [docs/templates/traceability-matrix.md](../docs/templates/traceability-matrix.md)):
@@ -943,7 +987,7 @@ Traceability chain:
   Research ✅ → Product Spec ✅ → spec.md ✅ → Plan ✅
   → Tasks ✅ → Code ✅ → Verified ✅ → Tested ✅
 
-This feature is READY TO SHIP. 🚀
+{KNOWN_ISSUES ? "Ships with known issues — see test-report.md § Known Issues." : "This feature is READY TO SHIP. 🚀"}
 
 All artifacts: {FEATURE_DIR}/
   testing/test-plan.md
