@@ -156,7 +156,7 @@ const STATUS_EMOJI = new Set(["✅", "⚠", "❌", "⏳", "⏭", "↔"]);
 const SEDIMENT_RE = /\((?:v1\.\d+[^)]*|W\d-[A-Z]\d+[^)]*|P\d-[A-Z]\b[^)]*|Theme [A-I]\b[^)]*)\)|^>\s*Background:|\bTheme [A-I]\b/m;
 const DECOR_RULE_RE = /[━═]{8,}|─{20,}/;
 
-function lint(root, opts = {}) {
+function lint(root) {
   const findings = [];
   const add = (rule, severity, file, msg) => findings.push({ rule, severity, file, msg });
 
@@ -678,8 +678,7 @@ function lint(root, opts = {}) {
   }
 
   // ── CMD-SHAPE: command files follow the prompt-shape contract ──────────────
-  // Opt-in (--prompt-shape) until every command is migrated (v1.9.0 rewrite).
-  if (opts.promptShape) {
+  {
     for (const f of cmdFiles) {
       const txt = read(f);
       const fmBlock = (txt.match(/^---\n([\s\S]*?)\n---/) || [])[1] || "";
@@ -705,12 +704,11 @@ function lint(root, opts = {}) {
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
-  const o = { json: false, selftest: false, promptShape: false, root: process.cwd() };
+  const o = { json: false, selftest: false, root: process.cwd() };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") o.json = true;
     else if (a === "--selftest") o.selftest = true;
-    else if (a === "--prompt-shape") o.promptShape = true;
     else if (a === "--root") o.root = path.resolve(argv[++i]);
     else if (a === "--help" || a === "-h") { printHelp(); process.exit(0); }
     else { console.error("Unknown argument: " + a); process.exit(2); }
@@ -720,12 +718,12 @@ function parseArgs(argv) {
 
 function printHelp() {
   console.log([
-    "Usage: node scripts/lint-docs.js [--json] [--prompt-shape] [--root <repo-root>]",
+    "Usage: node scripts/lint-docs.js [--json] [--root <repo-root>]",
     "       node scripts/lint-docs.js --selftest",
     "",
     "Deterministic consistency-linter over the Product Forge doc corpus.",
     "Rules: XREF, CMD-COUNT, VERSION, ENUM, GATE-POLICY, CARRIER, PHASEMAP, LAYER-COUNT,",
-    "       CONFIG-READER, CONFIG-DECLARED, SCRIPT-PATH, ID-FORMAT, CMD-SHAPE (--prompt-shape).",
+    "       CONFIG-READER, CONFIG-DECLARED, SCRIPT-PATH, ID-FORMAT, CMD-SHAPE.",
     "Exit 0 = clean, 1 = findings, 2 = usage/IO error.",
   ].join("\n"));
 }
@@ -924,11 +922,10 @@ function selftest() {
     assert(!lint(tmp).some((f) => f.rule === "CONFIG-DECLARED"), "CONFIG-DECLARED passes once the key is declared");
 
     // CMD-SHAPE: contract link, Done when, description cap, sediment, decor.
-    const shape = (t) => lint(tmp, { promptShape: true }).filter((f) => f.rule === "CMD-SHAPE" && /shape\.md/.test(f.file));
+    const shape = () => lint(tmp).filter((f) => f.rule === "CMD-SHAPE" && /shape\.md/.test(f.file));
     const good = "---\nname: speckit.product-forge.shape\ndescription: >\n  Phase 9: short pointer.\n---\n# T\nFollow the [command contract](../docs/runtime.md#0-command-contract).\n✅ done\n## Done when\n- file written\n";
     W("commands/shape.md", good);
     assert(shape().length === 0, "CMD-SHAPE passes a conforming command");
-    assert(!lint(tmp).some((f) => f.rule === "CMD-SHAPE"), "CMD-SHAPE is off without --prompt-shape");
     W("commands/shape.md", good.replace("short pointer.", "word ".repeat(45)));
     assert(shape().some((f) => /description is/.test(f.msg)), "CMD-SHAPE caps description length");
     W("commands/shape.md", good.replace("## Done when", "## Finish").replace("runtime.md#0-command-contract", "runtime.md#1-x"));
@@ -947,7 +944,7 @@ function main() {
   const o = parseArgs(process.argv);
   if (o.selftest) process.exit(selftest());
   let findings;
-  try { findings = lint(o.root, { promptShape: o.promptShape }); }
+  try { findings = lint(o.root); }
   catch (e) { console.error("lint-docs error: " + (e && e.message)); process.exit(2); }
   emit(o, findings);
   process.exit(findings.some((f) => f.severity === "error") ? 1 : (findings.length ? 1 : 0));
