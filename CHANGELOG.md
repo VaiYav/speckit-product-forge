@@ -22,8 +22,8 @@ _Nothing yet._
 ### Added
 
 - **`/speckit.product-forge.catalog`** + **`scripts/build-catalog.js`** — builds and verifies
-  `_portfolio/catalog.yml`, a deterministic carrier (per feature: slug, name, summary, mode,
-  status, phase progress, code path, REQ/FR/US counts, artifact map) generated via the
+  `_portfolio/catalog.yml`, a deterministic carrier (per feature: slug, name, summary, kind,
+  feature_mode, status, phase progress, code path, REQ/FR/US counts, artifact map) generated via the
   Path-Resolution Contract `enumerate()`. Zero-dependency (shares `lib-paths` / `lib-yaml`),
   with `--selftest` and a `--check` staleness/quality gate. Folded into `doctor`.
 - **`/speckit.product-forge.retrieve`** + **`scripts/retrieve-catalog.js`** — deterministic
@@ -45,6 +45,72 @@ _Nothing yet._
 - **`lint-docs`** registers the `catalog.yml` carrier (producer ↔ consumer) and exempts
   `CHANGELOG.md` from the command-count claim check — mirroring the existing VERSION-rule
   exemption, since the changelog records historical counts.
+
+### Changed — documentation overhaul (2026-10)
+
+> Design rationale: [docs/improvements/2026-10-docs-overhaul.md](docs/improvements/2026-10-docs-overhaul.md).
+> Optimised for the LLM executor; no new config keys are required and existing
+> feature folders are untouched.
+
+- **One status-write procedure** ([runtime §2.9](docs/runtime.md#29-status-write-procedure)):
+  lock (via `acquire-lock.sh` / `release-lock.sh`) → read + v3 init or migrate → merge in
+  object form → digest before `completed` → `last_updated` → atomic write → catalog refresh,
+  dry-run aware. Every writing command points at it instead of restating it.
+- **Gate ownership** ([runtime §6.1–§6.3](docs/runtime.md#61-gate-ownership)): forge presents
+  and records the gate when orchestrating; under `--from-forge` a sub-skill shows no gate,
+  sets no status and appends no `gates[]` entry. Status follows the decision (§6.2). One
+  parameterised Gate template computes its options from config.
+- **Skip at a gate** means *approve this phase, skip the next (optional) one* — two gate
+  entries; Skip is never offered when the next phase is required.
+- **Mode-keyed prerequisites** (runtime §11.2) and a defined `speckit_mode` ↔ `feature_mode`
+  relationship (policy §4.1; `feature_mode: v-model` forces `speckit_mode: v-model`).
+- **Schema:** v3 initial document (schema §3.1); declared fields for `config_override`,
+  `phases.tasks` / `phases.implement` counters, gate extras (`findings`, `risks_accepted`,
+  `action_items`, …), CI fields, per-command run summaries (`security_check`,
+  `tracking_plan`, `i18n_harvest`, `migration_plan`, `monitoring_setup`,
+  `experiment_design`, `retrospective`), `spec_merge.archived_to` and the
+  `change_requests[]` entry shape.
+- **Catalog:** canonical record shape in [docs/schema/catalog.yml](docs/schema/catalog.yml);
+  `build-catalog.js` reads v3 fields (legacy fallback); record field `mode` → `kind` plus
+  `feature_mode`; `retrieve --mode` → `--kind`; `bounded_context` from `domains.yml` when
+  present; a fixture catalog is verified by `doctor` (`--check`), now 18 checks.
+- **Config wired:** `default_competitors`, `default_tech_research`,
+  `default_metrics_research`, `default_wireframe_detail` pre-fill answers; `require_*`,
+  `require_skip_reason` and `auto_sync_between_phases` drive the Gate template;
+  `require_problem_discovery` and `verify.ac_judge` declared in `config-template.yml`.
+  `docs/config.md` reorganised by topic, mirroring the template.
+- **`lint-docs`:** CLAUDE.md is linted; stale version pins / title stamps / versions in
+  command descriptions are flagged; new **CONFIG-DECLARED** rule (documented
+  `require_*`/`default_*`/`auto_*` keys must exist); the CONFIG-READER exemption list is
+  gone; SCRIPT-PATH also covers bare `scripts/*.sh` and normative docs. Self-test 23→31.
+- **Docs:** README is a ~200-line landing page; `docs/how-it-works-v2.md` folded into
+  `docs/concept.md` (new end-to-end walkthrough) and removed; `file-structure.md` is one
+  merged tree that points at the canonical schema; `phases.md` lists every phase in forge
+  order; open roadmap items moved to [ROADMAP.md](ROADMAP.md); implemented design notes moved
+  to `docs/improvements/archive/`.
+
+### Fixed — documentation overhaul (2026-10)
+
+- `lite` / `express` could not run: plan required `spec.md` and implement required
+  `tasks.md`, both `not_applicable` in those modes (now mode-keyed, runtime §11.2).
+- `forge` recorded every delegated gate twice and sub-skills prompted a second gate.
+- Phase status flipped to `completed` on Revise / Rollback / Abort; it now follows the
+  decision (§6.2).
+- The first writer of a new feature created a **v2** status file, and `problem-discovery`
+  overwrote the v3 file forge had just written; all writers merge into the v3 init block.
+- `revalidate` offered Skip on a required phase; `bridge` rejected a `completed`
+  revalidation.
+- `change-request` rollback left no gate entry and reset `not_applicable` phases; it now
+  writes a `rolled_back` entry, resets only in-scope phases and archives rewound artifacts
+  under `_rewound/`.
+- `spec-merge` wrote status at the old path after archiving; status is written first, and
+  under forge the archive move happens only after an approved gate.
+- `status` hard-coded the standard phase list; it now renders `phase-map.yml` for the
+  feature's mode.
+- `test-run` fix retries were unbounded (now capped at 3 per bug); `release-readiness`
+  post-release ordering and supply-chain paths corrected.
+- `sync-verify` / `verify-full` scanned `.forge-dry-run/` and `_rewound/` as live code.
+- Optional / supporting commands wrote top-level status blocks instead of `phases.<key>`.
 
 ---
 
@@ -129,15 +195,13 @@ _Nothing yet._
   scoped to standalone sub-skill invocation.
 - `lint-docs` self-test 18→23; `validate-traceability` 20→23.
 
----
-
-> Repo-hardening + tooling pass on top of v1.6.0 — addresses the 2026-06 deep
+> **Repo hardening (pre-wave, on top of v1.6.0)** — addresses the 2026-06 deep
 > review ([docs/improvements/archive/2026-06-deep-review.md](docs/improvements/archive/2026-06-deep-review.md)).
 > No behavioural change to the lifecycle; closes a runtime-portability bug, a
 > dead config switch, and residual doc drift, and adds a deterministic
 > consistency gate so the whole class can't silently return.
 
-### Fixed
+### Fixed — repo hardening (pre-wave)
 - **Bundled-script path resolution (P1).** `forge.md`, `verify-full.md`, and
   `test-run.md` invoked `node scripts/…` / `require('./scripts/…')` by bare
   relative path, which does not resolve once the plugin is installed to
@@ -159,7 +223,7 @@ _Nothing yet._
   and `verify-full.md`; added missing `SEC-` / `F-` rows to the ID registry.
 - **`docs/claude-plugin.md`** relative-ref typo (`./config-template.yml`).
 
-### Added
+### Added — repo hardening (pre-wave)
 - **`scripts/lint-docs.js`** — deterministic doc-corpus consistency linter
   (zero-dep, `--selftest`, `--json`). Rules: XREF (dangling refs + plugin-root
   escapes + anchors), CMD-COUNT, VERSION (extension.yml == plugin.json + stale
